@@ -19,7 +19,7 @@ models/
 # Installer build artifacts
 installer/publish/
 installer/*.exe
-!installer/MicrosoftEdgeWebview2Setup.exe
+installer/MicrosoftEdgeWebview2Setup.exe
 
 # OS files
 Thumbs.db
