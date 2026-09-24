@@ -1,0 +1,716 @@
+@namespace Darkstar.Gui.Pages
+@using Microsoft.JSInterop
+@inject ConfigStore Store
+@inject IJSRuntime JS
+@implements IDisposable
+
+<h1>DCS-gRPC</h1>
+<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+    Not used by replies yet - test the connection, then use the mission data explorer below to see
+    exactly which data a running mission exposes, as groundwork for real bullseye/bogey dope/picture
+    calls later.
+</p>
+
+<div class="toggle-row">
+    <span>Enable DCS-gRPC</span>
+    <button class="toggle @(Store.Config.DcsGrpcEnabled ? "on" : "")" @onclick="() => Store.Config.DcsGrpcEnabled = !Store.Config.DcsGrpcEnabled">
+        <span class="knob"></span>
+    </button>
+</div>
+
+<div class="field" style="opacity:@(Store.Config.DcsGrpcEnabled ? "1" : "0.5")">
+    <label>SERVER ADDRESS</label>
+    <input type="text" @bind="Store.Config.DcsGrpcAddress" placeholder="http://127.0.0.1:50051" disabled="@(!Store.Config.DcsGrpcEnabled)" />
+</div>
+
+<div class="field" style="opacity:@(Store.Config.DcsGrpcEnabled ? "1" : "0.5")">
+    <label>API KEY (only if auth is enabled on the server)</label>
+    <input type="password" @bind="Store.Config.DcsGrpcApiKey" disabled="@(!Store.Config.DcsGrpcEnabled)" />
+</div>
+
+<button class="link-action" @onclick="RunTest" disabled="@(_testing || !Store.Config.DcsGrpcEnabled)">
+    <span>@(_testing ? "Testing..." : "Test connection")</span>
+</button>
+
+@if (_result != null)
+{
+    <div class="card" style="border-color:@(_result.Success ? "#2E4E4C" : "#6C2E2E");margin-top:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:@(_result.Success ? "#5FBF7A" : "#E2543A");font-size:14px">@(_result.Success ? "✓" : "✕")</span>
+            <span style="font-size:12.5px;color:#E7EDEF">@(_result.Success ? "Connection OK" : "Connection failed")</span>
+        </div>
+        <div style="font-size:12px;color:#8CA0A8;margin-top:8px">@_result.Message</div>
+    </div>
+}
+
+<!-- ================= Tactical replies (bogey dope / picture / threat) ================= -->
+
+<h1 style="margin-top:28px">TACTICAL REPLIES</h1>
+<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+    Lets the bot answer "bogey dope", "picture" and "threat check" from live mission data instead
+    of from phrases.json or Gemini.
+</p>
+
+<div class="toggle-row">
+    <span>Answer tactical requests from mission data</span>
+    <button class="toggle @(Store.Config.DcsIntelEnabled ? "on" : "")" @onclick="() => Store.Config.DcsIntelEnabled = !Store.Config.DcsIntelEnabled">
+        <span class="knob"></span>
+    </button>
+</div>
+
+@if (Store.Config.DcsIntelEnabled && !Store.Config.DcsGrpcEnabled)
+{
+    <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
+        DCS-gRPC is switched off above - tactical requests will keep being handled by phrases/Gemini.
+    </div>
+}
+
+<div style="opacity:@(Store.Config.DcsIntelEnabled ? "1" : "0.5")">
+    <div class="field">
+        <label>CONTACT SOURCE</label>
+        <select @bind="Store.Config.DcsIntelContactSource" disabled="@(!Store.Config.DcsIntelEnabled)">
+            <option value="AwacsThenMissionData">AWACS sensors, mission data as fallback</option>
+            <option value="AwacsOnly">AWACS sensors only — no god's eye</option>
+            <option value="MissionDataOnly">Mission data only (god's eye)</option>
+        </select>
+        <div class="hint">
+            @switch (Store.Config.DcsIntelContactSource)
+            {
+                case "AwacsOnly":
+                    <span>
+                        Strictly what the unit below detects; "detects nothing" is reported as a clean picture.
+                        <b>DCS only fills the detection table for AI units</b>, so a player-flown AWACS will always
+                        look blind in this mode. Without a unit name, tactical requests answer "no tactical data".
+                    </span>
+                    break;
+                case "MissionDataOnly":
+                    <span>Every hostile aircraft in the mission is reported, whether detected or not. The unit name below is ignored.</span>
+                    break;
+                default:
+                    <span>
+                        Uses the unit's sensors when they deliver contacts, and plain mission data whenever they
+                        don't (empty detection table, unit missing, call failed). Never falsely reports a clean
+                        picture — but gives god's-eye information while the AWACS sees nothing.
+                    </span>
+                    break;
+            }
+        </div>
+    </div>
+
+    <div class="field" style="opacity:@(Store.Config.DcsIntelContactSource == "MissionDataOnly" ? "0.5" : "1")">
+        <label>AWACS UNIT NAME (mission editor name)</label>
+        <input type="text" list="grpc-names" @bind="Store.Config.DcsIntelAwacsUnitName"
+               placeholder="@(Store.Config.DcsIntelContactSource == "AwacsOnly" ? "(required in this mode)" : "(empty = report every hostile aircraft, god's eye)")"
+               disabled="@(!Store.Config.DcsIntelEnabled || Store.Config.DcsIntelContactSource == "MissionDataOnly")" />
+        <div class="hint">Only contacts this unit's group actually detects are reported. Use an <b>AI</b> AWACS.</div>
+    </div>
+
+    @if (Store.Config.DcsIntelContactSource == "AwacsOnly" && string.IsNullOrWhiteSpace(Store.Config.DcsIntelAwacsUnitName))
+    {
+        <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
+            No unit named, and mission data is switched off — tactical requests will answer "no tactical data".
+        </div>
+    }
+
+    <div class="row3">
+        <div class="field">
+            <label>MAX RANGE (NM, 0 = NO LIMIT)</label>
+            <input type="number" step="10" min="0" @bind="Store.Config.DcsIntelMaxRangeNm" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field">
+            <label>GROUPS PER PICTURE</label>
+            <input type="number" min="1" max="6" @bind="Store.Config.DcsIntelMaxGroups" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field">
+            <label>QUERY TIMEOUT (SECONDS)</label>
+            <input type="number" min="1" max="30" @bind="Store.Config.DcsIntelTimeoutSeconds" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="row3">
+        <div class="toggle-row">
+            <span style="font-size:12px">Magnetic bearings</span>
+            <button class="toggle @(Store.Config.DcsIntelMagneticBearings ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                    @onclick="() => Store.Config.DcsIntelMagneticBearings = !Store.Config.DcsIntelMagneticBearings">
+                <span class="knob"></span>
+            </button>
+        </div>
+        <div class="toggle-row">
+            <span style="font-size:12px">Include helicopters</span>
+            <button class="toggle @(Store.Config.DcsIntelIncludeHelicopters ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                    @onclick="() => Store.Config.DcsIntelIncludeHelicopters = !Store.Config.DcsIntelIncludeHelicopters">
+                <span class="knob"></span>
+            </button>
+        </div>
+        <div class="toggle-row">
+            <span style="font-size:12px">Say aircraft type</span>
+            <button class="toggle @(Store.Config.DcsIntelSayContactType ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                    @onclick="() => Store.Config.DcsIntelSayContactType = !Store.Config.DcsIntelSayContactType">
+                <span class="knob"></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="toggle-row">
+        <div>
+            <div>Slow, clearly spoken numbers</div>
+            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                Comma between the digits of a bearing, and ranges/altitudes/counts spelled out as words -
+                so TTS doesn't rattle through them.
+            </div>
+        </div>
+        <button class="toggle @(Store.Config.DcsIntelSlowSpeech ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                @onclick="() => Store.Config.DcsIntelSlowSpeech = !Store.Config.DcsIntelSlowSpeech">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <div class="field">
+        <label>BOGEY DOPE TRIGGERS (comma separated)</label>
+        <input type="text" @bind="BogeyDopeTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+    </div>
+    <div class="row2">
+        <div class="field">
+            <label>PICTURE TRIGGERS</label>
+            <input type="text" @bind="PictureTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field">
+            <label>THREAT TRIGGERS</label>
+            <input type="text" @bind="ThreatTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <label>REPLY WHEN NOTHING IS FOUND</label>
+            <input type="text" @bind="Store.Config.DcsIntelNoContactsReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field">
+            <label>REPLY WHEN MISSION DATA IS UNAVAILABLE</label>
+            <input type="text" @bind="Store.Config.DcsIntelUnavailableReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head" style="margin-bottom:6px">
+            <span style="font-size:12.5px;color:#E7EDEF">Threat circle (standing watch)</span>
+            <span class="spacer"></span>
+            <button class="toggle @(Store.Config.DcsIntelThreatCircleEnabled ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                    @onclick="() => Store.Config.DcsIntelThreatCircleEnabled = !Store.Config.DcsIntelThreatCircleEnabled">
+                <span class="knob"></span>
+            </button>
+        </div>
+        <div style="font-size:11.5px;color:#8CA0A8;margin-bottom:12px">
+            A pilot asks for "threat circle forty miles" and the bot keeps watching a circle of that
+            radius <b>around their own aircraft</b> — it moves with them — warning them on this
+            frequency as soon as a hostile aircraft or helicopter enters it. Every contact is
+            reported once per circle.
+        </div>
+
+        <div style="opacity:@(Store.Config.DcsIntelThreatCircleEnabled && Store.Config.DcsIntelEnabled ? "1" : "0.5")">
+            <div class="row3">
+                <div class="field">
+                    <label>DEFAULT RADIUS (NM)</label>
+                    <input type="number" step="5" min="1" @bind="Store.Config.DcsIntelThreatCircleDefaultRadiusNm" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">Used when the pilot names no radius.</div>
+                </div>
+                <div class="field">
+                    <label>MAX RADIUS (NM)</label>
+                    <input type="number" step="10" min="1" @bind="Store.Config.DcsIntelThreatCircleMaxRadiusNm" disabled="@ThreatCircleDisabled" />
+                </div>
+                <div class="field">
+                    <label>SWEEP INTERVAL (SECONDS)</label>
+                    <input type="number" min="5" max="300" @bind="Store.Config.DcsIntelThreatCirclePollSeconds" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">One set of mission queries per circle and sweep.</div>
+                </div>
+            </div>
+
+            <div class="row3">
+                <div class="field">
+                    <label>EXPIRES AFTER (MINUTES)</label>
+                    <input type="number" min="1" @bind="Store.Config.DcsIntelThreatCircleDurationMinutes" disabled="@ThreatCircleDisabled" />
+                </div>
+                <div class="field">
+                    <label>MAX CIRCLES AT ONCE</label>
+                    <input type="number" min="1" max="32" @bind="Store.Config.DcsIntelThreatCircleMaxActive" disabled="@ThreatCircleDisabled" />
+                </div>
+                <div class="field">
+                    <label>MAX WARNINGS PER SWEEP</label>
+                    <input type="number" min="1" max="10" @bind="Store.Config.DcsIntelThreatCircleMaxAlertsPerSweep" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">The rest follow on later sweeps.</div>
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>START TRIGGERS</label>
+                    <input type="text" @bind="ThreatCircleTriggers" disabled="@ThreatCircleDisabled" />
+                </div>
+                <div class="field">
+                    <label>CANCEL TRIGGERS</label>
+                    <input type="text" @bind="ThreatCircleCancelTriggers" disabled="@ThreatCircleDisabled" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head" style="margin-bottom:8px">
+            <span style="font-size:12.5px;color:#E7EDEF">Try it without flying</span>
+        </div>
+        <div class="row3">
+            <div class="field">
+                <label>REQUEST</label>
+                <select @bind="_intelKind" disabled="@(!Store.Config.DcsIntelEnabled)">
+                    <option value="BogeyDope">Bogey dope</option>
+                    <option value="Picture">Picture</option>
+                    <option value="Threat">Threat check</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>PILOT'S SRS NAME (for BRAA)</label>
+                <input type="text" @bind="_intelPlayerName" placeholder="(empty = bullseye reference)" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            </div>
+            <div class="field">
+                <label>&nbsp;</label>
+                <button class="link-action" style="margin:0;padding-top:8px" @onclick="RunIntelTest" disabled="@(_intelTesting || !Store.Config.DcsIntelEnabled)">
+                    <span>@(_intelTesting ? "Asking..." : "Show reply")</span>
+                </button>
+            </div>
+        </div>
+        <div class="hint" style="font-size:11px">
+            Uses the settings as currently shown here (no need to save first) and only displays the
+            reply - nothing is transmitted on SRS.
+        </div>
+        @if (_intelResult != null)
+        {
+            <div class="log-tail" style="margin-top:10px;user-select:text">@_intelResult</div>
+        }
+    </div>
+</div>
+
+<!-- ================= Mission data explorer ================= -->
+
+<h1 style="margin-top:28px">MISSION DATA EXPLORER</h1>
+<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+    Read-only: only Get/Stream calls are made - nothing in the running mission is changed.
+    Results are shown as the raw JSON DCS-gRPC returns (all fields, including empty/default values).
+</p>
+
+@if (!Store.Config.DcsGrpcEnabled)
+{
+    <div class="card" style="color:#8CA0A8;font-size:12px">Enable DCS-gRPC above to use the explorer.</div>
+}
+else
+{
+    <div class="card">
+        <div class="card-head">
+            <span style="font-size:12.5px;color:#E7EDEF">Mission snapshot</span>
+            <span class="spacer"></span>
+            <button class="link-action" style="margin:0" @onclick="RunSnapshot" disabled="@_running">
+                <span>@(_running && _runningSnapshot ? "Collecting..." : "Run snapshot")</span>
+            </button>
+        </div>
+        <div style="font-size:11.5px;color:#8CA0A8">
+            Runs every query that needs no input (mission, time, theatre, airbases, groups, player units,
+            statics, players, bullseye of both sides...) in one go - the quickest overview of what's available.
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="field">
+            <label>SINGLE QUERY</label>
+            <select @bind="_queryId">
+                @foreach (var group in DcsGrpcExplorer.Queries.GroupBy(q => q.Category))
+                {
+                    <optgroup label="@group.Key">
+                        @foreach (var q in group)
+                        {
+                            <option value="@q.Id">@q.Title</option>
+                        }
+                    </optgroup>
+                }
+            </select>
+            <div class="hint">
+                <span style="color:#4FD1C5;font-family:Consolas,monospace">@Selected.Rpc</span> - @Selected.Description
+            </div>
+        </div>
+
+        @if (Selected.Has(DcsGrpcParam.Coalition) || Selected.Has(DcsGrpcParam.SpecificCoalition) || Selected.Has(DcsGrpcParam.GroupCategory))
+        {
+            <div class="row2">
+                @if (Selected.Has(DcsGrpcParam.Coalition) || Selected.Has(DcsGrpcParam.SpecificCoalition))
+                {
+                    <div class="field">
+                        <label>COALITION</label>
+                        <select @bind="_input.Coalition">
+                            @foreach (var c in DcsGrpcExplorer.Coalitions)
+                            {
+                                if (c == "All" && Selected.Has(DcsGrpcParam.SpecificCoalition)) continue;
+                                <option value="@c">@c</option>
+                            }
+                        </select>
+                    </div>
+                }
+                @if (Selected.Has(DcsGrpcParam.GroupCategory))
+                {
+                    <div class="field">
+                        <label>CATEGORY</label>
+                        <select @bind="_input.GroupCategory">
+                            @foreach (var c in DcsGrpcExplorer.GroupCategories)
+                            {
+                                <option value="@c">@c</option>
+                            }
+                        </select>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Selected.Has(DcsGrpcParam.GroupName))
+        {
+            <div class="field">
+                <label>GROUP NAME (as in the mission editor)</label>
+                <input type="text" list="grpc-names" @bind="_input.GroupName" placeholder="e.g. Aerial-1" />
+                <div class="hint">Tip: run "Groups" (or the snapshot) first - names found there are offered as suggestions here.</div>
+            </div>
+        }
+
+        @if (Selected.Has(DcsGrpcParam.UnitName) || Selected.Has(DcsGrpcParam.Position))
+        {
+            <div class="field">
+                <label>UNIT NAME (as in the mission editor, not the player name)</label>
+                <input type="text" list="grpc-names" @bind="_input.UnitName" placeholder="e.g. Aerial-1-1" />
+                <div class="hint">Tip: run "Player-occupied units", "Units of a group" or the snapshot first to get name suggestions.</div>
+            </div>
+        }
+
+        @if (Selected.Has(DcsGrpcParam.Position))
+        {
+            <div class="row3">
+                <div class="field">
+                    <label>LATITUDE</label>
+                    <input type="number" step="any" @bind="_input.Latitude" />
+                </div>
+                <div class="field">
+                    <label>LONGITUDE</label>
+                    <input type="number" step="any" @bind="_input.Longitude" />
+                </div>
+                <div class="field">
+                    <label>ALTITUDE (m MSL)</label>
+                    <input type="number" step="any" @bind="_input.AltitudeMeters" />
+                </div>
+            </div>
+            <button class="link-action" @onclick="TakePositionFromUnit" disabled="@_running">
+                <span>Take position from unit</span>
+            </button>
+            @if (_positionMessage != null)
+            {
+                <div class="hint" style="margin-top:-10px;margin-bottom:12px;font-size:11px;color:#8CA0A8">@_positionMessage</div>
+            }
+        }
+
+        @if (Selected.Has(DcsGrpcParam.FlagName))
+        {
+            <div class="field">
+                <label>FLAG NAME / NUMBER</label>
+                <input type="text" @bind="_input.FlagName" placeholder="e.g. 1" />
+            </div>
+        }
+
+        @if (Selected.Has(DcsGrpcParam.StreamDuration) || Selected.Has(DcsGrpcParam.PollRate))
+        {
+            <div class="row2">
+                @if (Selected.Has(DcsGrpcParam.StreamDuration))
+                {
+                    <div class="field">
+                        <label>LISTEN FOR (seconds, max @DcsGrpcExplorer.MaxStreamDurationSeconds)</label>
+                        <input type="number" min="1" max="@DcsGrpcExplorer.MaxStreamDurationSeconds" @bind="_input.StreamDurationSeconds" />
+                    </div>
+                }
+                @if (Selected.Has(DcsGrpcParam.PollRate))
+                {
+                    <div class="field">
+                        <label>POLL RATE (seconds)</label>
+                        <input type="number" min="1" max="60" @bind="_input.PollRateSeconds" />
+                    </div>
+                }
+            </div>
+            <div class="hint" style="margin-top:-6px;margin-bottom:12px;font-size:11px;color:#5A6A70">
+                Stops after the time above or @DcsGrpcExplorer.MaxStreamMessages messages, whichever comes first.
+            </div>
+        }
+
+        <div style="display:flex;gap:18px">
+            <button class="link-action" @onclick="RunQuery" disabled="@_running">
+                <span>@(_running && !_runningSnapshot ? RunningLabel : "Run query")</span>
+            </button>
+            @if (_running)
+            {
+                <button class="link-action" style="color:#E2543A" @onclick="Cancel"><span>Cancel</span></button>
+            }
+        </div>
+    </div>
+
+    <datalist id="grpc-names">
+        @foreach (var n in _knownNames)
+        {
+            <option value="@n"></option>
+        }
+    </datalist>
+
+    @if (_queryResult != null)
+    {
+        <div class="card" style="border-color:@(_queryResult.Success ? "#2E4E4C" : "#6C2E2E")">
+            <div class="card-head" style="margin-bottom:6px">
+                <span style="color:@(_queryResult.Success ? "#5FBF7A" : "#E2543A");font-size:14px">@(_queryResult.Success ? "✓" : "✕")</span>
+                <span style="font-size:12.5px;color:#E7EDEF">@_resultTitle</span>
+                <span class="spacer"></span>
+                @if (_queryResult.Success)
+                {
+                    <button class="link-action" style="margin:0" @onclick="CopyJson"><span>Copy JSON</span></button>
+                    <button class="link-action" style="margin:0" @onclick="SaveJson"><span>Save to file</span></button>
+                }
+            </div>
+            <div style="font-size:12px;color:#8CA0A8">@_queryResult.Message</div>
+            @if (_queryResult.Success && _queryResult.DiscoveredNames.Count > 0)
+            {
+                <div style="font-size:11px;color:#5A6A70;margin-top:4px">
+                    @_queryResult.DiscoveredNames.Count name(s) found - now offered as suggestions in the unit/group name fields.
+                </div>
+            }
+            @if (_actionMessage != null)
+            {
+                <div style="font-size:11px;color:#4FD1C5;margin-top:4px;word-break:break-all">@_actionMessage</div>
+            }
+            @if (_queryResult.Success)
+            {
+                <div class="log-tail" style="max-height:460px;margin-top:10px;user-select:text">@DisplayJson</div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private const int MaxDisplayChars = 300_000;
+
+    private bool _testing;
+    private DcsGrpcTestResult? _result;
+
+    private string _intelKind = "BogeyDope";
+    private string _intelPlayerName = "";
+    private bool _intelTesting;
+    private string? _intelResult;
+
+    // The trigger lists are edited as one comma-separated line each - shorter than a list editor
+    // and these are rarely changed after the initial setup.
+    private string BogeyDopeTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelBogeyDopeTriggers);
+        set => Store.Config.DcsIntelBogeyDopeTriggers = SplitTriggers(value);
+    }
+
+    private string PictureTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelPictureTriggers);
+        set => Store.Config.DcsIntelPictureTriggers = SplitTriggers(value);
+    }
+
+    private string ThreatTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelThreatTriggers);
+        set => Store.Config.DcsIntelThreatTriggers = SplitTriggers(value);
+    }
+
+    private bool ThreatCircleDisabled => !Store.Config.DcsIntelEnabled || !Store.Config.DcsIntelThreatCircleEnabled;
+
+    private string ThreatCircleTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelThreatCircleTriggers);
+        set => Store.Config.DcsIntelThreatCircleTriggers = SplitTriggers(value);
+    }
+
+    private string ThreatCircleCancelTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelThreatCircleCancelTriggers);
+        set => Store.Config.DcsIntelThreatCircleCancelTriggers = SplitTriggers(value);
+    }
+
+    private static List<string> SplitTriggers(string value) =>
+        (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private async Task RunIntelTest()
+    {
+        _intelTesting = true;
+        _intelResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var service = new DcsIntelService(Store.Config);
+            var kind = Enum.TryParse<IntelRequestKind>(_intelKind, out var parsed) ? parsed : IntelRequestKind.BogeyDope;
+
+            // The transcript matters for one thing only here: a "bullseye" in it forces the
+            // bullseye format. Feeding the first configured trigger keeps the test honest.
+            var transcript = kind switch
+            {
+                IntelRequestKind.Picture => Store.Config.DcsIntelPictureTriggers.FirstOrDefault() ?? "picture",
+                IntelRequestKind.Threat => Store.Config.DcsIntelThreatTriggers.FirstOrDefault() ?? "threat check",
+                _ => Store.Config.DcsIntelBogeyDopeTriggers.FirstOrDefault() ?? "bogey dope"
+            };
+
+            var result = await service.AnswerAsync(kind, transcript, _intelPlayerName ?? "", senderCoalition: 0);
+            _intelResult = string.IsNullOrWhiteSpace(result.Reply)
+                ? $"No reply produced. ({result.Detail})"
+                : $"{result.Reply}\n\n[{result.Detail}]";
+        }
+        catch (Exception ex)
+        {
+            _intelResult = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _intelTesting = false;
+            StateHasChanged();
+        }
+    }
+
+    private string _queryId = DcsGrpcExplorer.Queries[0].Id;
+    private readonly DcsGrpcQueryInput _input = new();
+    private bool _running;
+    private bool _runningSnapshot;
+    private DateTime _runStarted;
+    private CancellationTokenSource? _cts;
+    private System.Threading.Timer? _ticker;
+    private DcsGrpcQueryResult? _queryResult;
+    private string _resultTitle = "";
+    private string _resultId = "";
+    private string? _actionMessage;
+    private string? _positionMessage;
+    private readonly SortedSet<string> _knownNames = new(StringComparer.OrdinalIgnoreCase);
+
+    private DcsGrpcQueryInfo Selected =>
+        DcsGrpcExplorer.Queries.FirstOrDefault(q => q.Id == _queryId) ?? DcsGrpcExplorer.Queries[0];
+
+    private string RunningLabel => Selected.Has(DcsGrpcParam.StreamDuration)
+        ? $"Listening... {(int)(DateTime.Now - _runStarted).TotalSeconds}s"
+        : "Running...";
+
+    private string DisplayJson => _queryResult == null ? "" :
+        _queryResult.Json.Length <= MaxDisplayChars
+            ? _queryResult.Json
+            : _queryResult.Json[..MaxDisplayChars] + $"\n\n... (display truncated - {_queryResult.Json.Length:N0} characters total, use 'Save to file' for the full result)";
+
+    private async Task RunTest()
+    {
+        _testing = true;
+        _result = null;
+        StateHasChanged();
+
+        _result = await DcsGrpcTester.TestConnectionAsync(Store.Config.DcsGrpcAddress, Store.Config.DcsGrpcApiKey);
+
+        _testing = false;
+        StateHasChanged();
+    }
+
+    private Task RunQuery()
+    {
+        var q = Selected;
+        // Bullseye can't use "All" - make sure a valid coalition is selected before running.
+        if (q.Has(DcsGrpcParam.SpecificCoalition) && _input.Coalition == "All")
+            _input.Coalition = "Blue";
+
+        return Execute(q.Title, q.Id, false,
+            token => DcsGrpcExplorer.RunAsync(Store.Config.DcsGrpcAddress, Store.Config.DcsGrpcApiKey, q.Id, _input, cancellationToken: token));
+    }
+
+    private Task RunSnapshot() =>
+        Execute("Mission snapshot", "snapshot", true,
+            token => DcsGrpcExplorer.RunSnapshotAsync(Store.Config.DcsGrpcAddress, Store.Config.DcsGrpcApiKey, cancellationToken: token));
+
+    private async Task Execute(string title, string id, bool snapshot, Func<CancellationToken, Task<DcsGrpcQueryResult>> run)
+    {
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _running = true;
+        _runningSnapshot = snapshot;
+        _runStarted = DateTime.Now;
+        _actionMessage = null;
+        _queryResult = null;
+
+        // Refresh the "Listening... Ns" label once a second during streaming calls.
+        _ticker = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+        StateHasChanged();
+
+        try
+        {
+            _queryResult = await run(_cts.Token);
+            _resultTitle = title;
+            _resultId = id;
+            foreach (var n in _queryResult.DiscoveredNames)
+                _knownNames.Add(n);
+        }
+        finally
+        {
+            _ticker?.Dispose();
+            _ticker = null;
+            _running = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    private async Task TakePositionFromUnit()
+    {
+        _positionMessage = "Looking up position...";
+        StateHasChanged();
+
+        var (success, message, lat, lon, alt) = await DcsGrpcExplorer.GetUnitPositionAsync(
+            Store.Config.DcsGrpcAddress, Store.Config.DcsGrpcApiKey, _input.UnitName);
+
+        if (success)
+        {
+            _input.Latitude = Math.Round(lat, 6);
+            _input.Longitude = Math.Round(lon, 6);
+            _input.AltitudeMeters = Math.Round(alt, 1);
+        }
+        _positionMessage = message;
+        StateHasChanged();
+    }
+
+    private async Task CopyJson()
+    {
+        if (_queryResult == null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _queryResult.Json);
+            _actionMessage = "JSON copied to the clipboard.";
+        }
+        catch (Exception ex)
+        {
+            _actionMessage = $"Could not copy to the clipboard ({ex.Message}) - use 'Save to file' instead.";
+        }
+    }
+
+    private void SaveJson()
+    {
+        if (_queryResult == null) return;
+        try
+        {
+            var path = Store.SaveGrpcDump(_resultId, _queryResult.Json);
+            _actionMessage = $"Saved to {path}";
+        }
+        catch (Exception ex)
+        {
+            _actionMessage = $"Could not save: {ex.Message}";
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _ticker?.Dispose();
+    }
+}

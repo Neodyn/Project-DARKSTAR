@@ -1,0 +1,99 @@
+@namespace Darkstar.Gui
+@inject ConfigStore Store
+@implements IDisposable
+
+<div class="titlebar">
+    <div class="brand">D.A.R.K.S.T.A.R. // CONFIG EDITOR</div>
+    <div class="status @(Store.IsLoaded ? "connected" : "disconnected")">
+        <span class="dot"></span>
+        @(Store.IsLoaded ? $"Loaded from {Store.ConfigFolder}" : "Not loaded")
+    </div>
+</div>
+
+<div class="body-row">
+    <div class="sidebar">
+        <div class="heading">CHANNELS</div>
+        <div class="navitem @(_active == "connection" ? "active" : "")" @onclick='() => SetActive("connection")'>CH1 CONNECTION</div>
+        <div class="navitem @(_active == "radios" ? "active" : "")" @onclick='() => SetActive("radios")'>CH2 RADIOS</div>
+        <div class="navitem @(_active == "speech" ? "active" : "")" @onclick='() => SetActive("speech")'>CH3 SPEECH</div>
+        <div class="navitem @(_active == "phrases" ? "active" : "")" @onclick='() => SetActive("phrases")'>CH4 PHRASES</div>
+        <div class="navitem @(_active == "vocabulary" ? "active" : "")" @onclick='() => SetActive("vocabulary")'>CH5 VOCABULARY</div>
+        <div class="navitem @(_active == "discord" ? "active" : "")" @onclick='() => SetActive("discord")'>CH6 DISCORD</div>
+        <div class="navitem @(_active == "logging" ? "active" : "")" @onclick='() => SetActive("logging")'>CH7 LOGGING</div>
+        <div class="navitem @(_active == "dcsgrpc" ? "active" : "")" @onclick='() => SetActive("dcsgrpc")'>CH8 DCS-GRPC</div>
+        <div class="navitem @(_active == "service" ? "active" : "")" @onclick='() => SetActive("service")'>CH9 SERVICE</div>
+    </div>
+
+    <div class="content">
+        @if (!Store.IsLoaded)
+        {
+            <h1>NOT LOADED</h1>
+            <p style="color:#8CA0A8">@Store.StatusMessage</p>
+            <div class="field" style="max-width:480px">
+                <label>CONFIG FOLDER</label>
+                <input type="text" @bind="Store.ConfigFolder" />
+                <div class="hint">Folder containing config.json / phrases.json / vocabulary.json. Auto-detected based on where an existing config.json was found nearby; change it if the bot lives elsewhere.</div>
+            </div>
+            <button class="link-action" @onclick="Reload"><span>Load</span></button>
+        }
+        else
+        {
+            @switch (_active)
+            {
+                case "connection":
+                    <ConnectionPanel />
+                    break;
+                case "radios":
+                    <RadiosPanel />
+                    break;
+                case "speech":
+                    <SpeechPanel />
+                    break;
+                case "phrases":
+                    <PhrasesPanel />
+                    break;
+                case "vocabulary":
+                    <VocabularyPanel />
+                    break;
+                case "discord":
+                    <DiscordPanel />
+                    break;
+                case "logging":
+                    <LoggingPanel />
+                    break;
+                case "dcsgrpc":
+                    <DcsGrpcPanel />
+                    break;
+                case "service":
+                    <ServicePanel />
+                    break;
+            }
+        }
+    </div>
+</div>
+
+<div class="footer">
+    <div class="left">
+        <span class="@(Store.StatusIsError ? "warn" : "ok")">@Store.StatusMessage</span>
+    </div>
+    <div>
+        <button @onclick="Reload">Discard (reload from disk)</button>
+        <button class="primary" @onclick="() => Store.SaveAll()">Save changes</button>
+    </div>
+</div>
+
+@code {
+    private string _active = "connection";
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += StateHasChanged;
+        Store.Load();
+    }
+
+    private void SetActive(string channel) => _active = channel;
+
+    private void Reload() => Store.Load();
+
+    public void Dispose() => Store.OnChange -= StateHasChanged;
+}

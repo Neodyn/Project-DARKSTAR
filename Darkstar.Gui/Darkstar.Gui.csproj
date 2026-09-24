@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Darkstar.Gui</RootNamespace>
+    <AssemblyName>Darkstar.ConfigEditor</AssemblyName>
+    <AssemblyTitle>D.A.R.K.S.T.A.R. Config Editor</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Hosts Blazor (Razor components) inside a native WPF window via WebView2 - lets us reuse
+         plain HTML/CSS for styling (close to the original mockup) while still being a normal
+         Windows desktop app, and lets Razor components call straight into Darkstar.Core
+         (AppConfig, PhraseBook, VocabularyBook) with no serialization boundary in between.
+         NOTE: no explicit Microsoft.Web.WebView2 reference here on purpose - let this package
+         pull in whichever WebView2 version it was actually built against, instead of pinning a
+         version ourselves and risking a mismatch. -->
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.100" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Darkstar.Core\Darkstar.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Darkstar</RootNamespace>
+  </PropertyGroup>
+
+  <!--
+    Shared logic used by BOTH the bot service (Darkstar.csproj) and the GUI config editor
+    (Darkstar.Gui.csproj): loading/saving/validating config.json, phrases.json, vocabulary.json,
+    the automatic pre-write backup, and the console/file logger. Keeping this in one place means
+    the GUI edits the exact same data model the bot actually runs on - no separate parsing logic
+    to keep in sync.
+  -->
+
+  <ItemGroup>
+    <!-- Official DCS-gRPC C# bindings (generated from the DCS-gRPC .proto files) - lets us
+         talk to a running DCS-gRPC server for real mission data (currently used by the GUI's
+         connection test and read-only mission data explorer, see DcsGrpcTester.cs and
+         DcsGrpcExplorer.cs; real features like bullseye/bogey-dope calls build on this later). -->
+    <PackageReference Include="RurouniJones.Dcs.Grpc" Version="0.7.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.66.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.28.2" />
+  </ItemGroup>
+
+</Project>

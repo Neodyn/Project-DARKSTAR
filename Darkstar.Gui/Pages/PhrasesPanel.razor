@@ -1,0 +1,48 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">PHRASES</h1>
+    <div class="toggle-row" style="margin-bottom:0;padding:6px 10px;gap:10px;display:flex;width:auto">
+        <span style="font-size:11px;color:#8CA0A8">Restrict to known phrases</span>
+        <button class="toggle @(Store.Config.RestrictToKnownPhrases ? "on" : "")" @onclick="() => Store.Config.RestrictToKnownPhrases = !Store.Config.RestrictToKnownPhrases">
+            <span class="knob"></span>
+        </button>
+    </div>
+</div>
+
+<table class="phrase-table">
+    <tbody>
+        @for (var i = 0; i < Store.Phrases.Count; i++)
+        {
+            var entry = Store.Phrases[i];
+            <tr>
+                <td style="width:35%"><input type="text" @bind="entry.Trigger" placeholder="trigger phrase" /></td>
+                <td><input type="text" @bind="entry.Response" placeholder="fixed reply" /></td>
+                <td style="width:32px;text-align:center">
+                    <button class="icon-btn" title="Remove" @onclick="() => RemovePhrase(entry)">✕</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<button class="link-action" @onclick="AddPhrase"><span>+ Add phrase</span></button>
+
+<div class="field" style="max-width:520px">
+    <label>FALLBACK RESPONSE</label>
+    <input type="text" @bind="Store.Config.FallbackResponse" />
+    <div class="hint">Used when RestrictToKnownPhrases is on and nothing matches.</div>
+</div>
+
+@code {
+    private void AddPhrase()
+    {
+        Store.Phrases.Add(new PhraseEntry { Trigger = "", Response = "" });
+    }
+
+    private void RemovePhrase(PhraseEntry entry)
+    {
+        Store.Phrases.Remove(entry);
+    }
+}

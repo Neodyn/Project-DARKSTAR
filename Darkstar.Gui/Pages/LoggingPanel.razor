@@ -1,0 +1,51 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<h1>LOGGING</h1>
+
+<div class="row2">
+    <div class="toggle-row">
+        <span>Logging enabled</span>
+        <button class="toggle @(Store.Config.LoggingEnabled ? "on" : "")" @onclick="() => Store.Config.LoggingEnabled = !Store.Config.LoggingEnabled">
+            <span class="knob"></span>
+        </button>
+    </div>
+    <div class="toggle-row">
+        <span>Debug (verbose) logging</span>
+        <button class="toggle @(Store.Config.DebugLogging ? "on" : "")" @onclick="() => Store.Config.DebugLogging = !Store.Config.DebugLogging">
+            <span class="knob"></span>
+        </button>
+    </div>
+</div>
+
+<div class="field">
+    <label>LOG FOLDER</label>
+    <input type="text" value="@System.IO.Path.Combine(Store.ConfigFolder, "logs")" readonly />
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
+    <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">RECENT ACTIVITY</span>
+    <button class="link-action" style="margin-bottom:0" @onclick="Refresh"><span>Refresh</span></button>
+</div>
+<div class="log-tail">
+    @if (_lines.Count == 0)
+    {
+        <span style="color:#5A6A70">No log file found yet in @System.IO.Path.Combine(Store.ConfigFolder, "logs").</span>
+    }
+    else
+    {
+        @foreach (var line in _lines)
+        {
+            @line
+            <br />
+        }
+    }
+</div>
+
+@code {
+    private List<string> _lines = new();
+
+    protected override void OnInitialized() => Refresh();
+
+    private void Refresh() => _lines = Store.GetRecentLogLines();
+}

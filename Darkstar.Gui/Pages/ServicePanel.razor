@@ -1,0 +1,244 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<h1>WINDOWS SERVICE</h1>
+<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+    Runs the bot in the background and after every reboot, without anyone having to log in and
+    start it. Installing, removing, starting and stopping all need administrator rights, so Windows
+    shows a UAC prompt each time - this editor itself does not have to run as administrator.
+</p>
+
+<div class="card">
+    <div class="card-head" style="margin-bottom:10px">
+        <span style="color:@StatusColor;font-size:14px">@StatusIcon</span>
+        <span style="font-size:12.5px;color:#E7EDEF">@StatusHeadline</span>
+        <span class="spacer"></span>
+        <button class="link-action" style="margin:0" @onclick="Refresh" disabled="@_busy">
+            <span>@(_busy ? "Working..." : "Refresh")</span>
+        </button>
+    </div>
+
+    @if (_status != null && _status.IsInstalled)
+    {
+        <div style="font-size:11.5px;color:#8CA0A8;line-height:1.8">
+            <div>Display name: @(string.IsNullOrWhiteSpace(_status.DisplayName) ? "-" : _status.DisplayName)</div>
+            <div>Start type: @(string.IsNullOrWhiteSpace(_status.StartType) ? "-" : _status.StartType)</div>
+            <div style="word-break:break-all">Registered executable: @(string.IsNullOrWhiteSpace(_status.BinaryPath) ? "-" : _status.BinaryPath)</div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_status.BinaryPath) && !RegisteredPathMatches)
+        {
+            <div style="font-size:11.5px;color:#F2A93B;margin-top:8px">
+                The installed service points at a different executable than the one configured below -
+                remove it and install again if that's an old installation.
+            </div>
+        }
+    }
+</div>
+
+<div class="field">
+    <label>SERVICE NAME</label>
+    <input type="text" @bind="_serviceName" @bind:after="Refresh" disabled="@_busy" />
+    <div class="hint">Internal name used by Windows (no spaces). Change it only if you run several bots on one machine.</div>
+</div>
+
+<div class="field">
+    <label>BOT EXECUTABLE</label>
+    <input type="text" @bind="_exePath" disabled="@(_busy || IsInstalled)" />
+    <div class="hint">
+        @if (System.IO.File.Exists(_exePath))
+        {
+            <span style="color:#5FBF7A">Found.</span>
+        }
+        else
+        {
+            <span style="color:#E2543A">Not found at this path.</span>
+        }
+        <span> Normally Darkstar.exe next to config.json. The service runs this exact file, so the config it uses is the one in that folder.</span>
+    </div>
+</div>
+
+@if (!IsInstalled)
+{
+    <div class="field">
+        <label>DISPLAY NAME (shown in services.msc)</label>
+        <input type="text" @bind="_displayName" disabled="@_busy" />
+    </div>
+
+    <div class="toggle-row">
+        <div>
+            <div>Start automatically after a reboot</div>
+            <div style="font-size:11px;color:#5A6A70;margin-top:3px">Uses delayed auto-start, so the network and the SRS server are up first.</div>
+        </div>
+        <button class="toggle @(_automaticStart ? "on" : "")" disabled="@_busy" @onclick="() => _automaticStart = !_automaticStart">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <div class="toggle-row">
+        <span>Start right after installing</span>
+        <button class="toggle @(_startAfterInstall ? "on" : "")" disabled="@_busy" @onclick="() => _startAfterInstall = !_startAfterInstall">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <button class="link-action" @onclick="Install" disabled="@(_busy || !System.IO.File.Exists(_exePath))">
+        <span>@(_busy ? "Working..." : "Install service")</span>
+    </button>
+}
+else
+{
+    <div style="display:flex;gap:18px;flex-wrap:wrap">
+        @if (_status!.State == WindowsServiceState.Running)
+        {
+            <button class="link-action" @onclick="Stop" disabled="@_busy"><span>Stop service</span></button>
+        }
+        else
+        {
+            <button class="link-action" @onclick="Start" disabled="@_busy"><span>Start service</span></button>
+        }
+        <button class="link-action" style="color:#E2543A" @onclick="Uninstall" disabled="@_busy">
+            <span>@(_confirmUninstall ? "Really remove? Click again" : "Stop and remove service")</span>
+        </button>
+        @if (_confirmUninstall)
+        {
+            <button class="link-action" @onclick="() => _confirmUninstall = false"><span>Cancel</span></button>
+        }
+    </div>
+}
+
+@if (_result != null)
+{
+    <div class="card" style="border-color:@(_result.Success ? "#2E4E4C" : "#6C2E2E")">
+        <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:@(_result.Success ? "#5FBF7A" : "#E2543A");font-size:14px">@(_result.Success ? "✓" : "✕")</span>
+            <span style="font-size:12.5px;color:#E7EDEF">@_result.Message</span>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_result.Output))
+        {
+            <div class="log-tail" style="margin-top:10px;max-height:180px;user-select:text">@_result.Output</div>
+        }
+    </div>
+}
+
+@if (!WindowsServiceManager.IsSupported)
+{
+    <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
+        Windows Services are not available on this system.
+    </div>
+}
+
+@code {
+    private string _serviceName = WindowsServiceManager.DefaultServiceName;
+    private string _displayName = WindowsServiceManager.DefaultDisplayName;
+    private string _exePath = "";
+    private bool _automaticStart = true;
+    private bool _startAfterInstall = true;
+
+    private bool _busy;
+    private bool _confirmUninstall;
+    private WindowsServiceStatus? _status;
+    private ServiceOperationResult? _result;
+
+    private bool IsInstalled => _status?.IsInstalled == true;
+
+    private bool RegisteredPathMatches =>
+        _status != null &&
+        _status.BinaryPath.Replace("\"", "").Trim().Equals(_exePath.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private string StatusHeadline => _status == null
+        ? "Checking..."
+        : _status.State switch
+        {
+            WindowsServiceState.NotInstalled => "Not installed",
+            WindowsServiceState.Running => "Installed and running",
+            WindowsServiceState.Stopped => "Installed, stopped",
+            WindowsServiceState.Other => $"Installed, {_status.StateText}",
+            _ => $"Status unknown ({_status.StateText})"
+        };
+
+    private string StatusIcon => _status?.State switch
+    {
+        WindowsServiceState.Running => "✓",
+        WindowsServiceState.NotInstalled => "○",
+        WindowsServiceState.Unknown => "!",
+        _ => "■"
+    };
+
+    private string StatusColor => _status?.State switch
+    {
+        WindowsServiceState.Running => "#5FBF7A",
+        WindowsServiceState.Stopped or WindowsServiceState.Other => "#F2A93B",
+        WindowsServiceState.Unknown => "#E2543A",
+        _ => "#5A6A70"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The bot's executable normally sits next to the config files the GUI already resolved.
+        _exePath = System.IO.Path.Combine(Store.ConfigFolder, "Darkstar.exe");
+
+        // An existing installation may use the installer's service name rather than the default
+        // one - preselect whichever is actually registered, so the panel shows the real state.
+        var installed = await WindowsServiceManager.FindInstalledServiceNameAsync();
+        if (installed != null)
+            _serviceName = installed;
+
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        _busy = true;
+        StateHasChanged();
+
+        _status = await WindowsServiceManager.QueryAsync(_serviceName);
+
+        _busy = false;
+        StateHasChanged();
+    }
+
+    private async Task Install()
+    {
+        await Run(() => WindowsServiceManager.InstallAsync(
+            _serviceName, _displayName, _exePath, WindowsServiceManager.DefaultDescription,
+            _automaticStart, _startAfterInstall));
+    }
+
+    private async Task Uninstall()
+    {
+        // Removing a service is not undoable from here, so the button asks twice.
+        if (!_confirmUninstall)
+        {
+            _confirmUninstall = true;
+            StateHasChanged();
+            return;
+        }
+
+        _confirmUninstall = false;
+        await Run(() => WindowsServiceManager.UninstallAsync(_serviceName));
+    }
+
+    private Task Start() => Run(() => WindowsServiceManager.StartAsync(_serviceName));
+
+    private Task Stop() => Run(() => WindowsServiceManager.StopAsync(_serviceName));
+
+    private async Task Run(Func<Task<ServiceOperationResult>> operation)
+    {
+        _busy = true;
+        _result = null;
+        StateHasChanged();
+
+        try
+        {
+            _result = await operation();
+        }
+        catch (Exception ex)
+        {
+            _result = new ServiceOperationResult { Success = false, Message = $"Failed: {ex.Message}" };
+        }
+
+        _status = await WindowsServiceManager.QueryAsync(_serviceName);
+        _busy = false;
+        StateHasChanged();
+    }
+}

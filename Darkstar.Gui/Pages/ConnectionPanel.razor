@@ -1,0 +1,49 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<h1>CONNECTION</h1>
+
+<div class="row2">
+    <div class="field">
+        <label>SRS HOST</label>
+        <input type="text" @bind="Store.Config.SrsHost" />
+    </div>
+    <div class="field">
+        <label>PORT</label>
+        <input type="number" @bind="Store.Config.SrsPort" />
+    </div>
+</div>
+
+<div class="field">
+    <label>CLIENT NAME</label>
+    <input type="text" @bind="Store.Config.ClientName" />
+    <div class="hint">The name shown in the SRS client list.</div>
+</div>
+
+<div class="field">
+    <label>EXTERNAL AWACS PASSWORD</label>
+    <input type="password" @bind="Store.Config.ExternalAwacsPassword" />
+    <div class="hint">Only needed if the server requires an EAM password. Leave empty otherwise.</div>
+</div>
+
+<div class="field">
+    <label>EXTERNALAUDIO.EXE PATH</label>
+    <input type="text" @bind="Store.Config.ExternalAudioExePath" />
+    <div class="hint">Usually located in the SRS server install folder.</div>
+</div>
+
+<div class="field" style="max-width:420px">
+    <label>OWN COALITION</label>
+    <div class="row3">
+        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"#2E4E6C":"#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"#4FA8E0":"#5A6A70");background:@(Store.Config.Coalition==2?"#1E3A55":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>
+        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==1?"#6C2E2E":"#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==1?"#E2543A":"#5A6A70");background:@(Store.Config.Coalition==1?"#4A1B0C":"transparent")" @onclick="() => Store.Config.Coalition = 1">Red</button>
+        <button class="link-action" style="justify-content:center;border:1px solid #2A363C;border-radius:4px;padding:8px;color:@(Store.Config.Coalition==0?"#E7EDEF":"#5A6A70");background:@(Store.Config.Coalition==0?"#1B2429":"transparent")" @onclick="() => Store.Config.Coalition = 0">Spectator</button>
+    </div>
+</div>
+
+<div class="toggle-row" style="max-width:420px">
+    <span>Restrict to own coalition (ignore opposing coalition entirely)</span>
+    <button class="toggle @(Store.Config.RestrictToOwnCoalition ? "on" : "")" @onclick="() => Store.Config.RestrictToOwnCoalition = !Store.Config.RestrictToOwnCoalition">
+        <span class="knob"></span>
+    </button>
+</div>

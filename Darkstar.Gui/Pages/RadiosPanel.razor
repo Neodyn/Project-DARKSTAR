@@ -1,0 +1,74 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+    <h1 style="margin:0">RADIOS — PER-CHANNEL IDENTITY</h1>
+    <span style="font-size:11px;color:#5A6A70">@Store.Config.Radios.Count active</span>
+</div>
+
+@if (Store.Config.Radios.Count == 0)
+{
+    <p style="color:#8CA0A8;font-size:12px">
+        No entries in "Radios" yet - the bot falls back to the legacy single-radio fields
+        (@Store.Config.FrequencyHz Hz, @Store.Config.Modulation). Add a radio below to switch to
+        the multi-radio mode.
+    </p>
+}
+
+@for (var i = 0; i < Store.Config.Radios.Count; i++)
+{
+    var radio = Store.Config.Radios[i];
+    <div class="card">
+        <div class="card-head">
+            <input type="number" step="1000" @bind="radio.FrequencyHz" class="freq" style="background:transparent;border:none;width:130px;padding:0" />
+            <select @bind="radio.Modulation" style="background:#161F24;border:1px solid #2A363C;border-radius:3px;color:#4FD1C5;font-size:11px;padding:3px 6px">
+                <option value="AM">AM</option>
+                <option value="FM">FM</option>
+            </select>
+            <span class="spacer"></span>
+            <button class="icon-btn" title="Remove radio" @onclick="() => RemoveRadio(radio)">✕</button>
+        </div>
+        <div class="row2">
+            <div class="field" style="margin-bottom:0">
+                <label>WAKE WORD (empty = global default)</label>
+                <input type="text" @bind="radio.Keyword" placeholder="@Store.Config.VoskKeyword" />
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>CALLSIGN (empty = global default)</label>
+                <input type="text" @bind="radio.Callsign" placeholder="@Store.Config.BotCallsign" />
+            </div>
+        </div>
+    </div>
+}
+
+<button class="link-action" @onclick="AddRadio"><span>+ Add radio</span></button>
+
+<div class="card" style="margin-top:10px">
+    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:10px">Legacy single-radio fields</div>
+    <div class="hint" style="margin-bottom:10px">Only used when the list above is empty.</div>
+    <div class="row2">
+        <div class="field" style="margin-bottom:0">
+            <label>FREQUENCY (HZ)</label>
+            <input type="number" @bind="Store.Config.FrequencyHz" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>MODULATION</label>
+            <select @bind="Store.Config.Modulation" style="background:#161F24;border:1px solid #2A363C;border-radius:4px;color:#E7EDEF;padding:7px 10px;width:100%">
+                <option value="AM">AM</option>
+                <option value="FM">FM</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+@code {
+    private void AddRadio()
+    {
+        Store.Config.Radios.Add(new RadioConfig { FrequencyHz = 251_000_000, Modulation = "AM" });
+    }
+
+    private void RemoveRadio(RadioConfig radio)
+    {
+        Store.Config.Radios.Remove(radio);
+    }
+}

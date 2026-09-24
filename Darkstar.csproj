@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Darkstar</RootNamespace>
+    <AssemblyName>Darkstar</AssemblyName>
+    <AssemblyTitle>D.A.R.K.S.T.A.R.</AssemblyTitle>
+    <Product>D.A.R.K.S.T.A.R. - Digital Assistant for Radio Keyword-activated Speech Transcription And Response</Product>
+  </PropertyGroup>
+
+  <!--
+    IMPORTANT: SDK-style projects compile every .cs file under the project folder by default.
+    Darkstar.Core and Darkstar.Gui live in subfolders next to this .csproj, so they must be
+    explicitly excluded here - otherwise this project would try to compile their files too
+    (duplicate type definitions) on top of referencing Darkstar.Core as a proper library below.
+  -->
+  <ItemGroup>
+    <Compile Remove="Darkstar.Core\**\*.cs" />
+    <Compile Remove="Darkstar.Gui\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Darkstar.Core\Darkstar.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Pure .NET Opus codec with no native DLLs, for SRS audio (48kHz, mono) -->
+    <PackageReference Include="Concentus" Version="2.2.2" />
+
+    <!-- Vosk: offline speech recognition, no account/cloud needed at all. Default (and only)
+         wake word detection path in this project. The model must be downloaded separately,
+         see the README. -->
+    <PackageReference Include="Vosk" Version="0.3.38" />
+
+    <!-- Generic Host: lets the bot run either as a normal console app (for testing) or as a
+         real Windows Service (for unattended background operation), using the same .exe. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+
+    <!-- Optional, if you use Azure Speech for STT/TTS instead of another engine.
+         Alternatives: Vosk (offline STT), Whisper.net (offline STT), Piper (offline TTS) -->
+    <!-- <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.40.0" /> -->
+  </ItemGroup>
+
+</Project>

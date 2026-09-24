@@ -1,0 +1,46 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<h1>VOCABULARY</h1>
+<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+    Terms speech recognition should transcribe exactly (callsigns, jargon) - not what the bot
+    responds to. See Phrases for that.
+</p>
+
+<div style="margin-bottom:16px">
+    @foreach (var term in Store.Vocabulary)
+    {
+        <span class="chip">
+            @term
+            <span class="x" @onclick="() => RemoveTerm(term)">✕</span>
+        </span>
+    }
+</div>
+
+<div class="field" style="max-width:360px;display:flex;gap:8px;align-items:flex-end">
+    <div style="flex:1">
+        <label>NEW TERM</label>
+        <input type="text" @bind="_newTerm" @bind:event="oninput" @onkeydown="OnKeyDown" placeholder="e.g. Viggen" />
+    </div>
+    <button class="link-action" style="margin-bottom:9px" @onclick="AddTerm"><span>Add</span></button>
+</div>
+
+@code {
+    private string _newTerm = "";
+
+    private void AddTerm()
+    {
+        var term = _newTerm.Trim();
+        if (string.IsNullOrEmpty(term)) return;
+        if (!Store.Vocabulary.Contains(term, StringComparer.OrdinalIgnoreCase))
+            Store.Vocabulary.Add(term);
+        _newTerm = "";
+    }
+
+    private void RemoveTerm(string term) => Store.Vocabulary.Remove(term);
+
+    private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") AddTerm();
+    }
+}

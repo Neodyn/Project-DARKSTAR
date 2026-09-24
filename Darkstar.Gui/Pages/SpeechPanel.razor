@@ -1,0 +1,113 @@
+@namespace Darkstar.Gui.Pages
+@inject ConfigStore Store
+
+<h1>SPEECH — GEMINI</h1>
+
+<div class="field">
+    <label>API KEY</label>
+    <input type="password" @bind="Store.Config.GeminiApiKey" />
+    <div class="hint">Free to create at aistudio.google.com/apikey</div>
+</div>
+
+<div class="row2">
+    <div class="field">
+        <label>MODEL</label>
+        <input type="text" @bind="Store.Config.GeminiModel" />
+    </div>
+    <div class="field">
+        <label>FALLBACK MODEL (optional)</label>
+        <input type="text" @bind="Store.Config.GeminiFallbackModel" placeholder="none" />
+    </div>
+</div>
+
+<div class="row2">
+    <div class="field">
+        <label>MAX RETRIES</label>
+        <input type="number" min="0" @bind="Store.Config.GeminiMaxRetries" />
+    </div>
+    <div class="field">
+        <label>RETRY DELAY (MS)</label>
+        <input type="number" min="0" @bind="Store.Config.GeminiRetryDelayMs" />
+    </div>
+</div>
+
+<div class="row2">
+    <div class="field">
+        <label>TTS VOICE</label>
+        <input type="text" @bind="Store.Config.VoiceName" placeholder="server default" />
+    </div>
+    <div class="field">
+        <label>PRE-ROLL (SECONDS)</label>
+        <input type="number" step="0.5" min="0" @bind="Store.Config.PreRollSeconds" />
+    </div>
+</div>
+
+<div class="field">
+    <label>EXTRA ARGUMENTS FOR DCS-SR-ExternalAudio.exe</label>
+    <input type="text" @bind="Store.Config.ExternalAudioExtraArgs" placeholder="(none)" />
+    <div class="hint">
+        Appended to every transmission. Use it for options this bot doesn't set itself — whether your
+        SRS build has a speaking-rate flag, and what it's called, depends on its version:
+        run <code>DCS-SR-ExternalAudio.exe --help</code> to check. A wrong flag shows up as an
+        [ExternalAudio] error in the log.
+    </div>
+</div>
+
+<div class="field">
+    <label>VOSK MODEL FOLDER</label>
+    <input type="text" @bind="Store.Config.VoskModelPath" placeholder="(empty = volume-based fallback, no real wake word)" />
+</div>
+
+<div class="row2">
+    <div class="field">
+        <label>GLOBAL WAKE WORD</label>
+        <input type="text" @bind="Store.Config.VoskKeyword" />
+        <div class="hint">Used by radios that don't set their own wake word.</div>
+    </div>
+    <div class="field">
+        <label>SILENCE FRAMES TO STOP RECORDING</label>
+        <input type="number" min="1" @bind="Store.Config.SilenceFramesToStopRecording" />
+    </div>
+</div>
+
+<div class="toggle-row" style="margin-top:8px">
+    <div>
+        <div>"Message received, standby" while the reply is being worked on</div>
+        <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+            Sent only if the reply isn't ready in time - and never while the pilot is still transmitting.
+        </div>
+    </div>
+    <button class="toggle @(Store.Config.AckEnabled ? "on" : "")" @onclick="() => Store.Config.AckEnabled = !Store.Config.AckEnabled">
+        <span class="knob"></span>
+    </button>
+</div>
+
+<div class="row2" style="opacity:@(Store.Config.AckEnabled ? "1" : "0.5")">
+    <div class="field">
+        <label>SEND AFTER (SECONDS)</label>
+        <input type="number" step="0.5" min="0.5" @bind="Store.Config.AckAfterSeconds" disabled="@(!Store.Config.AckEnabled)" />
+        <div class="hint">Measured from the moment the wake word was heard.</div>
+    </div>
+    <div class="field">
+        <label>ACKNOWLEDGEMENT TEXT</label>
+        <input type="text" @bind="Store.Config.AckMessage" disabled="@(!Store.Config.AckEnabled)" />
+        <div class="hint">
+            <code>{pilot}</code> = the pilot's callsign (parsed from their SRS name),
+            <code>{callsign}</code> = this radio's own callsign.
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top:8px">
+    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Fallback hotword (used only if no Vosk model is set)</div>
+    <div class="row2" style="margin-top:10px">
+        <div class="field" style="margin-bottom:0">
+            <label>ENERGY THRESHOLD (0-32767)</label>
+            <input type="number" min="0" max="32767" @bind="Store.Config.HotwordEnergyThreshold" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>CONSECUTIVE LOUD FRAMES NEEDED</label>
+            <input type="number" min="1" @bind="Store.Config.HotwordConsecutiveFramesNeeded" />
+        </div>
+    </div>
+</div>
