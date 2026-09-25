@@ -2,7 +2,7 @@
 
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse
 
-*🇩🇪 [Diese Seite auf Deutsch](README.de.md) · 📖 [Full manual](docs/manual-en.md)*
+*🇩🇪 [Diese Seite auf Deutsch](README.de.md)*
 
 A voice-controlled radio assistant for [DCS World](https://www.digitalcombatsimulator.com/) that joins a [DCS-SimpleRadio-Standalone](https://github.com/ciribob/DCS-SimpleRadio-Standalone) (SRS) server as an external AWACS-mode client.
 
@@ -11,65 +11,57 @@ A pilot keys up on a monitored frequency, says the wake word and asks something 
 > *"Overlord, bogey dope."*
 > *"Enfield 1-1, this is Overlord… Bogey, bearing zero, niner, zero, thirty five miles, twenty two thousand, hot, group of two, type MiG-29."*
 
----
+## 📖 Documentation
 
-## What it can do
+**Everything is in the manual — installation, every setting, radio usage, troubleshooting:**
 
-- **Offline wake word** — [Vosk](https://alphacephei.com/vosk/) transcribes locally and watches for your keyword. No account, no per-request cost, and no audio leaves the machine for this step.
-- **Answers from the running mission** — "bogey dope", "picture" and "threat check" are answered from live DCS data via [DCS-gRPC](https://github.com/DCS-gRPC/rust-server): BRAA with aspect from the pilot's own aircraft, or bullseye format.
-- **Threat circle** — a pilot arms a standing watch around their own aircraft ("threat circle forty miles") and gets warned as soon as a hostile enters it.
-- **Fixed phrases and free answers** — known question/answer pairs are served directly; anything else can go to Google Gemini (or be refused, your choice).
-- **Several radios at once** — each frequency with its own wake word, callsign and conversation, e.g. "Overlord" on AWACS and "Texaco" on the tanker.
-- **Coalition awareness** — can ignore the opposing side entirely, the way a real radio would.
-- **Config editor** — a desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer, and one-click Windows Service management.
-- **One-command installer build** — produces a `Setup.exe` that installs every runtime dependency on a bare Windows machine.
+### → **[Full manual (English)](docs/manual-en.md)** · **[Vollständiges Handbuch (Deutsch)](docs/manual-de.md)**
 
-## Quick start
+Reference material: [configuration fields](docs/configuration.md) · [config editor](docs/gui.md) · [building the installer](docs/building-the-installer.md) · [contributing](docs/contributing.md) · [changelog](docs/changelog.md)
 
-```powershell
-# 1. Set up the dev machine (SDK, workloads, runtimes, a speech model)
-.\setup-dev-environment.ps1 -ProjectRoot "C:\path\to\this\repo" -VoskModelSize Standard
+## Features
 
-# 2. First run: creates config.json next to the executable and exits
-dotnet run --project Darkstar.csproj
-
-# 3. Fill in SRS server, radios, VoskModelPath and GeminiApiKey - by hand or in the GUI - then run it again
-```
-
-Deploying to another machine instead? Build the installer:
-
-```powershell
-.\build-installer.ps1                      # with a bundled speech model
-.\build-installer.ps1 -Slim                # small installer, model supplied separately
-```
-
-Everything in detail — requirements, every setting, radio usage, DCS-gRPC setup, troubleshooting — is in the **[full manual](docs/manual-en.md)**.
-
-## Documentation
-
-| Document | What's in it |
+| | |
 |---|---|
-| **[Manual](docs/manual-en.md)** | The complete guide: requirements, installation, configuration, radio usage, DCS-gRPC, Windows Service, troubleshooting. |
-| [Configuration reference](docs/configuration.md) | Every field of `config.json`, `phrases.json` and `vocabulary.json`. |
-| [Config editor (GUI)](docs/gui.md) | All nine channel panels and the Blazor Hybrid build requirements. |
-| [Building the installer](docs/building-the-installer.md) | How `build-installer.ps1` and the Inno Setup script fit together. |
-| [Contributing](docs/contributing.md) | Ground rules and project layout for working on the code. |
-| [Changelog](docs/changelog.md) | What changed. |
-| 🇩🇪 [Handbuch (Deutsch)](docs/handbuch-de.md) | Dieselbe vollständige Dokumentation auf Deutsch. |
+| 🎙️ **Offline wake word** | [Vosk](https://alphacephei.com/vosk/) transcribes locally and watches for your keyword. No account, no per-request cost, no audio leaving the machine for this step. |
+| 🛰️ **Answers from the live mission** | "bogey dope", "picture" and "threat check" answered from real DCS data via [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA with aspect from the pilot's own aircraft, or bullseye format. |
+| ⭕ **Threat circle** | A pilot arms a watch that flies with them ("threat circle forty miles") and gets warned the moment a hostile enters it. |
+| 📻 **Several radios at once** | Each frequency with its own wake word, callsign and conversation — "Overlord" on AWACS, "Texaco" on the tanker. |
+| 💬 **Fixed phrases or free answers** | Known question/answer pairs served directly; anything else goes to Google Gemini, or is refused — your choice. |
+| 🎯 **Realistic sensor gating** | Report only what a configured AI AWACS actually detects, or everything in the mission. |
+| 🛡️ **Coalition aware** | Can ignore the opposing side entirely, the way a real radio net would. |
+| 🖥️ **Config editor** | Desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer and one-click Windows Service management. |
+| 📦 **One-file installer** | A `Setup.exe` that installs every runtime dependency on a bare Windows machine. |
+
+## Installation
+
+1. Download **`DARKSTAR-Setup-<version>.exe`** from the [Releases](../../releases) page.
+2. Run it — it installs the bot, the config editor, a speech model and every missing runtime.
+3. Open the config editor, fill in your SRS server, radios and Gemini API key, save, start.
+
+Step by step, with everything that can go wrong: **[manual, chapter 3](docs/manual-en.md#3-installation)**.
 
 ## Requirements
 
-Windows, the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), a running SRS server with its `DCS-SR-ExternalAudio.exe`, a [Vosk model](https://alphacephei.com/vosk/models) and a [Gemini API key](https://aistudio.google.com/apikey) (free tier is enough). Optional: a [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) server for the tactical replies. The [manual](docs/manual-en.md#2-what-you-need) explains each of them.
+| | Needed for | Notes |
+|---|---|---|
+| **Windows** | everything | Replies use `DCS-SR-ExternalAudio.exe` and Windows TTS voices. |
+| **SRS server** | everything | Including its `DCS-SR-ExternalAudio.exe`, which the bot transmits through. |
+| **[Gemini API key](https://aistudio.google.com/apikey)** | transcription, free answers | Free tier is enough for testing and small groups. |
+| **[Vosk model](https://alphacephei.com/vosk/models)** | wake word | Comes with the installer. Offline, free, no account. |
+| .NET 8 Desktop Runtime, VC++ Redistributable, WebView2 | running the bot and GUI | **Installed automatically** by the installer if missing. |
+| **[DCS-gRPC](https://github.com/DCS-gRPC/rust-server)** | tactical replies, threat circle | Optional. Without it, everything else still works. |
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) + Visual Studio 2022 | building from source only | Not needed to *use* the bot. |
 
 ## Project structure
 
 ```
 Darkstar.csproj, *.cs        The bot: SRS connection, audio, wake word, replies
-Darkstar.Core/               Shared library: config, phrases, logging, DCS-gRPC, service management
-Darkstar.Gui/                Config editor (Blazor Hybrid over WPF)
-installer/                   Inno Setup script
+  └── Darkstar.Core/         Shared library: config, phrases, logging, DCS-gRPC, service management
+  └── Darkstar.Gui/          Config editor (Blazor Hybrid over WPF)
+installer/                   Inno Setup script for the distributable Setup.exe
 docs/                        All documentation
-build-installer.ps1          Builds the distributable Setup.exe
+build-installer.ps1          Builds the Setup.exe (Release, dependencies, speech model, one command)
 setup-dev-environment.ps1    Sets up a development machine
 ```
 

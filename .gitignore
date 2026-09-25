@@ -19,7 +19,7 @@ models/
 # Installer build artifacts
 installer/publish/
 installer/*.exe
-installer/MicrosoftEdgeWebview2Setup.exe
+!installer/MicrosoftEdgeWebview2Setup.exe
 
 # OS files
 Thumbs.db
@@ -31,4 +31,4 @@ grpc-dumps/
 # Installer build artefacts (produced by build-installer.ps1)
 installer/vosk-model/
 installer/output/
-installer/MicrosoftEdgeWebview2Setup.exe
+!installer/MicrosoftEdgeWebview2Setup.exe

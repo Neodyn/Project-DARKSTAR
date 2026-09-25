@@ -40,7 +40,9 @@ All notable changes to this project are documented here. Format loosely follows 
 - `setup-dev-environment.ps1`: a PowerShell script that checks/installs the .NET 8 SDK, required Visual Studio workloads, the WebView2 Runtime, and a Vosk model, then does a trial restore/build — including a project-structure check that catches misplaced `.csproj` files before Visual Studio does.
 
 ### Changed
-- Documentation moved into `docs/` (`manual-en.md`, `handbuch-de.md`, `configuration.md`, `gui.md`, `contributing.md`, `changelog.md`, `building-the-installer.md`), with `README.md` and the new `README.de.md` acting as short overview pages that link into the full documentation in either language.
+- Documentation reorganised around the manuals: `docs/manual-en.md` and `docs/manual-de.md` (renamed from `handbuch-de.md`) are the single place where everything is explained, and both README pages were cut down to what belongs on a landing page - features, requirements, project structure and links into the manual.
+- Installation is documented as "download the Setup.exe from the Releases page" first; building the installer and running from source are now clearly marked as the developer paths.
+- Documentation moved into `docs/` (`manual-en.md`, `manual-de.md`, `configuration.md`, `gui.md`, `contributing.md`, `changelog.md`, `building-the-installer.md`), with `README.md` and the new `README.de.md` acting as short overview pages that link into the full documentation in either language.
 - The installer build now always publishes in Release and wipes the publish folders first, so Debug or stale output can never end up in a Setup.exe.
 - Removed the unused speech stubs (`StubSpeechToText`, `StubTextToSpeech`, `EchoResponseGenerator`) and the `ITextToSpeech` interface from `SpeechServices.cs` - leftovers from the initial scaffold; reply audio goes through `DCS-SR-ExternalAudio.exe`, not through a .NET interface.
 - Project and Windows Service renamed from `DcsSrsHotwordBot` to `Darkstar` / "D.A.R.K.S.T.A.R." throughout the codebase, project files, and installer.

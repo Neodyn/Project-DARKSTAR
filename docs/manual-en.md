@@ -1,6 +1,6 @@
 # D.A.R.K.S.T.A.R. — Complete manual
 
-*Deutsche Fassung: **[handbuch-de.md](handbuch-de.md)***
+*Deutsche Fassung: **[manual-de.md](manual-de.md)***
 
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse — a voice-controlled radio assistant for [DCS World](https://www.digitalcombatsimulator.com/) that joins a [DCS-SimpleRadio-Standalone](https://github.com/ciribob/DCS-SimpleRadio-Standalone) (SRS) server as an external AWACS-mode client.
 
@@ -102,119 +102,77 @@ The dev-setup script can download any of them for you (`-VoskModelSize Standard`
 
 ## 3. Installation
 
-### Option A: with the installer (recommended for a server)
+### The normal way: the installer from the Releases page
 
-The Inno Setup installer puts the bot, the GUI and a Vosk model onto a machine and installs **every** runtime dependency both need — the target machine only has to be Windows.
+1. Download the latest **`DARKSTAR-Setup-<version>.exe`** from the repository's **Releases** page.
+2. Run it (it asks for administrator rights — it installs system runtimes).
+3. Choose what to install:
 
-1. Run `Setup.exe`.
-2. Pick the components (bot, GUI, Vosk model).
-3. Optionally tick *"Install and start as a Windows Service"* — you can also do this later and more comfortably from the GUI (see [chapter 9](#9-running-as-a-windows-service)).
+   | Component | What it is |
+   |---|---|
+   | Bot service | The bot itself. Always installed. |
+   | Config GUI | The graphical configuration editor. Recommended. |
+   | Vosk model | The offline speech model. Only in the full installer, not in the `-slim` one. |
 
-The installer checks each dependency and skips whatever is already present: .NET 8 Desktop Runtime, Visual C++ Redistributable, WebView2 Runtime.
+4. Optionally tick *"Install and start as a Windows Service"*. You can also do that later, and more comfortably, from the GUI — see [chapter 9](#9-running-as-a-windows-service).
 
-Building the installer yourself is described in [building-the-installer.md](building-the-installer.md).
+The installer brings every runtime dependency with it and installs only what is actually missing: the **.NET 8 Desktop Runtime**, the **Visual C++ Redistributable** (needed by Vosk) and the **WebView2 Runtime** (needed by the GUI). It also writes a `config.json` containing the correct path to the model it just installed, so that one setting is already done.
+
+Two installer variants exist. The full one carries the speech model; the **`-slim`** one doesn't and is a few MB instead of up to ~2 GB — for machines that already have a model, in which case `VoskModelPath` has to be set by hand afterwards.
+
+After installing, continue with [chapter 4](#4-first-start).
 
 ### Building the installer yourself
 
-From the repository root, in PowerShell:
+Only needed to produce a new `Setup.exe` (for a release, or with a different speech model). In PowerShell, from the repository root:
 
 ```powershell
-.\build-installer.ps1
+.\build-installer.ps1                                        # full installer, small model
+.\build-installer.ps1 -VoskModelSize Standard -Version 1.1   # recommended model, ~1.8 GB
+.\build-installer.ps1 -Slim                                  # slim installer, no model
 ```
 
-This checks the prerequisites (.NET 8 SDK, Inno Setup 6), publishes the bot and the GUI, downloads
-the three dependency installers and a Vosk model, and compiles everything into
-`installer\output\DARKSTAR-Setup-1.0.exe`. Copy that one file to the target machine and run it —
-nothing else has to be prepared there.
+It checks the prerequisites, publishes both projects **in Release**, fetches the dependency installers and the model, and compiles everything into `installer\output\`. Details and all options: [building-the-installer.md](building-the-installer.md).
+
+### Running from source
+
+For working on the code rather than just using it. The setup script installs the .NET 8 SDK, the Visual Studio workloads, the runtimes and a speech model, then does a trial build:
 
 ```powershell
-.\build-installer.ps1 -VoskModelSize Standard -Version 1.1   # recommended model, ~1.8 GB installer
-.\build-installer.ps1 -Slim                                  # slim installer, no model bundled
-.\build-installer.ps1 -DryRun                                # only check prerequisites
+.\setup-dev-environment.ps1 -ProjectRoot "C:\path\to\repo" -VoskModelSize Standard
+dotnet run --project Darkstar.csproj
 ```
 
-Everything shipped is built in **Release**; the script never uses Debug output. `-Slim` (same as
-`-SkipVoskModel`) leaves the speech model out entirely, which turns a ~1.8 GB installer into a few
-MB — useful when the target machine already has a model, or when you distribute it separately. The
-file is then named `DARKSTAR-Setup-<version>-slim.exe`, and `VoskModelPath` has to be filled in by
-hand after installing; without it the bot falls back to a placeholder that recognizes no words.
-
-Re-running is safe: each step skips itself when its result is already there. Delete
-`installer\vosk-model\` to bundle a different model size. More options are in
-[building-the-installer.md](building-the-installer.md).
-
-
-### Option B: from source
-
-1. Clone the repository.
-2. Run the setup script from an **elevated** PowerShell — it checks and installs the .NET 8 SDK, the required Visual Studio workloads, the Visual C++ Redistributable, the WebView2 Runtime and a Vosk model, verifies the project structure, and finishes with a trial build:
-
-   ```powershell
-   .\setup-dev-environment.ps1 -ProjectRoot "C:\path\to\repo" -VoskModelSize Standard
-   ```
-
-   | Parameter | Default | Purpose |
-   |---|---|---|
-   | `-ProjectRoot` | `K:\Darkstar\BOT_SRS` | Repository folder. |
-   | `-VoskModelSize` | `Small` | `Small`, `Standard` or `Large` (see the table above). |
-   | `-VoskModelUrl` | — | Download a different model instead; overrides `-VoskModelSize`. |
-   | `-SkipWebView2` | off | Skip the WebView2 check. |
-   | `-SkipVoskModel` | off | Skip the model download. |
-   | `-SkipVCRedist` | off | Skip the Visual C++ Redistributable check. |
-
-   The script is safe to re-run at any time — every step skips itself when it is already satisfied. An existing Vosk model is never replaced, even if you ask for a different size (delete the folder first if you want to switch).
-
-3. Build and run:
-
-   ```
-   dotnet run --project Darkstar.csproj
-   ```
-
-4. For a production copy, publish it framework-dependent:
-
-   ```
-   dotnet publish Darkstar.csproj -c Release -r win-x64 --self-contained false -o publish\bot
-   dotnet publish Darkstar.Gui\Darkstar.Gui.csproj -c Release -r win-x64 --self-contained false -o publish\gui
-   ```
-
-### Folder layout
-
-```
-Darkstar-Project/
-├── Darkstar.sln                  Visual Studio solution
-├── Darkstar.csproj               The bot (console app / Windows Service) → Darkstar.exe
-├── Program.cs, BotService.cs, SrsConnection.cs, GeminiClient.cs, ...
-├── Darkstar.Core/                Shared library: config, phrases, logging, backups,
-│                                 DCS-gRPC access, Windows Service management
-├── Darkstar.Gui/                 Configuration editor → Darkstar.ConfigEditor.exe
-├── installer/                    Inno Setup script
-└── setup-dev-environment.ps1     Dev machine bootstrap
-```
-
-**Important:** `Darkstar.csproj` sits in the repository root, *not* in a subfolder of its own — its project references point at `Darkstar.Core\` relative to itself. Moving it into a subfolder breaks the solution.
+Its parameters and the project layout are described in [contributing.md](contributing.md).
 
 ---
 
 ## 4. First start
 
-1. **Start the bot once without a `config.json`.** It writes a `config.json` with default values next to the executable and exits, so you can review the settings before it connects to anything.
+1. **Open the Config Editor.** It's in the Start menu as *D.A.R.K.S.T.A.R. Config Editor*, or as `Darkstar.ConfigEditor.exe` in the installation folder. It finds the bot's `config.json` by itself.
 
-2. **Fill in the essentials** — either by editing `config.json` directly or, more comfortably, in the GUI (`Darkstar.ConfigEditor.exe`):
+   *(Running from source instead? Start the bot once — it writes a `config.json` next to the executable and exits, so you can review it before anything connects.)*
 
-   | Setting | Meaning |
-   |---|---|
-   | `SrsHost`, `SrsPort` | Your SRS server (default `127.0.0.1:5002`). |
-   | `Radios` | The frequencies to monitor, each with wake word and callsign. |
-   | `VoskModelPath` | Folder of the unpacked Vosk model. |
-   | `GeminiApiKey` | Your API key. |
-   | `ExternalAudioExePath` | Path to `DCS-SR-ExternalAudio.exe` in the SRS server folder. |
-   | `Coalition` | `2` = Blue, `1` = Red, `0` = Spectator. |
+2. **Fill in the essentials:**
 
-3. **Start the bot again.** The log should show, in order: phrases loaded, wake word active with the radio list, "Connecting to SRS server …", "Connected. Waiting for hotword…".
+   | Setting | Channel in the GUI | Meaning |
+   |---|---|---|
+   | `SrsHost`, `SrsPort` | CH1 Connection | Your SRS server (default `127.0.0.1:5002`). |
+   | `Coalition` | CH1 Connection | `2` = Blue, `1` = Red, `0` = Spectator. |
+   | `ExternalAudioExePath` | CH1 Connection | Path to `DCS-SR-ExternalAudio.exe` in the SRS **server** folder. |
+   | `Radios` | CH2 Radios | The frequencies to monitor, each with wake word and callsign. |
+   | `GeminiApiKey` | CH3 Speech | Your API key. |
+   | `VoskModelPath` | CH3 Speech | Already filled in by the installer; only needed by hand after a `-slim` install or a source build. |
 
-4. **Check it in DCS:** the bot appears in the SRS client list under `ClientName` (default `DARKSTAR`). Key up on a monitored frequency and say the wake word plus a question.
+   Then **Save changes** — the previous version of each file is backed up automatically.
 
-A quick way to verify the reply path on its own, without flying, is a manual test transmission:
+3. **Start the bot:** either register it as a Windows Service on **CH9 Service** (runs in the background and after every reboot), or simply run `Darkstar.exe` for a visible console window while testing.
+
+4. **Check the log.** A healthy start shows, in order: phrases loaded, the wake word active with your radio list, "Connecting to SRS server …", "Connected. Waiting for hotword…".
+
+5. **Check it in DCS:** the bot appears in the SRS client list under `ClientName` (default `DARKSTAR`). Key up on a monitored frequency and say the wake word plus a question.
+
+To test the reply path on its own, without flying, send a transmission by hand:
 
 ```
 cd "C:\Program Files\DCS-SimpleRadio-Standalone\Server"

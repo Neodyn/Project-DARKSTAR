@@ -2,7 +2,7 @@
 
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse
 
-*🇬🇧 [This page in English](README.md) · 📖 [Vollständiges Handbuch](docs/handbuch-de.md)*
+*🇬🇧 [This page in English](README.md)*
 
 Ein sprachgesteuerter Funk-Assistent für [DCS World](https://www.digitalcombatsimulator.com/), der sich als External-AWACS-Client mit einem [DCS-SimpleRadio-Standalone](https://github.com/ciribob/DCS-SimpleRadio-Standalone)-Server (SRS) verbindet.
 
@@ -11,65 +11,57 @@ Ein Pilot drückt auf einer überwachten Frequenz die Sendetaste, sagt das Hotwo
 > *„Overlord, bogey dope."*
 > *„Enfield 1-1, this is Overlord… Bogey, bearing zero, niner, zero, thirty five miles, twenty two thousand, hot, group of two, type MiG-29."*
 
----
+## 📖 Dokumentation
 
-## Was er kann
+**Alles steht im Handbuch — Installation, jede Einstellung, Bedienung am Funk, Fehlersuche:**
 
-- **Hotword-Erkennung offline** — [Vosk](https://alphacephei.com/vosk/) transkribiert lokal und achtet auf dein Schlüsselwort. Kein Account, keine Kosten pro Anfrage, und für diesen Schritt verlässt kein Audio den Rechner.
-- **Antworten aus der laufenden Mission** — „bogey dope", „picture" und „threat check" werden über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) aus echten DCS-Daten beantwortet: BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format.
-- **Threat Circle** — ein Pilot schaltet eine mitfliegende Überwachung um sein Flugzeug scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt.
-- **Feste Phrasen und freie Antworten** — bekannte Frage-/Antwortpaare werden direkt bedient; alles andere kann an Google Gemini gehen oder abgelehnt werden, ganz wie du willst.
-- **Mehrere Radios gleichzeitig** — jede Frequenz mit eigenem Hotword, Rufzeichen und Gesprächsverlauf, etwa „Overlord" für AWACS und „Texaco" für den Tanker.
-- **Koalitionsbewusst** — kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte.
-- **Konfigurationseditor** — eine Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer und Dienstverwaltung per Knopfdruck.
-- **Installer per Einzelbefehl** — erzeugt eine `Setup.exe`, die auf einem nackten Windows alle Laufzeitabhängigkeiten mitinstalliert.
+### → **[Vollständiges Handbuch (Deutsch)](docs/manual-de.md)** · **[Full manual (English)](docs/manual-en.md)**
 
-## Schnellstart
+Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfigurationseditor](docs/gui.md) · [Installer bauen](docs/building-the-installer.md) · [Mitarbeiten](docs/contributing.md) · [Änderungen](docs/changelog.md) *(englisch)*
 
-```powershell
-# 1. Entwicklungsrechner einrichten (SDK, Workloads, Runtimes, Sprachmodell)
-.\setup-dev-environment.ps1 -ProjectRoot "C:\pfad\zum\repo" -VoskModelSize Standard
+## Funktionen
 
-# 2. Erster Start: legt config.json neben der EXE an und beendet sich
-dotnet run --project Darkstar.csproj
-
-# 3. SRS-Server, Radios, VoskModelPath und GeminiApiKey eintragen - von Hand oder in der GUI - dann erneut starten
-```
-
-Du willst es stattdessen auf einem anderen Rechner installieren? Dann den Installer bauen:
-
-```powershell
-.\build-installer.ps1                      # mit mitgeliefertem Sprachmodell
-.\build-installer.ps1 -Slim                # schlanker Installer, Modell kommt separat
-```
-
-Alles im Detail — Voraussetzungen, jede Einstellung, Bedienung am Funk, DCS-gRPC-Einrichtung, Fehlersuche — steht im **[vollständigen Handbuch](docs/handbuch-de.md)**.
-
-## Dokumentation
-
-| Dokument | Inhalt |
+| | |
 |---|---|
-| **[Handbuch](docs/handbuch-de.md)** | Die vollständige Anleitung: Voraussetzungen, Installation, Konfiguration, Bedienung am Funk, DCS-gRPC, Windows-Dienst, Fehlersuche. |
-| [Konfigurationsreferenz](docs/configuration.md) | Jedes Feld von `config.json`, `phrases.json` und `vocabulary.json` (englisch). |
-| [Konfigurationseditor (GUI)](docs/gui.md) | Alle neun Kanäle und die Besonderheiten des Blazor-Hybrid-Builds (englisch). |
-| [Installer bauen](docs/building-the-installer.md) | Wie `build-installer.ps1` und das Inno-Setup-Skript zusammenspielen (englisch). |
-| [Mitarbeiten](docs/contributing.md) | Grundregeln und Projektaufbau für die Arbeit am Code (englisch). |
-| [Änderungen](docs/changelog.md) | Was sich geändert hat (englisch). |
-| 🇬🇧 [Manual (English)](docs/manual-en.md) | The same complete documentation in English. |
+| 🎙️ **Hotword offline** | [Vosk](https://alphacephei.com/vosk/) transkribiert lokal und achtet auf dein Schlüsselwort. Kein Account, keine Kosten pro Anfrage, kein Audio verlässt dafür den Rechner. |
+| 🛰️ **Antworten aus der laufenden Mission** | „bogey dope", „picture" und „threat check" aus echten DCS-Daten über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format. |
+| ⭕ **Threat Circle** | Ein Pilot schaltet eine mitfliegende Überwachung scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt. |
+| 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen und Gesprächsverlauf — „Overlord" für AWACS, „Texaco" für den Tanker. |
+| 💬 **Feste Phrasen oder freie Antworten** | Bekannte Frage-/Antwortpaare werden direkt bedient; alles andere geht an Google Gemini oder wird abgelehnt — deine Entscheidung. |
+| 🎯 **Realistische Sensorlogik** | Nur melden, was eine konfigurierte KI-AWACS tatsächlich erfasst — oder alles, was in der Mission fliegt. |
+| 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
+| 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer und Dienstverwaltung per Knopfdruck. |
+| 📦 **Installer in einer Datei** | Eine `Setup.exe`, die auf einem nackten Windows alle Laufzeitabhängigkeiten mitinstalliert. |
+
+## Installation
+
+1. **`DARKSTAR-Setup-<Version>.exe`** von der [Releases](../../releases)-Seite herunterladen.
+2. Ausführen — sie installiert Bot, Konfigurationseditor, ein Sprachmodell und jede fehlende Runtime.
+3. Konfigurationseditor öffnen, SRS-Server, Radios und Gemini-API-Key eintragen, speichern, starten.
+
+Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](docs/manual-de.md#3-installation)**.
 
 ## Voraussetzungen
 
-Windows, das [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), ein laufender SRS-Server samt `DCS-SR-ExternalAudio.exe`, ein [Vosk-Modell](https://alphacephei.com/vosk/models) und ein [Gemini-API-Key](https://aistudio.google.com/apikey) (die kostenlose Stufe reicht). Optional: ein [DCS-gRPC](https://github.com/DCS-gRPC/rust-server)-Server für die taktischen Antworten. Das [Handbuch](docs/handbuch-de.md#2-was-du-brauchst) erklärt jeden Punkt einzeln.
+| | Wofür | Anmerkung |
+|---|---|---|
+| **Windows** | alles | Antworten laufen über `DCS-SR-ExternalAudio.exe` und Windows-TTS-Stimmen. |
+| **SRS-Server** | alles | Samt `DCS-SR-ExternalAudio.exe`, worüber der Bot sendet. |
+| **[Gemini-API-Key](https://aistudio.google.com/apikey)** | Transkription, freie Antworten | Die kostenlose Stufe reicht für Tests und kleine Gruppen. |
+| **[Vosk-Modell](https://alphacephei.com/vosk/models)** | Hotword | Liegt dem Installer bei. Offline, kostenlos, ohne Account. |
+| .NET 8 Desktop Runtime, VC++ Redistributable, WebView2 | Betrieb von Bot und GUI | Werden vom Installer **automatisch** nachinstalliert, falls sie fehlen. |
+| **[DCS-gRPC](https://github.com/DCS-gRPC/rust-server)** | taktische Antworten, Threat Circle | Optional. Ohne läuft alles andere trotzdem. |
+| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) + Visual Studio 2022 | nur zum Bauen aus dem Quellcode | Für die reine *Nutzung* nicht nötig. |
 
 ## Projektaufbau
 
 ```
 Darkstar.csproj, *.cs        Der Bot: SRS-Verbindung, Audio, Hotword, Antworten
-Darkstar.Core/               Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
-Darkstar.Gui/                Konfigurationseditor (Blazor Hybrid über WPF)
-installer/                   Inno-Setup-Skript
+  └── Darkstar.Core/         Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
+  └── Darkstar.Gui/          Konfigurationseditor (Blazor Hybrid über WPF)
+installer/                   Inno-Setup-Skript für die auslieferbare Setup.exe
 docs/                        Die gesamte Dokumentation
-build-installer.ps1          Baut die auslieferbare Setup.exe
+build-installer.ps1          Baut die Setup.exe (Release, Abhängigkeiten, Sprachmodell, ein Befehl)
 setup-dev-environment.ps1    Richtet einen Entwicklungsrechner ein
 ```
 

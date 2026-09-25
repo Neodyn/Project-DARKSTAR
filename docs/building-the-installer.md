@@ -1,6 +1,10 @@
 # Building the D.A.R.K.S.T.A.R. installer
 
-*Part of the [D.A.R.K.S.T.A.R. documentation](../README.md#documentation).*
+> **Just want to install the bot?** Download `DARKSTAR-Setup-<version>.exe` from the Releases page
+> instead — see [manual-en.md, chapter 3](manual-en.md#3-installation). This page is about
+> *producing* that file.
+
+*Part of the D.A.R.K.S.T.A.R. documentation — see the [manual](manual-en.md).*
 
 This produces a normal Windows `Setup.exe` (via [Inno Setup](https://jrsoftware.org/isinfo.php),
 free) that installs the bot (and optionally the config GUI + Vosk model + Windows Service) on a

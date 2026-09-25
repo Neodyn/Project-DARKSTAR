@@ -38,7 +38,7 @@ A single toggle for `DiscordEnabled` and the webhook URL field, which is disable
 Toggles for `LoggingEnabled` and `DebugLogging`, a read-only display of the resolved log folder path, and a live-refreshable tail of the most recent log lines read directly from the current log file — so you can check that the bot (running separately) is behaving correctly without leaving the GUI.
 
 ### CH8 — DCS-gRPC
-A toggle for `DcsGrpcEnabled`, fields for the server address and optional API key (both disabled while the toggle is off), and a **"Test connection"** button that calls `DcsGrpcTester.TestConnectionAsync` against `MissionService.GetScenarioCurrentTime` — confirming that a DCS-gRPC server is reachable and actively receiving data from a running mission. The panel is explicit that this is groundwork only: nothing here yet feeds into the bot's actual replies (see [changelog.md](changelog.md) / [README.md](../README.md#what-it-can-do)).
+A toggle for `DcsGrpcEnabled`, fields for the server address and optional API key (both disabled while the toggle is off), and a **"Test connection"** button that calls `DcsGrpcTester.TestConnectionAsync` against `MissionService.GetScenarioCurrentTime` — confirming that a DCS-gRPC server is reachable and actively receiving data from a running mission. Everything below on this channel builds on that connection: the tactical replies, the threat circle and the mission data explorer (see [manual-en.md, chapter 8](manual-en.md#8-live-mission-data-via-dcs-grpc)).
 
 #### Tactical replies
 

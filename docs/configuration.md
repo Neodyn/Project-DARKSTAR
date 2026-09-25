@@ -1,6 +1,6 @@
 # Configuration reference
 
-*Looking for a step-by-step guide instead of a field reference? See the full manual: **[manual-en.md](manual-en.md)** (English) / **[handbuch-de.md](handbuch-de.md)** (Deutsch).*
+*Looking for a step-by-step guide instead of a field reference? See the full manual: **[manual-en.md](manual-en.md)** (English) / **[manual-de.md](manual-de.md)** (Deutsch).*
 
 D.A.R.K.S.T.A.R. reads its settings from three JSON files next to the executable, all of which are created automatically with sensible defaults on first run if missing:
 
