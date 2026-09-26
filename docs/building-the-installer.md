@@ -89,13 +89,25 @@ Inno Setup via winget when it's missing).
     self-contained, doesn't bring this along since it isn't a .NET assembly).
   - **WebView2 Runtime** — checked/installed only when the GUI component is selected. Most
     current Windows 10/11 machines already have it.
-- **Writes a `config.json` with `VoskModelPath` already pointing at the model it just
-  installed** - this is exactly the manual fix you had to do by hand after moving the project;
-  the installer does it automatically because it's the only one who reliably knows where it put
-  the model. Every other setting still gets its normal default via the bot's own
-  `AppConfig.LoadOrCreateDefault` on first run (and gets merged into this file, same as usual) -
-  the installer does not try to guess things it can't know, like your SRS server address or your
-  Gemini API key.
+- **Writes a `config.json` with the two paths it can work out itself** - this is exactly the
+  manual fixing you had to do by hand after moving the project:
+  - `VoskModelPath`, pointing at the model it just installed (only when that component was
+    selected, so a `-slim` install leaves it out).
+  - `ExternalAudioExePath`, pointing at this machine's real SRS installation. It reads SRS's
+    own uninstall entry from the registry (`HKLM64`, `HKLM32`, `HKCU`, matching any
+    `DisplayName` containing "SimpleRadio") and takes its `InstallLocation`; failing that it
+    probes both `Program Files` folders, `%LOCALAPPDATA%\Programs` and the root,
+    `Program Files` and `Games` folder of every drive from C: to Z: for the known layouts.
+    The layout and folder-name lists mirror `Darkstar.Core\SrsPaths.cs`, which does the same
+    at runtime behind the GUI's "Detect SRS installation" button - `srstest` asserts that the
+    two lists stay in sync.
+
+  It runs at `ssPostInstall` for every variant (the slim one included, which still has the SRS
+  path to seed), writes nothing at all when neither value could be determined, and never
+  touches an existing `config.json`. Every other setting still gets its normal default via the
+  bot's own `AppConfig.LoadOrCreateDefault` on first run (and is merged into this file, same as
+  usual) - the installer does not try to guess things it can't know, like your SRS server
+  address or your Gemini API key.
 - Optional checkbox on the "Ready to Install" page: register the bot as a Windows Service
   (unchecked by default, since silently starting background services isn't something an
   installer should assume you want).

@@ -99,6 +99,60 @@
 </div>
 
 <div class="card" style="margin-top:8px">
+    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Wake word accuracy</div>
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        How the 48 kHz radio audio is prepared before Vosk sees it. If wake words are missed or fire
+        on their own, this is the first place to look — after the model size.
+    </div>
+
+    <div class="field" style="max-width:420px">
+        <label>AUDIO PREPARATION</label>
+        <div class="row2">
+            <button class="link-action"
+                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#2E4E4C" : "#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#5FBF7A" : "#5A6A70");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#16302A" : "transparent")"
+                    @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.LowPass">Low-pass (recommended)</button>
+            <button class="link-action"
+                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#6C5A2E" : "#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#D9A62E" : "#5A6A70");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#332A12" : "transparent")"
+                    @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.Average">Average (old)</button>
+        </div>
+        <div class="hint">
+            Low-pass filters properly before discarding samples, so sounds above 8 kHz can't fold down
+            into the speech range and be misheard. <strong>Average</strong> is the old behaviour and is
+            only here so the two can be compared on the same recordings.
+        </div>
+    </div>
+
+    <div class="toggle-row">
+        <div>
+            <div>Even out quiet pilots (automatic gain)</div>
+            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                Helps transmissions that arrive too quiet — but any automatic gain also lifts background
+                noise, which can produce wake words nobody said. Turn on only if quiet pilots are a real
+                problem, then check for false triggers.
+            </div>
+        </div>
+        <button class="toggle @(Store.Config.HotwordAutoGain ? "on" : "")" @onclick="() => Store.Config.HotwordAutoGain = !Store.Config.HotwordAutoGain">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <div class="toggle-row">
+        <div>
+            <div>Save every transmission to <code>recordings\</code></div>
+            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                Builds a set of real recordings to measure against, including the ones where the wake word
+                did <em>not</em> fire. Then run
+                <code>Darkstar.exe --test-hotword recordings --compare</code>.
+                Roughly 100 KB per second of speech, and nothing deletes them again.
+            </div>
+        </div>
+        <button class="toggle @(Store.Config.SaveRecordings ? "on" : "")" @onclick="() => Store.Config.SaveRecordings = !Store.Config.SaveRecordings">
+            <span class="knob"></span>
+        </button>
+    </div>
+</div>
+
+<div class="card" style="margin-top:8px">
     <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Fallback hotword (used only if no Vosk model is set)</div>
     <div class="row2" style="margin-top:10px">
         <div class="field" style="margin-bottom:0">

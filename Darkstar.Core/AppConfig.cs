@@ -319,8 +319,12 @@ public sealed class AppConfig
     /// <summary>Only needed if the server requires EXTERNAL_AWACS_MODE with a password. Leave empty if not needed.</summary>
     public string ExternalAwacsPassword { get; set; } = "";
 
-    /// <summary>Path to DCS-SR-ExternalAudio.exe, usually located in the SRS server install folder.</summary>
-    public string ExternalAudioExePath { get; set; } = @"C:\Program Files\DCS-SimpleRadio-Standalone\Server\DCS-SR-ExternalAudio.exe";
+    /// <summary>
+    /// Path to DCS-SR-ExternalAudio.exe, which ships with DCS-SimpleRadio-Standalone in its own
+    /// "ExternalAudio" subfolder. The default below is the standard install location; the installer
+    /// and the config editor's "Detect" button both look the real one up (see SrsPaths).
+    /// </summary>
+    public string ExternalAudioExePath { get; set; } = SrsPaths.DefaultExternalAudioExePath;
 
     /// <summary>
     /// Extra command-line arguments appended to every DCS-SR-ExternalAudio.exe call, for options
@@ -342,6 +346,33 @@ public sealed class AppConfig
 
     /// <summary>Keyword the continuously transcribed text is checked against, e.g. "computer".</summary>
     public string VoskKeyword { get; set; } = "computer";
+
+    /// <summary>
+    /// How the 48 kHz radio audio is reduced to the 16 kHz Vosk expects.
+    ///
+    /// "LowPass" (default) filters properly before throwing samples away, which keeps content
+    /// above 8 kHz from folding down into the speech range and being mistaken for other sounds.
+    /// "Average" is the old behaviour (average three samples, drop two) and exists to compare
+    /// the two on the same recording - see the manual's chapter on wake word accuracy.
+    /// </summary>
+    public HotwordAudioFilter HotwordAudioFilter { get; set; } = HotwordAudioFilter.LowPass;
+
+    /// <summary>
+    /// Evens out how loud different pilots arrive before the wake word is looked for. Off by
+    /// default: it helps quiet transmissions, but any automatic gain also lifts background
+    /// noise, and noise lifted into speech range is what produces wake words nobody said. Turn
+    /// it on only if quiet pilots are a real problem, and check the false-positive rate after.
+    /// Never affects the audio that is transcribed or saved - only what the detector hears.
+    /// </summary>
+    public bool HotwordAutoGain { get; set; } = false;
+
+    /// <summary>
+    /// Writes the audio of every transmission to "recordings\" as a WAV file, so wake word
+    /// accuracy can be measured against real traffic instead of guessed at
+    /// ("Darkstar.exe --test-hotword recordings"). Off by default - it writes roughly
+    /// 100 KB per second of speech and never cleans up after itself.
+    /// </summary>
+    public bool SaveRecordings { get; set; } = false;
 
     /// <summary>How many consecutive "silent" 20ms frames end the recording (silence detection after the hotword).</summary>
     public int SilenceFramesToStopRecording { get; set; } = 50;
@@ -418,6 +449,20 @@ public sealed class AppConfig
         BackupUtils.BackupBeforeWrite(configPath);
         var json = JsonSerializer.Serialize(this, JsonOptions);
         File.WriteAllText(configPath, json);
+    }
+
+    /// <summary>
+    /// Reads a config.json without any of the side effects LoadOrCreateDefault has - no file is
+    /// created, no missing fields are merged in, nothing is logged, nothing is backed up. For
+    /// tools that only want to look at the settings, such as the --test-hotword runner.
+    /// </summary>
+    /// <exception cref="JsonException">The file isn't valid JSON.</exception>
+    public static AppConfig? LoadReadOnly(string configPath)
+    {
+        if (!File.Exists(configPath))
+            return null;
+
+        return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(configPath), JsonOptions);
     }
 
     public static AppConfig? LoadOrCreateDefault(string configPath)
@@ -589,10 +634,26 @@ public sealed class AppConfig
         if (string.IsNullOrWhiteSpace(config.ExternalAudioExePath))
             Warn("ExternalAudioExePath is empty - the bot won't be able to send any replies.");
         else if (!File.Exists(config.ExternalAudioExePath))
-            Warn($"ExternalAudioExePath ('{config.ExternalAudioExePath}') does not exist on disk.");
+        {
+            // Look the real one up so the warning can name it instead of just saying "wrong".
+            var detected = SrsPaths.FindExternalAudioExe();
+            Warn(detected is null
+                ? $"ExternalAudioExePath ('{config.ExternalAudioExePath}') does not exist on disk, and no SRS installation was found in the usual places. Set it to your {SrsPaths.ExternalAudioExeName} (config editor, CH1 Connection, \"Detect\")."
+                : $"ExternalAudioExePath ('{config.ExternalAudioExePath}') does not exist on disk - found one at '{detected}' instead.");
+        }
 
-        if (!string.IsNullOrWhiteSpace(config.VoskModelPath) && !Directory.Exists(config.VoskModelPath))
-            Warn($"VoskModelPath ('{config.VoskModelPath}') does not exist on disk.");
+        if (!string.IsNullOrWhiteSpace(config.VoskModelPath))
+        {
+            // Checking the folder's contents, not just that it exists: a folder that isn't a
+            // Vosk model is what used to take the whole process down inside the native library.
+            var model = VoskModelCheck.Check(config.VoskModelPath);
+            if (!model.IsUsable)
+            {
+                Warn(model.Message);
+                foreach (var hint in model.Hints)
+                    Warn($"  {hint}");
+            }
+        }
 
         if (config.HotwordEnergyThreshold is < 0 or > 32767)
             Warn($"HotwordEnergyThreshold ({config.HotwordEnergyThreshold}) should be between 0 and 32767.");

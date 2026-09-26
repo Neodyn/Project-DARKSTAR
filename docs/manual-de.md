@@ -23,7 +23,8 @@ Dieses Handbuch deckt alles ab: was du brauchst, wie du es installierst, jede Ei
 9. [Betrieb als Windows-Dienst](#9-betrieb-als-windows-dienst)
 10. [Dateien, Logs und Backups](#10-dateien-logs-und-backups)
 11. [Fehlersuche](#11-fehlersuche)
-12. [Kosten, Grenzen und Datenschutz](#12-kosten-grenzen-und-datenschutz)
+12. [Hotword-Genauigkeit](#12-hotword-genauigkeit)
+13. [Kosten, Grenzen und Datenschutz](#13-kosten-grenzen-und-datenschutz)
 
 ---
 
@@ -72,7 +73,7 @@ Jedes konfigurierte Radio ist vollständig eigenständig: eigenes Hotword, eigen
 | **Windows** | Der Bot nutzt `DCS-SR-ExternalAudio.exe` und Windows-TTS-Stimmen für seine Antworten. |
 | **.NET 8** | Die **Desktop Runtime** deckt Bot und GUI ab. Nötig zum *Ausführen*. Der Installer bringt sie mit; aus dem Quellcode brauchst du das [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). |
 | **Laufender SRS-Server** | Der Bot verbindet sich als External-AWACS-Client. Er muss nicht auf derselben Maschine laufen — allerdings sendet `DCS-SR-ExternalAudio.exe` derzeit an `127.0.0.1` (siehe [Fehlersuche](#11-fehlersuche)). |
-| **`DCS-SR-ExternalAudio.exe`** | Teil der SRS-**Server**-Installation. Wird für jede Antwort verwendet. |
+| **`DCS-SR-ExternalAudio.exe`** | Teil von DCS-SimpleRadio-Standalone, im Unterordner `ExternalAudio`. Wird für jede Antwort verwendet. |
 | **Vosk-Sprachmodell** | Offline, kostenlos, ohne Account. [Übersicht](https://alphacephei.com/vosk/models) — welches, siehe Tabelle unten. |
 | **Google-Gemini-API-Key** | Kostenlos bei [Google AI Studio](https://aistudio.google.com/apikey). Nur für Transkription und frei formulierte Antworten nötig; die kostenlose Stufe reicht für Tests und kleine Gruppen. |
 | **Visual C++ Redistributable (x64)** | Wird von Vosks nativer `libvosk.dll` benötigt. Installer und Setup-Skript erledigen das. |
@@ -116,9 +117,38 @@ Das Setup-Skript lädt jedes davon auf Wunsch herunter (`-VoskModelSize Standard
 
 4. Optional *„Install and start as a Windows Service"* ankreuzen. Das geht auch später und bequemer über die GUI — siehe [Kapitel 9](#9-betrieb-als-windows-dienst).
 
-Der Installer bringt alle Laufzeitabhängigkeiten mit und installiert nur, was tatsächlich fehlt: die **.NET 8 Desktop Runtime**, das **Visual C++ Redistributable** (für Vosk) und die **WebView2 Runtime** (für die GUI). Außerdem legt er eine `config.json` mit dem korrekten Pfad zum gerade installierten Modell an — diese eine Einstellung ist damit schon erledigt.
+Der Installer bringt alle Laufzeitabhängigkeiten mit und installiert nur, was tatsächlich fehlt: die **.NET 8 Desktop Runtime**, das **Visual C++ Redistributable** (für Vosk) und die **WebView2 Runtime** (für die GUI).
+
+Außerdem legt er eine `config.json` mit den beiden Pfaden an, die er selbst ermitteln kann — beide müssen damit nicht mehr von Hand eingetragen werden:
+
+- **`VoskModelPath`** — wohin er das Sprachmodell gerade installiert hat.
+- **`ExternalAudioExePath`** — wo **deine** SRS-Installation liegt. Er fragt zuerst in der Registry nach, wo sich DCS-SimpleRadio-Standalone eingetragen hat, und sucht, falls dort nichts steht, die üblichen Installationsorte ab (beide `Program Files`-Ordner, Benutzerinstallationen sowie Laufwerkswurzel, `Program Files` und `Games` jedes Laufwerks) — zuerst nach `ExternalAudio\DCS-SR-ExternalAudio.exe`, dann nach den älteren Varianten direkt im Ordner und unter `Server\`.
+
+Eine vorhandene `config.json` wird nie überschrieben, eine Reparatur oder ein Update lässt deine Einstellungen also unangetastet. Wird nichts gefunden (SRS noch nicht installiert oder an einem ungewöhnlichen Ort), bleibt das Feld auf seinem Standardwert und lässt sich später mit dem Knopf **Detect SRS installation** auf **CH1 Connection** füllen.
 
 Es gibt zwei Varianten: Die volle enthält das Sprachmodell, die **`-slim`**-Variante nicht und ist wenige MB statt bis zu ~2 GB groß — für Rechner, auf denen bereits ein Modell liegt. Dann muss `VoskModelPath` hinterher von Hand gesetzt werden.
+
+### Eine bestehende Installation aktualisieren
+
+Die neue `Setup.exe` einfach über die alte laufen lassen — vorher deinstallieren ist nicht nötig. Sie erkennt die installierte Version und verhält sich entsprechend:
+
+| Situation | Was passiert |
+|---|---|
+| **Neuere Version** | Normales Update. Installationsordner und die früher gewählten Komponenten/Aufgaben werden übernommen, also Weiter, Weiter, Fertig. |
+| **Gleiche Version nochmal** | Reparatur-Installation. Dasselbe, nur ohne Versionswechsel. |
+| **Ältere über eine neuere Version** | Sie sagt es und fragt nach. Ein Nein bricht ab, ohne irgendetwas zu ändern. |
+
+Was ein Update erhält und selbst erledigt:
+
+- **`config.json`, `phrases.json` und `vocabulary.json` werden nie überschrieben.** Neue Einstellungen aus dem Update ergänzt der Bot beim nächsten Start selbst in deiner vorhandenen `config.json` — mit ihren Standardwerten und nach einer Sicherung in `Backup\`.
+- **Der Windows-Dienst wird vor dem ersten Dateikopieren gestoppt und danach wieder gestartet.** Ohne das würde das Update an einer gesperrten `Darkstar.exe` scheitern, denn ein laufender Dienst hält seine eigene Programmdatei offen. Lässt sich der Dienst nicht wieder starten, sagt der Installer das, statt dich raten zu lassen.
+- **Eine auf einen alten Pfad zeigende Dienstregistrierung wird repariert** — die vorhandene Registrierung wird entfernt und neu angelegt.
+- **Der Konfigurationseditor wird über den Windows-Neustart-Manager behandelt**: Ist er offen, bietet das Setup an, ihn zu schließen, statt an einer gesperrten Datei zu scheitern.
+
+Welcher der drei Fälle vorliegt, steht auf der Seite „Ready to Install", bevor irgendetwas geschrieben wird.
+
+Die Versionsnummer kommt aus dem Build: `.\build-installer.ps1 -Version 1.2` schreibt `1.2` in den Dateinamen, in die Dateieigenschaften der Setup.exe und in den Deinstallationseintrag, den der *nächste* Installer wieder ausliest. Ein Build ohne eigene Versionsnummer ist vom vorherigen nicht zu unterscheiden — also bei jedem Mal hochzählen.
+
 
 Nach der Installation geht es weiter mit [Kapitel 4](#4-erster-start).
 
@@ -159,7 +189,7 @@ Seine Parameter und der Projektaufbau stehen in [contributing.md](contributing.m
    |---|---|---|
    | `SrsHost`, `SrsPort` | CH1 Connection | Dein SRS-Server (Standard `127.0.0.1:5002`). |
    | `Coalition` | CH1 Connection | `2` = Blau, `1` = Rot, `0` = Zuschauer. |
-   | `ExternalAudioExePath` | CH1 Connection | Pfad zu `DCS-SR-ExternalAudio.exe` im SRS-**Server**-Ordner. |
+   | `ExternalAudioExePath` | CH1 Connection | Pfad zu `DCS-SR-ExternalAudio.exe` im Ordner `ExternalAudio` der SRS-Installation. Wird normalerweise schon vom Installer eingetragen; sonst findet ihn **Detect SRS installation**. |
    | `Radios` | CH2 Radios | Die zu überwachenden Frequenzen, je mit Hotword und Rufzeichen. |
    | `GeminiApiKey` | CH3 Speech | Dein API-Key. |
    | `VoskModelPath` | CH3 Speech | Vom Installer bereits gesetzt; von Hand nur nach einer `-slim`-Installation oder einem Quellcode-Build nötig. |
@@ -175,7 +205,7 @@ Seine Parameter und der Projektaufbau stehen in [contributing.md](contributing.m
 Den Antwortweg kannst du auch ohne Flug einzeln testen:
 
 ```
-cd "C:\Program Files\DCS-SimpleRadio-Standalone\Server"
+cd "C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio"
 DCS-SR-ExternalAudio.exe --text="Radio check, loud and clear." --freqs=251.000 --modulations=AM --coalition=2 --port=5002 --name="TEST"
 ```
 
@@ -246,6 +276,9 @@ Vor der Sprachausgabe werden Bindestriche durch Leerzeichen ersetzt, damit „1-
 |---|---|---|
 | `VoskModelPath` | `""` | Ordner des entpackten Vosk-Modells. Ohne ihn greift ein reiner Lautstärke-Platzhalter, der keine Wörter erkennt. |
 | `VoskKeyword` | `"computer"` | Globales Hotword für Radios ohne eigenes. |
+| `HotwordAudioFilter` | `"LowPass"` | Audio-Aufbereitung vor Vosk. `"Average"` ist der alte Weg, nur zum Vergleich — siehe [Kapitel 12](#12-hotword-genauigkeit). |
+| `HotwordAutoGain` | `false` | Leise Piloten für die Erkennung verstärken. Standardmäßig aus; kann Fehlauslösungen verursachen. |
+| `SaveRecordings` | `false` | Jede Aussendung nach `recordings\` speichern, um die Genauigkeit zu messen. |
 | `SilenceFramesToStopRecording` | `50` | Stille 20-ms-Frames, die eine Aufnahme beenden (50 = 1 Sekunde). |
 | `PreRollSeconds` | `2.0` | Sekunden Audio, die vor dem Hotword gepuffert und der Aufnahme vorangestellt werden, damit der Anfang nicht fehlt. |
 | `HotwordEnergyThreshold` | `2000` | Nur für den Platzhalter-Detektor (kein Vosk-Modell). |
@@ -276,7 +309,7 @@ Transkription und Antwort sind ein einziger API-Aufruf — das halbiert den Kont
 
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
-| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\Server\DCS-SR-ExternalAudio.exe` | Das SRS-Werkzeug für die Aussendung. |
+| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | Das SRS-Werkzeug für die Aussendung. Wird vom Installer aus der tatsächlichen SRS-Installation übernommen; **Detect SRS installation** auf CH1 sucht ihn jederzeit erneut. |
 | `VoiceName` | `""` | Windows-TTS-Stimme, z. B. `"Microsoft David Desktop"`. Leer = Standardstimme. `DCS-SR-ExternalAudio.exe --help` listet die Optionen. |
 | `ExternalAudioExtraArgs` | `""` | Zusätzliche Argumente für jede Aussendung, für Optionen, die der Bot nicht selbst setzt. Ob deine SRS-Version einen Parameter fürs Sprechtempo hat und wie er heißt, hängt von der Version ab — in `--help` nachsehen und hier eintragen (z. B. `--speed=-1`). |
 
@@ -377,7 +410,7 @@ Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen
 
 | Kanal | Inhalt |
 |---|---|
-| **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, Koalition, Koalitionsbeschränkung. |
+| **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, der Pfad zu `DCS-SR-ExternalAudio.exe` samt Knopf **Detect SRS installation**, Koalition, Koalitionsbeschränkung. |
 | **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword und Rufzeichen je Radio, hinzufügen/entfernen. |
 | **CH3 Speech** | Gemini-Key/-Modell/-Wiederholungen, TTS-Stimme, Pre-Roll, Vosk-Modellordner, globales Hotword, Stille-Frames, die Zwischenansage und die Werte des Platzhalter-Detektors. |
 | **CH4 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases` und die Fallback-Antwort. |
@@ -592,12 +625,13 @@ Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *
 
 | Symptom | Wahrscheinliche Ursache und Abhilfe |
 |---|---|
+| **Bot beendet sich gleich nach dem Start, im Log steht „the wake word model could not be loaded"** | Der Ordner in `VoskModelPath` fehlt oder enthält kein Vosk-Modell. Das Log nennt den Ordner und was zu tun ist; ein Modellordner enthält `am\`, `conf\`, `graph\` und `ivector\`. Nach einer `-slim`-Installation muss das Modell separat geladen werden. |
 | **Bot erscheint nicht in der SRS-Clientliste** | Falscher `SrsHost`/`SrsPort`, Server läuft nicht, oder Firewall. Verbindungszeile im Log prüfen. |
-| **Bot reagiert auf gar nichts** | `VoskModelPath` leer oder falsch (das Log sagt es beim Start), falsche Frequenz/Modulation, oder das Hotword wird nicht erkannt — `[STT]`-Zeilen ansehen. |
-| **Hotword wird nur manchmal erkannt** | Modell zu schwach. Auf `Standard` wechseln (`-VoskModelSize Standard`), vorher den alten Modellordner löschen. Das ist mit Abstand die häufigste Ursache. |
+| **Bot reagiert auf gar nichts** | `VoskModelPath` leer oder falsch (das Log sagt es beim Start), falsche Frequenz/Modulation, oder das Hotword wird nicht erkannt — `[STT]`-Zeilen ansehen und [Kapitel 12](#12-hotword-genauigkeit). |
+| **Hotword wird nur manchmal erkannt** | Modell zu schwach. Auf `Standard` wechseln (`-VoskModelSize Standard`), vorher den alten Modellordner löschen. Das ist mit Abstand die häufigste Ursache. Systematisch nachmessen: [Kapitel 12](#12-hotword-genauigkeit). |
 | **Ein Radio reagiert auf das falsche Hotword** | Fast immer eine Fehltranskription des schwachen Modells — `[STT]` prüfen. Schlüsselwörter werden als ganze Wörter verglichen, ein längeres Wort löst also nicht aus. |
 | **Keine Antwort, im Log ein Gemini-Fehler** | Key fehlt/ungültig oder Kontingent erschöpft. `GeminiFallbackModel` setzen oder auf die Zurücksetzung warten. |
-| **Antwort wird erzeugt, aber nie gehört** | `ExternalAudioExePath` falsch oder TTS-Stimme nicht installiert. Manuell testen (siehe [Kapitel 4](#4-erster-start)). |
+| **Antwort wird erzeugt, aber nie gehört** | `ExternalAudioExePath` falsch oder TTS-Stimme nicht installiert. Auf CH1 **Detect SRS installation** drücken, dann eine Aussendung manuell testen (siehe [Kapitel 4](#4-erster-start)). Das Log nennt den gefundenen Pfad, wenn der eingetragene nicht existiert. |
 | **Bot antwortet auf seine eigenen Antworten** | Sollte unmöglich sein — das Radio ist währenddessen selbst stummgeschaltet. Falls doch, bitte mit Log melden. |
 | **Zahlen werden heruntergerattert / sind schwer verständlich** | `DcsIntelSlowSpeech` einschalten (GUI: CH8 → *Slow, clearly spoken numbers*). Ist die Stimme insgesamt zu schnell, eine andere `VoiceName` probieren oder — falls deine SRS-Version das kann — einen Tempo-Parameter über `ExternalAudioExtraArgs` setzen. |
 | **Antwort kommt sehr spät** | 2–5 s sind normal. Zwischenansage aktivieren, damit Piloten wissen, dass sie gehört wurden. |
@@ -614,7 +648,79 @@ Kommst du nicht weiter: Die Logdatei samt den `[STT]`-Zeilen rund um den Fehler 
 
 ---
 
-## 12. Kosten, Grenzen und Datenschutz
+## 12. Hotword-Genauigkeit
+
+Ein Hotword, das nicht anspringt — oder anspringt, obwohl niemand es gesagt hat — ist die häufigste Beschwerde über so einen Aufbau. Drei Dinge entscheiden darüber, in dieser Reihenfolge.
+
+### 12.1 Die Modellgröße (mit Abstand der größte Effekt)
+
+Das kleine Modell (~40 MB) ist ein Kompromiss für Rechner, die nichts übrig haben. Es verhört sich leicht, und jedes Verhören ist eine Gelegenheit, dein Schlüsselwort entweder zu überhören oder zu erfinden. Der Wechsel auf `Standard` (~1,8 GB) klärt die Sache meist:
+
+```powershell
+.\setup-dev-environment.ps1 -VoskModelSize Standard    # aus dem Quellcode
+.\build-installer.ps1 -VoskModelSize Standard          # in einen neuen Installer
+```
+
+Vorher den alten Modellordner löschen, dann `VoskModelPath` auf den neuen zeigen lassen.
+
+### 12.2 Audio-Aufbereitung (CH3 Speech → „Audio preparation")
+
+SRS liefert 48 kHz, Vosk will 16 kHz. Der Weg dorthin bedeutet, zwei von drei Samples wegzuwerfen — und was im Original über 8 kHz liegt, verschwindet dabei nicht einfach. Es klappt als Spiegelbild in den hörbaren Bereich zurück: 10 kHz erscheint wieder bei 6 kHz, 11 kHz bei 5 kHz, 12 kHz bei 4 kHz. Genau dort werden Konsonanten unterschieden — deshalb äußert sich der Effekt als verhörte Wörter und nicht als hörbares Rauschen.
+
+| Einstellung | Wirkung |
+|---|---|
+| **Low-pass** (Standard) | Filtert zuerst, sodass über 8 kHz nichts mehr übrig ist, das zurückklappen könnte. Gegen Testtöne gemessen liegen die Faltungsprodukte 60–79 dB darunter. |
+| **Average** (alt) | Das frühere Verhalten: drei Samples mitteln, zwei wegwerfen. Gleich gemessen liegen die Faltungsprodukte nur 5–22 dB darunter, das meiste kommt also durch. |
+
+`Average` ist für genau einen Zweck erhalten: den Vergleich beider Wege an deinen eigenen Aufnahmen (siehe 12.4). Sonst gibt es keinen Grund dafür.
+
+### 12.3 Leise Piloten (optional)
+
+**„Even out quiet pilots"** verstärkt Aussendungen, die zu leise für die Erkennung ankommen. Bewusst standardmäßig aus: jede automatische Verstärkung hebt auch Hintergrundgeräusche, und in den Sprachbereich gehobenes Rauschen ist genau das, was Hotwords erzeugt, die niemand gesagt hat. Wer es einschaltet, sollte danach auf Fehlauslösungen achten. Das transkribierte und gespeicherte Audio bleibt unberührt — es betrifft nur, was der Detektor hört.
+
+### 12.4 Messen statt raten
+
+**„Save every transmission to `recordings\`"** (CH3 Speech) einschalten und eine Weile normal fliegen. Der Bot schreibt eine WAV-Datei pro Aussendung, benannt nach dem, was passiert ist:
+
+- `..._hit_...` — das Hotword hat ausgelöst.
+- `..._missed_...` — jemand hat gesendet und es hat nicht ausgelöst. Das sind die interessanten, und ihretwegen gibt es das Ganze: ein Überhören hinterlässt sonst nirgends eine Spur.
+
+Dann lässt man den Bot sich selbst bewerten:
+
+```powershell
+Darkstar.exe --test-hotword recordings --compare
+```
+
+Das schickt jede Aufnahme durch den echten Detektor, in denselben 20-ms-Blöcken wie im Betrieb, mit beiden Audio-Aufbereitungen nebeneinander — und zählt, wie viele wie erwartet herauskommen. Es verbindet sich mit nichts, läuft also auch bedenkenlos, während der Dienst aktiv ist.
+
+```
+file                                   expected  Average   LowPass
+------------------------------------------------------------------
+..._0.000MHz_missed_Enfield 1-1.wav    trigger   MISSED    ok
+..._0.000MHz_hit_Springfield 2-1.wav   trigger   ok        ok
+
+Average: 4 of 6 as expected (67%), 2 missed, 0 fired when they shouldn't.
+LowPass: 6 of 6 as expected (100%), 0 missed, 0 fired when they shouldn't.
+```
+
+Nützliche Optionen: `--verbose` zeigt, was Vosk tatsächlich transkribiert hat — meist der Moment, in dem klar wird, was schiefging; `--keyword` und `--model` probieren ein anderes Wort oder Modell, ohne `config.json` anzufassen; `--filter` läuft nur einen der beiden Wege. `Darkstar.exe --test-hotword` ohne Pfad nimmt den Ordner `recordings`.
+
+Eigene Fälle ergänzt man durch Umbenennen: eine Datei mit `_silence_` im Namen soll *nicht* auslösen. So lässt sich ein Satz Aufnahmen pflegen, der den Bot niemals wecken darf — Motorengeräusch, Funkverkehr anderer Piloten, die eigene Stimme des Bots.
+
+> Aufnahmen kosten etwa 100 KB pro Sekunde Sprache, und nichts löscht sie wieder. Die Einstellung nach der Messung wieder ausschalten.
+
+### 12.5 Wenn es weiterhin nicht stimmt
+
+| Symptom | Wo ansetzen |
+|---|---|
+| Löst auf andere Wörter aus | Größeres Modell. Schlüsselwörter werden schon als ganze Wörter verglichen, ein längeres Wort mit deinem darin kann also nicht auslösen — `--verbose` zeigt, was wirklich gehört wurde. |
+| Löst bei einem bestimmten Piloten nie aus | Dessen Pegel, nicht deine Einstellungen: mit einer Aufnahme prüfen, dann 12.3 erwägen. |
+| Löst auf die eigenen Antworten aus | Sollte unmöglich sein — das Radio ist während der Aussendung stummgeschaltet. Falls doch, Log und Aufnahme aufbewahren. |
+| Zwei Radios reagieren auf das Hotword des anderen | Fast immer ein Verhören des schwachen Modells; `--verbose` bestätigt es. |
+
+---
+
+## 13. Kosten, Grenzen und Datenschutz
 
 - **Was Geld kostet:** im Normalbetrieb nichts. Vosk, SRS und DCS-gRPC sind kostenlos und laufen lokal; Geminis Freikontingent reicht für Tests und kleine Gruppen. Bei starker Nutzung kann das Tageskontingent überschritten werden — dafür gibt es `GeminiFallbackModel`.
 - **Was deinen Rechner verlässt:** nur die aufgenommene Frage, nur nach Auslösen des Hotwords und nur, wenn sie nicht schon durch eine feste Phrase oder durch Missionsdaten beantwortet wird. Das dauerhafte Mithören für das Hotword passiert vollständig lokal.

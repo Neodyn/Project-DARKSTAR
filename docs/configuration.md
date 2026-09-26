@@ -81,6 +81,9 @@ Each radio gets its own independent hotword detector, recording buffer, and repl
 |---|---|---|
 | `VoskModelPath` | `""` | Path to an unpacked [Vosk model](https://alphacephei.com/vosk/models) folder. This is the primary (and effectively only supported) wake-word engine. |
 | `VoskKeyword` | `"computer"` | Global default keyword the continuously transcribed text is checked against. Overridable per radio via `Radios[].Keyword`. |
+| `HotwordAudioFilter` | `"LowPass"` | How 48 kHz radio audio is reduced to the 16 kHz Vosk wants. `LowPass` filters before discarding samples, so content above 8 kHz cannot fold down into the speech range and be misheard (measured: fold-over 60–79 dB down, against 5–22 dB for the old path). `"Average"` is that old path, kept only for comparing the two on the same recordings. See [manual-en.md, chapter 12](manual-en.md#12-wake-word-accuracy). |
+| `HotwordAutoGain` | `false` | Amplifies quiet pilots before the wake word is looked for. Off by default: automatic gain also lifts background noise, and lifted noise is what produces wake words nobody said. Never affects the audio that is transcribed or saved. |
+| `SaveRecordings` | `false` | Writes every transmission to `recordings\` as a WAV, tagged `_hit_` or `_missed_`, so accuracy can be measured with `Darkstar.exe --test-hotword recordings --compare`. Roughly 100 KB per second of speech, never cleaned up. |
 | `HotwordEnergyThreshold` | `2000` | Volume threshold (0–32767) for the placeholder energy-based detector, only used as a last-resort fallback if `VoskModelPath` is left empty. Does not recognize actual words. |
 | `HotwordConsecutiveFramesNeeded` | `5` | Consecutive "loud" 20ms frames needed before the placeholder detector fires. Only relevant to the fallback above. |
 | `SilenceFramesToStopRecording` | `50` | Consecutive "silent" 20ms frames (1 second at the default) after the hotword that end the recording. |
@@ -100,7 +103,7 @@ Each radio gets its own independent hotword detector, recording buffer, and repl
 
 | Field | Default | Description |
 |---|---|---|
-| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\Server\DCS-SR-ExternalAudio.exe` | Path to the SRS tool used to transmit replies. List available TTS voices with `DCS-SR-ExternalAudio.exe --help`. |
+| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | Path to the SRS tool used to transmit replies — it lives in the `ExternalAudio` folder of your SRS installation. The installer detects the real location and writes it here; **Detect SRS installation** on CH1 does the same at any time, and startup validation names the path it found when the configured one is missing. List available TTS voices with `DCS-SR-ExternalAudio.exe --help`. |
 | `VoiceName` | `""` | Windows TTS voice name for replies, e.g. `"Microsoft David Desktop"`. Empty uses the server's default voice. |
 | `ExternalAudioExtraArgs` | `""` | Extra command-line arguments appended to every transmission, for options this bot doesn't set itself. Whether your SRS build has a speaking-rate flag (and what it's called) depends on its version — check `DCS-SR-ExternalAudio.exe --help`, then put it here, e.g. `--speed=-1`. A wrong flag surfaces as an `[ExternalAudio]` error in the log. |
 

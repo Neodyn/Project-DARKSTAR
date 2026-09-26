@@ -29,8 +29,25 @@
 <div class="field">
     <label>EXTERNALAUDIO.EXE PATH</label>
     <input type="text" @bind="Store.Config.ExternalAudioExePath" />
-    <div class="hint">Usually located in the SRS server install folder.</div>
+    <div class="hint">
+        Ships with DCS-SimpleRadio-Standalone, normally in its <code>ExternalAudio</code> subfolder.
+        Every reply is transmitted through it.
+    </div>
 </div>
+
+<button class="link-action" @onclick="DetectSrs" disabled="@_detecting">
+    <span>@(_detecting ? "Searching..." : "Detect SRS installation")</span>
+</button>
+
+@if (_detectMessage != null)
+{
+    <div class="card" style="border-color:@(_detectOk ? "#2E4E4C" : "#6C2E2E");margin-top:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+            <span style="color:@(_detectOk ? "#5FBF7A" : "#E2543A");font-size:14px">@(_detectOk ? "✓" : "✕")</span>
+            <span style="font-size:12.5px;color:#E7EDEF">@_detectMessage</span>
+        </div>
+    </div>
+}
 
 <div class="field" style="max-width:420px">
     <label>OWN COALITION</label>
@@ -47,3 +64,47 @@
         <span class="knob"></span>
     </button>
 </div>
+
+@code {
+    private bool _detecting;
+    private bool _detectOk;
+    private string? _detectMessage;
+
+    /// <summary>
+    /// Looks for DCS-SR-ExternalAudio.exe in the usual SRS install locations and fills the path
+    /// field with what it finds. Also accepts whatever is already in the field: if that points at
+    /// a folder (the SRS directory, say), the executable inside it is resolved first, before the
+    /// wider search runs. The disk probing happens off the UI thread - it walks drive roots.
+    /// </summary>
+    private async Task DetectSrs()
+    {
+        _detecting = true;
+        _detectMessage = null;
+        StateHasChanged();
+
+        var current = Store.Config.ExternalAudioExePath;
+
+        var found = await Task.Run(() =>
+            SrsPaths.ResolveToExecutable(current) ?? SrsPaths.FindExternalAudioExe());
+
+        if (found is null)
+        {
+            _detectOk = false;
+            _detectMessage = $"No {SrsPaths.ExternalAudioExeName} found. Enter the path by hand - "
+                           + "it sits in the ExternalAudio folder of your SRS installation.";
+        }
+        else if (string.Equals(found, current, StringComparison.OrdinalIgnoreCase))
+        {
+            _detectOk = true;
+            _detectMessage = "The configured path is correct.";
+        }
+        else
+        {
+            Store.Config.ExternalAudioExePath = found;
+            _detectOk = true;
+            _detectMessage = $"Found: {found}";
+        }
+
+        _detecting = false;
+    }
+}

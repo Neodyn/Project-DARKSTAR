@@ -52,6 +52,13 @@ public sealed class BotService : BackgroundService
         public int CurrentSenderCoalition;
 
         /// <summary>
+        /// Who was last heard on this radio, set for every packet rather than only on detection -
+        /// so a saved "missed" recording is labelled with whoever actually spoke, not with the
+        /// last pilot the wake word happened to work for.
+        /// </summary>
+        public string LastHeardSenderName = "";
+
+        /// <summary>
         /// Serializes everything this radio transmits. Without it, a slow-request acknowledgement
         /// and the real reply could end up starting DCS-SR-ExternalAudio.exe twice at the same
         /// time on the same frequency, talking over each other.
@@ -127,7 +134,64 @@ public sealed class BotService : BackgroundService
         return text.Replace("{callsign}", botCallsign).Trim();
     }
 
+    /// <summary>Exit code for "the bot is fine, the configuration isn't" - a wrong path, a missing model.</summary>
+    public const int ExitCodeConfigurationError = 2;
+
+    /// <summary>Exit code for anything unexpected that stopped the bot from starting.</summary>
+    public const int ExitCodeStartupFailure = 3;
+
+    /// <summary>
+    /// Wraps the actual startup so that nothing reaches the runtime as an unhandled exception.
+    /// An unhandled exception in a BackgroundService takes the whole process down and prints a
+    /// .NET stack trace - which tells the person running a voice bot nothing at all. Every
+    /// failure that gets here is logged as a sentence, followed by a clean stop.
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await RunAsync(stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // Normal shutdown (service stop / Ctrl+C).
+        }
+        catch (VoskModelLoadException ex)
+        {
+            FailStartup(ex.Message, ex.Hints, ExitCodeConfigurationError);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log("");
+            Logger.Log($"ERROR: the bot stopped unexpectedly - {ex.GetType().Name}: {ex.Message}");
+
+            // The full trace goes to the log file only; the console gets the readable version.
+            Logger.Debug(ex.ToString());
+
+            Logger.Log("The full details are in the log file under logs\\.");
+            DiscordNotifier.Notify($"❌ **D.A.R.K.S.T.A.R.** stopped unexpectedly: {ex.Message}");
+
+            Environment.ExitCode = ExitCodeStartupFailure;
+            _lifetime.StopApplication();
+        }
+    }
+
+    /// <summary>Logs a startup failure the way a person can act on it, then stops the host cleanly.</summary>
+    private void FailStartup(string message, IReadOnlyList<string> hints, int exitCode)
+    {
+        Logger.Log("");
+        Logger.Log($"ERROR: {message}");
+        foreach (var hint in hints)
+            Logger.Log($"  - {hint}");
+        Logger.Log("");
+
+        DiscordNotifier.Notify($"❌ **D.A.R.K.S.T.A.R.** could not start: {message}");
+
+        Environment.ExitCode = exitCode;
+        _lifetime.StopApplication();
+    }
+
+    private async Task RunAsync(CancellationToken stoppingToken)
     {
         // IMPORTANT: a Windows Service's working directory defaults to C:\Windows\System32,
         // not the folder the .exe lives in - so config.json/phrases.json must be resolved
@@ -175,8 +239,31 @@ public sealed class BotService : BackgroundService
         // VoskRecognizer per radio, instead of loading the whole model from disk per radio.
         if (!string.IsNullOrWhiteSpace(config.VoskModelPath))
         {
-            _voskModel = VoskHotwordDetector.LoadModel(config.VoskModelPath);
-            Logger.Log($"Wake word detection active (Vosk, offline), {radioConfigs.Count} radio(s):");
+            try
+            {
+                _voskModel = VoskHotwordDetector.LoadModel(config.VoskModelPath);
+                Logger.Log($"Wake word detection active (Vosk, offline), {radioConfigs.Count} radio(s):");
+
+                if (config.HotwordAudioFilter == HotwordAudioFilter.Average)
+                    Logger.Log("NOTE: HotwordAudioFilter is \"Average\" - the old audio path, kept for comparison. " +
+                               "\"LowPass\" recognizes noticeably better; see the manual's chapter on wake word accuracy.");
+
+                if (config.HotwordAutoGain)
+                    Logger.Log("[Hotword] Automatic gain is on - quiet pilots are amplified for detection. " +
+                               "Watch for wake words firing on noise.");
+            }
+            catch (VoskModelLoadException ex)
+            {
+                // A configured-but-unusable model is a stop condition, not something to work
+                // around: falling back to the volume detector would leave a bot that looks like
+                // it started normally and then answers every loud noise on the frequency.
+                var hints = ex.Hints.ToList();
+                hints.Add("To start without wake word detection anyway, clear VoskModelPath in config.json - " +
+                          "the bot then reacts to loud audio instead of a spoken word (for testing only).");
+
+                FailStartup($"the wake word model could not be loaded. {ex.Message}", hints, ExitCodeConfigurationError);
+                return;
+            }
         }
         else
         {
@@ -225,7 +312,7 @@ public sealed class BotService : BackgroundService
             var effectiveCallsign = string.IsNullOrWhiteSpace(radioConfig.Callsign) ? config.BotCallsign : radioConfig.Callsign;
 
             IHotwordDetector hotword = _voskModel != null
-                ? new VoskHotwordDetector(_voskModel, effectiveKeyword)
+                ? new VoskHotwordDetector(_voskModel, effectiveKeyword, config.HotwordAudioFilter, config.HotwordAutoGain)
                 : new EnergyThresholdPlaceholderDetector(config.HotwordEnergyThreshold, config.HotwordConsecutiveFramesNeeded);
 
             if (_voskModel != null)
@@ -396,6 +483,11 @@ public sealed class BotService : BackgroundService
 
             var freqLabel = $"{session.FrequencyHz / 1_000_000:0.000} MHz";
 
+            // The counterpart to the "missed" recordings written by the watchdog: together the
+            // two make up a corpus of real traffic that --test-hotword can be measured against.
+            if (config.SaveRecordings)
+                SaveRecording(audio, "hit", session.FrequencyHz, senderRawName);
+
             // Coalition security check happens BEFORE transcribing (not just before replying) -
             // this both matches realistic radio discipline (no engagement with the opposing
             // coalition at all) and avoids spending a Gemini call on a transmission we're going
@@ -533,6 +625,11 @@ public sealed class BotService : BackgroundService
 
             session.LastAudioReceivedAt = DateTime.UtcNow;
 
+            // Normalise once: the event's sender name can be absent, and it is used in several
+            // places below (callsign parsing, the saved recording's file name).
+            senderName ??= "";
+            session.LastHeardSenderName = senderName;
+
             bool justStarted = false;
             lock (session.Lock)
             {
@@ -599,6 +696,15 @@ public sealed class BotService : BackgroundService
                             Logger.Log($"[Watchdog] {session.FrequencyHz / 1_000_000:0.000} MHz: no further audio packets received - ending the recording.");
                             await FinalizeRecordingAsync(session);
                         }
+                        else if (config.SaveRecordings && !session.IsRecording)
+                        {
+                            // Someone transmitted on this frequency and the wake word did NOT
+                            // fire. Those are the recordings worth having: a hit can be replayed
+                            // from the reply log, a miss leaves no trace anywhere else. The
+                            // pre-roll buffer already holds the audio, so this costs nothing
+                            // beyond writing the file.
+                            SaveMissedTransmission(session, noAudioTimeout);
+                        }
                     }
                 }
                 catch (OperationCanceledException)
@@ -660,6 +766,65 @@ public sealed class BotService : BackgroundService
         {
             // Normal shutdown path (service stop / Ctrl+C) - nothing to do here, cleanup happens in StopAsync.
         }
+    }
+
+    /// <summary>
+    /// Where recordings go when SaveRecordings is on: next to the executable, so the service and
+    /// the console app agree on one place regardless of working directory.
+    /// </summary>
+    private static string RecordingsDirectory => Path.Combine(AppContext.BaseDirectory, "recordings");
+
+    /// <summary>
+    /// Writes one transmission's audio to recordings\ as a WAV file. Best-effort by design: a
+    /// full disk or a locked folder must never interfere with the radio work, so failures are
+    /// logged at debug level and otherwise ignored.
+    /// </summary>
+    private static void SaveRecording(byte[] pcm48k, string tag, double frequencyHz, string senderName)
+    {
+        if (pcm48k.Length < 2) return;
+
+        try
+        {
+            Directory.CreateDirectory(RecordingsDirectory);
+
+            var safeSender = string.Join("_", (senderName ?? "unknown")
+                .Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            if (safeSender.Length == 0) safeSender = "unknown";
+            if (safeSender.Length > 40) safeSender = safeSender[..40];
+
+            var name = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss.fff}_{frequencyHz / 1_000_000:0.000}MHz_{tag}_{safeSender}.wav";
+            File.WriteAllBytes(Path.Combine(RecordingsDirectory, name), WavUtils.WrapPcm16AsWav(pcm48k));
+            Logger.Debug($"[Recording] Saved {name} ({pcm48k.Length / 2 / 48000.0:0.0}s).");
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[Recording] Could not save a recording: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// A transmission that has gone quiet without the wake word firing: saves the pre-roll so the
+    /// miss can be replayed through --test-hotword. Only fires once per transmission, because the
+    /// buffer is cleared afterwards.
+    /// </summary>
+    private static void SaveMissedTransmission(RadioSession session, TimeSpan noAudioTimeout)
+    {
+        byte[] audio;
+        string sender;
+
+        lock (session.Lock)
+        {
+            // Wait for the same quiet period the recording watchdog uses, so this doesn't fire
+            // mid-sentence, and require enough audio to be worth listening to (0.4s).
+            if (session.PreRollBuffer.Count < 48000 * 2 * 0.4) return;
+            if (DateTime.UtcNow - session.LastAudioReceivedAt <= noAudioTimeout) return;
+
+            audio = session.PreRollBuffer.ToArray();
+            session.PreRollBuffer.Clear();
+            sender = session.LastHeardSenderName;
+        }
+
+        SaveRecording(audio, "missed", session.FrequencyHz, sender);
     }
 
     private static bool IsSilent(byte[] pcm16)

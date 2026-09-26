@@ -23,7 +23,8 @@ This manual covers everything: what you need, how to install it, every setting, 
 9. [Running as a Windows Service](#9-running-as-a-windows-service)
 10. [Files, logs and backups](#10-files-logs-and-backups)
 11. [Troubleshooting](#11-troubleshooting)
-12. [Costs, limits and privacy](#12-costs-limits-and-privacy)
+12. [Wake word accuracy](#12-wake-word-accuracy)
+13. [Costs, limits and privacy](#13-costs-limits-and-privacy)
 
 ---
 
@@ -72,7 +73,7 @@ Each configured radio is fully independent: its own wake word, its own callsign,
 | **Windows** | The bot uses `DCS-SR-ExternalAudio.exe` and Windows TTS voices for its replies. |
 | **.NET 8** | The **Desktop Runtime** covers both the bot and the GUI. Needed to *run* it. The installer brings it along; from source you need the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). |
 | **A running SRS server** | The bot connects as an external AWACS-mode client. It does not have to run on the same machine, but `DCS-SR-ExternalAudio.exe` currently transmits to `127.0.0.1` (see [Troubleshooting](#11-troubleshooting)). |
-| **`DCS-SR-ExternalAudio.exe`** | Ships with the SRS **server** install. Used for every reply. |
+| **`DCS-SR-ExternalAudio.exe`** | Ships with DCS-SimpleRadio-Standalone, in its `ExternalAudio` subfolder. Used for every reply. |
 | **A Vosk speech model** | Offline, free, no account. [Download list](https://alphacephei.com/vosk/models) — see the table below for which one to pick. |
 | **A Google Gemini API key** | Free to create at [Google AI Studio](https://aistudio.google.com/apikey). Only needed for transcription and freely generated replies; the free tier is enough for testing and small groups. |
 | **Visual C++ Redistributable (x64)** | Vosk's native `libvosk.dll` needs it. The installer and the dev-setup script both handle this. |
@@ -116,9 +117,38 @@ The dev-setup script can download any of them for you (`-VoskModelSize Standard`
 
 4. Optionally tick *"Install and start as a Windows Service"*. You can also do that later, and more comfortably, from the GUI — see [chapter 9](#9-running-as-a-windows-service).
 
-The installer brings every runtime dependency with it and installs only what is actually missing: the **.NET 8 Desktop Runtime**, the **Visual C++ Redistributable** (needed by Vosk) and the **WebView2 Runtime** (needed by the GUI). It also writes a `config.json` containing the correct path to the model it just installed, so that one setting is already done.
+The installer brings every runtime dependency with it and installs only what is actually missing: the **.NET 8 Desktop Runtime**, the **Visual C++ Redistributable** (needed by Vosk) and the **WebView2 Runtime** (needed by the GUI).
+
+It also writes a `config.json` with the two paths it can work out for you, so neither has to be typed in afterwards:
+
+- **`VoskModelPath`** — where it just put the speech model.
+- **`ExternalAudioExePath`** — where **your** SRS installation is. It asks the registry where DCS-SimpleRadio-Standalone registered itself, and if that comes up empty, probes the usual install locations (both `Program Files` folders, per-user installs, and the root, `Program Files` and `Games` folder of every drive) for the known layouts — `ExternalAudio\DCS-SR-ExternalAudio.exe` first, then the older flat and `Server\` layouts.
+
+An existing `config.json` is never overwritten, so a repair or an upgrade keeps your settings. If nothing is detected (SRS not installed yet, or installed somewhere unusual), the field simply keeps its default and can be filled in later with the **Detect SRS installation** button on **CH1 Connection**.
 
 Two installer variants exist. The full one carries the speech model; the **`-slim`** one doesn't and is a few MB instead of up to ~2 GB — for machines that already have a model, in which case `VoskModelPath` has to be set by hand afterwards.
+
+### Updating an existing installation
+
+Run the new `Setup.exe` over the old one — there is nothing to uninstall first. It recognises the installed version and behaves accordingly:
+
+| Situation | What happens |
+|---|---|
+| **Newer version** | Normal update. The install folder and your earlier component/task choices are reused, so it is Next, Next, Finish. |
+| **Same version again** | Reinstall/repair. Same thing, just without a version change. |
+| **Older version over a newer one** | It says so and asks whether you really want to. Answering no cancels without changing anything. |
+
+What an update keeps and does for you:
+
+- **`config.json`, `phrases.json` and `vocabulary.json` are never overwritten.** New settings added by the update are merged into your existing `config.json` by the bot at its next start, with their defaults, and a backup goes to `Backup\` first.
+- **The Windows Service is stopped before any file is replaced and started again afterwards.** Without this the update would fail on a locked `Darkstar.exe`, because a running service holds its own executable open. If the service can't be restarted, the installer says so instead of leaving you guessing.
+- **A service registration pointing at an old path is repaired** — the existing registration is removed and recreated.
+- **The config editor is handled by Windows' Restart Manager**: if it's open, Setup offers to close it rather than failing on a locked file.
+
+The "Ready to Install" page states which of the three situations it is before anything is written.
+
+Versions come from the build: `.uild-installer.ps1 -Version 1.2` stamps `1.2` into the file name, the Setup.exe's file properties, and the uninstall entry that the *next* installer reads back. A build handed out without its own version number can't be told apart from the one before it, so bump it every time.
+
 
 After installing, continue with [chapter 4](#4-first-start).
 
@@ -159,7 +189,7 @@ Its parameters and the project layout are described in [contributing.md](contrib
    |---|---|---|
    | `SrsHost`, `SrsPort` | CH1 Connection | Your SRS server (default `127.0.0.1:5002`). |
    | `Coalition` | CH1 Connection | `2` = Blue, `1` = Red, `0` = Spectator. |
-   | `ExternalAudioExePath` | CH1 Connection | Path to `DCS-SR-ExternalAudio.exe` in the SRS **server** folder. |
+   | `ExternalAudioExePath` | CH1 Connection | Path to `DCS-SR-ExternalAudio.exe`, in the `ExternalAudio` folder of your SRS installation. Normally already filled in by the installer; **Detect SRS installation** finds it otherwise. |
    | `Radios` | CH2 Radios | The frequencies to monitor, each with wake word and callsign. |
    | `GeminiApiKey` | CH3 Speech | Your API key. |
    | `VoskModelPath` | CH3 Speech | Already filled in by the installer; only needed by hand after a `-slim` install or a source build. |
@@ -175,7 +205,7 @@ Its parameters and the project layout are described in [contributing.md](contrib
 To test the reply path on its own, without flying, send a transmission by hand:
 
 ```
-cd "C:\Program Files\DCS-SimpleRadio-Standalone\Server"
+cd "C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio"
 DCS-SR-ExternalAudio.exe --text="Radio check, loud and clear." --freqs=251.000 --modulations=AM --coalition=2 --port=5002 --name="TEST"
 ```
 
@@ -246,6 +276,9 @@ Hyphens are replaced by spaces before speech, so "1-1" is spoken as "one one" an
 |---|---|---|
 | `VoskModelPath` | `""` | Folder of the unpacked Vosk model. Without it the bot falls back to a volume-based placeholder that recognizes no words at all. |
 | `VoskKeyword` | `"computer"` | Global wake word, used by radios that don't set their own. |
+| `HotwordAudioFilter` | `"LowPass"` | Audio preparation before Vosk. `"Average"` is the old path, for comparison only — see [chapter 12](#12-wake-word-accuracy). |
+| `HotwordAutoGain` | `false` | Amplify quiet pilots for detection. Off by default; can cause false triggers. |
+| `SaveRecordings` | `false` | Save every transmission to `recordings\` for measuring accuracy. |
 | `SilenceFramesToStopRecording` | `50` | Silent 20 ms frames that end a recording (50 = 1 second). |
 | `PreRollSeconds` | `2.0` | Seconds of audio kept before the wake word and prepended to the recording, so the start of the message isn't lost. |
 | `HotwordEnergyThreshold` | `2000` | Only for the placeholder detector (no Vosk model). |
@@ -276,7 +309,7 @@ Transcription and reply are one single API call — that halves the quota usage 
 
 | Field | Default | Description |
 |---|---|---|
-| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\Server\DCS-SR-ExternalAudio.exe` | The SRS tool used for transmitting. |
+| `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | The SRS tool used for transmitting. Seeded by the installer from your actual SRS installation; **Detect SRS installation** on CH1 looks it up again at any time. |
 | `VoiceName` | `""` | Windows TTS voice, e.g. `"Microsoft David Desktop"`. Empty = default voice. `DCS-SR-ExternalAudio.exe --help` lists the options. |
 | `ExternalAudioExtraArgs` | `""` | Extra arguments appended to every transmission, for options this bot doesn't set itself. Whether your SRS build has a speaking-rate flag, and what it's called, depends on its version — check `--help`, then put it here (e.g. `--speed=-1`). |
 
@@ -377,7 +410,7 @@ The bot does **not** need to be stopped to look at settings, but changed setting
 
 | Channel | Contents |
 |---|---|
-| **CH1 Connection** | Config folder, SRS host/port, client name, EAM password, coalition, coalition restriction. |
+| **CH1 Connection** | Config folder, SRS host/port, client name, EAM password, the `DCS-SR-ExternalAudio.exe` path with a **Detect SRS installation** button, coalition, coalition restriction. |
 | **CH2 Radios** | The radio list: frequency, modulation, per-radio wake word and callsign, add/remove. |
 | **CH3 Speech** | Gemini key/model/retries, TTS voice, pre-roll, Vosk model folder, global wake word, silence frames, the standby acknowledgement, and the placeholder detector's settings. |
 | **CH4 Phrases** | The trigger/answer table plus `RestrictToKnownPhrases` and the fallback reply. |
@@ -592,12 +625,13 @@ The `[STT]` lines are the most useful of all: they show what the bot actually *u
 
 | Symptom | Likely cause and fix |
 |---|---|
+| **Bot stops right after starting, log says "the wake word model could not be loaded"** | The folder in `VoskModelPath` is missing or doesn't hold a Vosk model. The log names the folder and what to do; a model folder contains `am\`, `conf\`, `graph\` and `ivector\`. After a `-slim` install the model has to be downloaded separately. |
 | **Bot doesn't appear in the SRS client list** | Wrong `SrsHost`/`SrsPort`, server not running, or firewall. Check the log for the connection line. |
-| **Bot reacts to nothing** | `VoskModelPath` empty or wrong (the log says so at startup), wrong frequency/modulation, or the wake word isn't being recognized — check the `[STT]` lines. |
-| **Wake word is only recognized sometimes** | Model too weak. Switch to `Standard` (`-VoskModelSize Standard`) and delete the old model folder first. This is by far the most common cause. |
+| **Bot reacts to nothing** | `VoskModelPath` empty or wrong (the log says so at startup), wrong frequency/modulation, or the wake word isn't being recognized — check the `[STT]` lines and [chapter 12](#12-wake-word-accuracy). |
+| **Wake word is only recognized sometimes** | Model too weak. Switch to `Standard` (`-VoskModelSize Standard`) and delete the old model folder first. This is by far the most common cause. To measure it rather than guess: [chapter 12](#12-wake-word-accuracy). |
 | **A radio reacts to the wrong wake word** | Almost always a mis-transcription by a weak model — check `[STT]`. Keywords are matched as whole words, so a longer word containing the keyword won't trigger it. |
 | **No reply, log shows a Gemini error** | Key missing/invalid, or quota exhausted. Set `GeminiFallbackModel`, or wait for the quota to reset. |
-| **Reply is generated but never heard** | `ExternalAudioExePath` wrong, or TTS voice not installed. Test it manually (see [chapter 4](#4-first-start)). |
+| **Reply is generated but never heard** | `ExternalAudioExePath` wrong, or TTS voice not installed. Press **Detect SRS installation** on CH1, then test transmitting manually (see [chapter 4](#4-first-start)). The log names the detected path when the configured one doesn't exist. |
 | **Bot answers its own replies** | Should be impossible — the radio is self-muted while transmitting. If it happens anyway, please report it with the log. |
 | **Numbers are rattled off / hard to understand** | Switch `DcsIntelSlowSpeech` on (GUI: CH8 → *Slow, clearly spoken numbers*). If the voice itself is too fast overall, try a different `VoiceName`, or a speaking-rate flag via `ExternalAudioExtraArgs` if your SRS version supports one. |
 | **Reply arrives very late** | Normal for 2–5 s. Turn on the standby acknowledgement so pilots know they were heard. |
@@ -614,7 +648,79 @@ Still stuck? The log file plus the `[STT]` lines around the failure usually expl
 
 ---
 
-## 12. Costs, limits and privacy
+## 12. Wake word accuracy
+
+A wake word that is missed, or that fires when nobody said it, is the most common complaint about a setup like this. Three things decide it, in this order.
+
+### 12.1 The model size (biggest effect by far)
+
+The small model (~40 MB) is a compromise for machines that have nothing to spare. It mis-transcribes readily, and every mis-transcription is a chance to either miss your keyword or invent it. Switching to `Standard` (~1.8 GB) usually settles the matter:
+
+```powershell
+.\setup-dev-environment.ps1 -VoskModelSize Standard    # from source
+.\build-installer.ps1 -VoskModelSize Standard          # into a new installer
+```
+
+Delete the old model folder first, then point `VoskModelPath` at the new one.
+
+### 12.2 Audio preparation (CH3 Speech → "Audio preparation")
+
+SRS delivers 48 kHz audio; Vosk wants 16 kHz. Getting from one to the other means discarding two of every three samples — and anything above 8 kHz in the original doesn't simply disappear when you do that. It folds back down into the audible range as a mirror image: 10 kHz reappears at 6 kHz, 11 kHz at 5 kHz, 12 kHz at 4 kHz. That is precisely the band where consonants are told apart, which is why the effect shows up as words being misheard rather than as audible noise.
+
+| Setting | What it does |
+|---|---|
+| **Low-pass** (default) | Filters the audio first, so there is nothing above 8 kHz left to fold down. Measured against test tones, fold-over products land 60–79 dB down. |
+| **Average** (old) | The previous behaviour: average three samples, drop two. Measured the same way, fold-over products land only 5–22 dB down, i.e. most of it still gets through. |
+
+`Average` is kept for one purpose: comparing the two on your own recordings (see 12.4). There is no reason to run it otherwise.
+
+### 12.3 Quiet pilots (optional)
+
+**"Even out quiet pilots"** amplifies transmissions that arrive too quiet for the recogniser. It is off by default on purpose: any automatic gain also lifts background noise, and noise lifted into speech range is exactly what produces wake words nobody said. If you turn it on, watch the false-trigger rate afterwards. It never touches the audio that gets transcribed or saved — only what the detector hears.
+
+### 12.4 Measuring instead of guessing
+
+Turn on **"Save every transmission to `recordings\`"** (CH3 Speech) and fly normally for a while. The bot writes one WAV per transmission, tagged with what happened:
+
+- `..._hit_...` — the wake word fired.
+- `..._missed_...` — someone transmitted and it did not fire. These are the interesting ones, and they are the reason this exists: a miss otherwise leaves no trace anywhere.
+
+Then let the bot grade itself:
+
+```powershell
+Darkstar.exe --test-hotword recordings --compare
+```
+
+This runs every recording through the real detector, in the same 20 ms frames the live path uses, with both audio preparations side by side — and prints how many came out as expected. It connects to nothing, so it is safe to run while the service is live.
+
+```
+file                                   expected  Average   LowPass
+------------------------------------------------------------------
+..._0.000MHz_missed_Enfield 1-1.wav    trigger   MISSED    ok
+..._0.000MHz_hit_Springfield 2-1.wav   trigger   ok        ok
+
+Average: 4 of 6 as expected (67%), 2 missed, 0 fired when they shouldn't.
+LowPass: 6 of 6 as expected (100%), 0 missed, 0 fired when they shouldn't.
+```
+
+Useful options: `--verbose` prints what Vosk actually transcribed, which is usually the moment it becomes obvious what went wrong; `--keyword` and `--model` try a different word or model without touching `config.json`; `--filter` runs just one of the two paths. `Darkstar.exe --test-hotword` with no path uses the `recordings` folder.
+
+A rename is all it takes to add your own cases: a file with `_silence_` in its name is expected *not* to trigger, so you can keep a set of recordings that must never wake the bot — engine noise, other pilots' chatter, the bot's own voice.
+
+> Recordings cost roughly 100 KB per second of speech and nothing ever deletes them. Turn the setting back off once you have measured what you needed.
+
+### 12.5 If it is still wrong
+
+| Symptom | Where to look |
+|---|---|
+| Fires on other words | A larger model. Keywords are matched as whole words already, so a longer word containing yours cannot trigger it — `--verbose` will show what was really heard. |
+| Never fires for one particular pilot | Their level, not your settings: check with a recording, then consider 12.3. |
+| Fires on the bot's own replies | Should be impossible — the radio is muted while transmitting. If it happens, keep the log and the recording. |
+| Two radios react to each other's keyword | Almost always a mis-transcription by a weak model; `--verbose` confirms it. |
+
+---
+
+## 13. Costs, limits and privacy
 
 - **What costs money:** nothing, in normal use. Vosk, SRS and DCS-gRPC are free and local; the Gemini free tier is enough for testing and small groups. Heavy use can exceed the free daily quota — that's what `GeminiFallbackModel` is for.
 - **What leaves your machine:** only the recorded question, and only after the wake word triggered, and only when it isn't answered by a fixed phrase or by mission data. Continuous listening for the wake word happens entirely locally.

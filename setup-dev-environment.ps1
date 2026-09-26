@@ -70,7 +70,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$ProjectRoot = "K:\Project-DARKSTAR",
+    [string]$ProjectRoot = "K:\Darkstar\BOT_SRS",
 
     [ValidateSet("Small", "Standard", "Large")]
     [string]$VoskModelSize = "Small",

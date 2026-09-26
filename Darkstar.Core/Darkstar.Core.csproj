@@ -17,9 +17,9 @@
 
   <ItemGroup>
     <!-- Official DCS-gRPC C# bindings (generated from the DCS-gRPC .proto files) - lets us
-         talk to a running DCS-gRPC server for real mission data (currently used by the GUI's
-         connection test and read-only mission data explorer, see DcsGrpcTester.cs and
-         DcsGrpcExplorer.cs; real features like bullseye/bogey-dope calls build on this later). -->
+         talk to a running DCS-gRPC server for real mission data. Used by the GUI's connection
+         test and read-only mission data explorer (DcsGrpcTester.cs, DcsGrpcExplorer.cs) and by
+         the tactical replies and the threat circle (DcsIntelService.cs, ThreatCircleService.cs). -->
     <PackageReference Include="RurouniJones.Dcs.Grpc" Version="0.7.1" />
     <PackageReference Include="Grpc.Net.Client" Version="2.66.0" />
     <PackageReference Include="Google.Protobuf" Version="3.28.2" />

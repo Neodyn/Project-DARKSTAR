@@ -41,7 +41,10 @@ param(
     [ValidateSet("Small", "Standard", "Large")]
     [string]$VoskModelSize = "Small",
 
-    # Version stamped into the installer and its file name.
+    # Version stamped into the installer and its file name. It is also what the NEXT installer
+    # compares against to decide whether it is upgrading, reinstalling or downgrading, so give
+    # every build you hand out its own number. Digits and dots only (1.0, 1.2.3, 2.0.0.0).
+    [ValidatePattern('^\d+(\.\d+){0,3}$')]
     [string]$Version = "1.0",
 
     # Slim installer: no speech model bundled, which cuts the Setup.exe down to a few MB. The
@@ -361,6 +364,19 @@ function Test-VoskModelFolder($path) {
     present, tolerates archives that are already flat, and refuses anything that isn't a model.
     Throws on failure so the caller can carry on without a bundled model.
 #>
+function Expand-ToFourPartVersion {
+    <#
+        Turns "1", "1.2" or "1.2.3" into the four-part form Windows requires for a file's
+        VersionInfo ("1.0.0.0", "1.2.0.0", "1.2.3.0"). A version that already has four parts is
+        returned unchanged. Kept as its own function so it can be tested without running a build.
+    #>
+    param([Parameter(Mandatory)] [string]$Version)
+
+    $parts = @($Version.Split('.'))
+    while ($parts.Count -lt 4) { $parts += "0" }
+    return ($parts[0..3] -join '.')
+}
+
 function Expand-VoskModel {
     param(
         [Parameter(Mandatory)] [string]$ZipPath,
@@ -451,7 +467,11 @@ if ($DryRun) {
     exit 0
 }
 
-$isccArgs = @("/DMyAppVersion=$Version")
+# Windows' file-version fields insist on exactly four numbers, while -Version may be "1.2".
+# Pad it out rather than making the caller type the padding.
+$versionInfo = Expand-ToFourPartVersion $Version
+
+$isccArgs = @("/DMyAppVersion=$Version", "/DMyVersionInfo=$versionInfo")
 if ($SkipVoskModel) { $isccArgs += "/DNoVoskModel" }   # leaves the model component out entirely
 
 & $iscc @isccArgs $issFile

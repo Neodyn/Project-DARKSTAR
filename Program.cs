@@ -9,6 +9,12 @@ using Microsoft.Extensions.Logging;
 Logger.Init(Path.Combine(AppContext.BaseDirectory, "logs"));
 Logger.Log("D.A.R.K.S.T.A.R. - Digital Assistant for Radio Keyword-activated Speech Transcription And Response");
 
+// "--test-hotword" measures wake word detection against recorded audio and exits. It never
+// connects to SRS, so it is safe to run while the service is live - useful for checking whether
+// a different model or audio setting would do better on the traffic you actually get.
+if (HotwordTestRunner.IsRequested(args))
+    return HotwordTestRunner.Run(args);
+
 var builder = Host.CreateApplicationBuilder(args);
 
 // Makes the exact same .exe runnable both as a normal console app (double-click / `dotnet run`,
@@ -26,5 +32,47 @@ builder.Logging.ClearProviders();
 
 builder.Services.AddHostedService<BotService>();
 
-var host = builder.Build();
-await host.RunAsync();
+// Last line of defence: anything that escapes the service itself still gets written to the log
+// file as something readable, rather than only appearing as a runtime crash dump in a console
+// window that a Windows Service doesn't even have.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    if (e.ExceptionObject is Exception ex)
+    {
+        Logger.Log($"FATAL: {ex.GetType().Name}: {ex.Message}");
+        Logger.Debug(ex.ToString());
+    }
+    else
+    {
+        Logger.Log($"FATAL: {e.ExceptionObject}");
+    }
+
+    Logger.Log("The bot is shutting down. Full details are in the log file under logs\\.");
+};
+
+// A faulted fire-and-forget task (a reply transmission, a threat circle sweep) would otherwise
+// be silently swallowed - or, depending on configuration, tear the process down at some later
+// garbage collection with no context at all.
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    Logger.Log($"WARNING: a background task failed without being awaited: {e.Exception.GetBaseException().Message}");
+    Logger.Debug(e.Exception.ToString());
+    e.SetObserved();
+};
+
+try
+{
+    var host = builder.Build();
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    // Host construction/startup failures (a locked log file, a broken service registration)
+    // land here. The bot's own startup problems are handled inside BotService, which logs them
+    // in full and stops the host cleanly.
+    Logger.Log($"ERROR: the bot could not be started - {ex.GetType().Name}: {ex.Message}");
+    Logger.Debug(ex.ToString());
+    return BotService.ExitCodeStartupFailure;
+}
+
+return Environment.ExitCode;

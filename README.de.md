@@ -24,6 +24,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | | |
 |---|---|
 | 🎙️ **Hotword offline** | [Vosk](https://alphacephei.com/vosk/) transkribiert lokal und achtet auf dein Schlüsselwort. Kein Account, keine Kosten pro Anfrage, kein Audio verlässt dafür den Rechner. |
+| 📈 **Messbare Genauigkeit** | Richtige Anti-Aliasing-Filterung im Detektor-Audio, plus `--test-hotword`, um echte Aufnahmen erneut durchlaufen zu lassen und Treffer und Fehlschläge zu zählen statt zu raten. |
 | 🛰️ **Antworten aus der laufenden Mission** | „bogey dope", „picture" und „threat check" aus echten DCS-Daten über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format. |
 | ⭕ **Threat Circle** | Ein Pilot schaltet eine mitfliegende Überwachung scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt. |
 | 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen und Gesprächsverlauf — „Overlord" für AWACS, „Texaco" für den Tanker. |
@@ -36,7 +37,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 ## Installation
 
 1. **`DARKSTAR-Setup-<Version>.exe`** von der [Releases](../../releases)-Seite herunterladen.
-2. Ausführen — sie installiert Bot, Konfigurationseditor, ein Sprachmodell und jede fehlende Runtime.
+2. Ausführen — sie installiert Bot, Konfigurationseditor, ein Sprachmodell und jede fehlende Runtime und legt eine `config.json` an, die schon auf das Modell und auf deine SRS-Installation zeigt.
 3. Konfigurationseditor öffnen, SRS-Server, Radios und Gemini-API-Key eintragen, speichern, starten.
 
 Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](docs/manual-de.md#3-installation)**.
@@ -46,7 +47,7 @@ Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](
 | | Wofür | Anmerkung |
 |---|---|---|
 | **Windows** | alles | Antworten laufen über `DCS-SR-ExternalAudio.exe` und Windows-TTS-Stimmen. |
-| **SRS-Server** | alles | Samt `DCS-SR-ExternalAudio.exe`, worüber der Bot sendet. |
+| **SRS-Server** | alles | Samt `ExternalAudio\DCS-SR-ExternalAudio.exe`, worüber der Bot sendet — der Installer findet die Datei selbst. |
 | **[Gemini-API-Key](https://aistudio.google.com/apikey)** | Transkription, freie Antworten | Die kostenlose Stufe reicht für Tests und kleine Gruppen. |
 | **[Vosk-Modell](https://alphacephei.com/vosk/models)** | Hotword | Liegt dem Installer bei. Offline, kostenlos, ohne Account. |
 | .NET 8 Desktop Runtime, VC++ Redistributable, WebView2 | Betrieb von Bot und GUI | Werden vom Installer **automatisch** nachinstalliert, falls sie fehlen. |

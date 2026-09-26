@@ -24,6 +24,7 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 | | |
 |---|---|
 | 🎙️ **Offline wake word** | [Vosk](https://alphacephei.com/vosk/) transcribes locally and watches for your keyword. No account, no per-request cost, no audio leaving the machine for this step. |
+| 📈 **Accuracy you can measure** | Proper anti-alias filtering on the detector's audio, plus `--test-hotword` to replay real recordings and count hits and misses instead of guessing. |
 | 🛰️ **Answers from the live mission** | "bogey dope", "picture" and "threat check" answered from real DCS data via [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA with aspect from the pilot's own aircraft, or bullseye format. |
 | ⭕ **Threat circle** | A pilot arms a watch that flies with them ("threat circle forty miles") and gets warned the moment a hostile enters it. |
 | 📻 **Several radios at once** | Each frequency with its own wake word, callsign and conversation — "Overlord" on AWACS, "Texaco" on the tanker. |
@@ -36,7 +37,7 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 ## Installation
 
 1. Download **`DARKSTAR-Setup-<version>.exe`** from the [Releases](../../releases) page.
-2. Run it — it installs the bot, the config editor, a speech model and every missing runtime.
+2. Run it — it installs the bot, the config editor, a speech model and every missing runtime, and writes a `config.json` already pointing at the model and at your SRS installation.
 3. Open the config editor, fill in your SRS server, radios and Gemini API key, save, start.
 
 Step by step, with everything that can go wrong: **[manual, chapter 3](docs/manual-en.md#3-installation)**.
@@ -46,7 +47,7 @@ Step by step, with everything that can go wrong: **[manual, chapter 3](docs/manu
 | | Needed for | Notes |
 |---|---|---|
 | **Windows** | everything | Replies use `DCS-SR-ExternalAudio.exe` and Windows TTS voices. |
-| **SRS server** | everything | Including its `DCS-SR-ExternalAudio.exe`, which the bot transmits through. |
+| **SRS server** | everything | Including its `ExternalAudio\DCS-SR-ExternalAudio.exe`, which the bot transmits through — the installer finds it for you. |
 | **[Gemini API key](https://aistudio.google.com/apikey)** | transcription, free answers | Free tier is enough for testing and small groups. |
 | **[Vosk model](https://alphacephei.com/vosk/models)** | wake word | Comes with the installer. Offline, free, no account. |
 | .NET 8 Desktop Runtime, VC++ Redistributable, WebView2 | running the bot and GUI | **Installed automatically** by the installer if missing. |
