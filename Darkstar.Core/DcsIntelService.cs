@@ -149,29 +149,43 @@ public class DcsIntelService
     /// Classifies a transcribed transmission. Returns None when it isn't a tactical request, in
     /// which case the normal phrase/Gemini pipeline should handle it as before.
     /// </summary>
-    public IntelRequestKind Classify(string transcript)
+    public IntelRequestKind Classify(string transcript) => Classify(transcript, out _);
+
+    /// <summary>
+    /// As <see cref="Classify(string)"/>, and also reports which trigger phrase fired. Worth
+    /// logging: when the bot answers the wrong request, the phrase that matched - together with
+    /// the transcript it matched in - is the whole diagnosis.
+    /// </summary>
+    public IntelRequestKind Classify(string transcript, out string? matchedTrigger)
     {
+        matchedTrigger = null;
         if (string.IsNullOrWhiteSpace(transcript)) return IntelRequestKind.None;
-        var text = transcript.ToLowerInvariant();
 
         // Cancel first: "cancel threat circle" contains the start trigger as well, and the more
         // specific intent has to win. The threat circle in turn is checked before the plain
         // "threat check", for the same reason.
         if (_config.DcsIntelThreatCircleEnabled)
         {
-            if (MatchesAny(text, _config.DcsIntelThreatCircleCancelTriggers)) return IntelRequestKind.ThreatCircleCancel;
-            if (MatchesAny(text, _config.DcsIntelThreatCircleTriggers)) return IntelRequestKind.ThreatCircleStart;
+            matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelThreatCircleCancelTriggers);
+            if (matchedTrigger != null) return IntelRequestKind.ThreatCircleCancel;
+
+            matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelThreatCircleTriggers);
+            if (matchedTrigger != null) return IntelRequestKind.ThreatCircleStart;
         }
 
         // Bogey dope before picture: "bogey dope, and picture" should give the more specific answer.
-        if (MatchesAny(text, _config.DcsIntelBogeyDopeTriggers)) return IntelRequestKind.BogeyDope;
-        if (MatchesAny(text, _config.DcsIntelPictureTriggers)) return IntelRequestKind.Picture;
-        if (MatchesAny(text, _config.DcsIntelThreatTriggers)) return IntelRequestKind.Threat;
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelBogeyDopeTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.BogeyDope;
+
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelPictureTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.Picture;
+
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelThreatTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.Threat;
+
+        matchedTrigger = null;
         return IntelRequestKind.None;
     }
-
-    private static bool MatchesAny(string lowerText, List<string>? triggers) =>
-        triggers != null && triggers.Any(t => !string.IsNullOrWhiteSpace(t) && lowerText.Contains(t.Trim().ToLowerInvariant()));
 
     /// <summary>
     /// Builds the reply for a tactical request. <paramref name="rawPlayerName"/> is the sender's
@@ -198,7 +212,7 @@ public class DcsIntelService
 
             // Where do we measure from? Preferably the requesting pilot's own aircraft (BRAA),
             // otherwise their coalition's bullseye (still a useful, standard reference).
-            var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, friendlyCoalition, cancellationToken);
+            var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, transcript, friendlyCoalition, cancellationToken);
             var bullseye = await GetBullseyeAsync(channel, headers, deadline, friendlyCoalition, cancellationToken);
 
             var contactSet = await GetHostileContactsAsync(channel, headers, deadline, hostileCoalition, cancellationToken);
@@ -423,7 +437,7 @@ public class DcsIntelService
     // Data gathering
     // ---------------------------------------------------------------------------------
 
-    private Coalition ResolveFriendlyCoalition(int senderCoalition) => senderCoalition switch
+    internal Coalition ResolveFriendlyCoalition(int senderCoalition) => senderCoalition switch
     {
         1 => Coalition.Red,
         2 => Coalition.Blue,
@@ -437,10 +451,20 @@ public class DcsIntelService
     /// match exactly, but not always - so this also tries the part after the callsign separator
     /// ("Enfield 1-1 | neodym" -> "neodym") and finally the unit's own callsign/name.
     /// </summary>
-    private async Task<Unit?> FindRequesterUnitAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
-        string rawPlayerName, Coalition friendly, CancellationToken token)
+    internal Task<Unit?> FindRequesterUnitAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
+        string rawPlayerName, Coalition friendly, CancellationToken token) =>
+        FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, null, friendly, token);
+
+    /// <summary>
+    /// As above, but also accepts the transcript. A pilot who says "active runway for Punch 1-1"
+    /// has named themselves, and that is a second, independent way to find their aircraft when
+    /// their SRS name and their DCS name don't line up - which is the usual reason a BRAA call
+    /// silently turns into a bullseye call.
+    /// </summary>
+    internal async Task<Unit?> FindRequesterUnitAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
+        string rawPlayerName, string? transcript, Coalition friendly, CancellationToken token)
     {
-        if (string.IsNullOrWhiteSpace(rawPlayerName)) return null;
+        if (string.IsNullOrWhiteSpace(rawPlayerName) && string.IsNullOrWhiteSpace(transcript)) return null;
 
         var response = await new CoalitionService.CoalitionServiceClient(channel)
             .GetPlayerUnitsAsync(new GetPlayerUnitsRequest { Coalition = friendly }, headers, deadline, token);
@@ -448,28 +472,42 @@ public class DcsIntelService
         var units = response.Units;
         if (units.Count == 0) return null;
 
-        var srsName = rawPlayerName.Trim();
-        var separator = _config.PlayerNameCallsignSeparator;
-        var callsignPart = srsName;
-        var handlePart = "";
-        if (!string.IsNullOrEmpty(separator))
+        // Tolerant matching: the SRS name and the DCS player name are typed in different places
+        // and rarely agree character for character - squadron tags, "1-1" against "11", spaces.
+        // PilotNames tries the strict rules first and only then loosens, refusing to guess when
+        // more than one pilot would fit. Fields in order of how much they can be trusted.
+        var match = PilotNames.FindMatch(
+            units,
+            rawPlayerName,
+            _config.PlayerNameCallsignSeparator,
+            u => u.PlayerName,
+            u => u.Callsign,
+            u => u.Name);
+
+        // The SRS name didn't lead anywhere, so try the transmission itself: pilots routinely say
+        // their own callsign, and that costs nothing to check.
+        if (!match.Found && !string.IsNullOrWhiteSpace(transcript))
         {
-            var index = srsName.IndexOf(separator, StringComparison.Ordinal);
-            if (index >= 0)
+            var spoken = PilotNames.FindMatchInTranscript(units, transcript,
+                u => u.PlayerName, u => u.Callsign, u => u.Name);
+
+            if (spoken.Found)
             {
-                callsignPart = srsName[..index].Trim();
-                handlePart = srsName[(index + separator.Length)..].Trim();
+                Logger.Debug($"[Intel] Pilot \"{rawPlayerName}\" identified from the transmission instead " +
+                             $"({spoken.Explanation}).");
+                return spoken.Match;
             }
         }
 
-        bool Same(string? a, string b) => !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&
-                                          string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+        // Logged either way: a failure here is why a BRAA call silently becomes a bullseye call,
+        // and until now it left no trace at all.
+        if (match.Found)
+            Logger.Debug($"[Intel] Pilot \"{rawPlayerName}\" matched unit \"{match.Match!.Name}\" ({match.Rule}: {match.Explanation}).");
+        else
+            Logger.Debug($"[Intel] Pilot \"{rawPlayerName}\" could not be matched to a unit - {match.Explanation}. " +
+                         "Replies will use the bullseye format.");
 
-        return units.FirstOrDefault(u => Same(u.PlayerName, srsName))
-               ?? units.FirstOrDefault(u => Same(u.PlayerName, handlePart))
-               ?? units.FirstOrDefault(u => Same(u.PlayerName, callsignPart))
-               ?? units.FirstOrDefault(u => Same(u.Callsign, callsignPart))
-               ?? units.FirstOrDefault(u => Same(u.Name, callsignPart));
+        return match.Match;
     }
 
     private static async Task<Position?> GetBullseyeAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
@@ -659,7 +697,7 @@ public class DcsIntelService
         SpeedMps = unit.Velocity?.Speed ?? 0
     };
 
-    private async Task<double> GetDeclinationAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
+    internal async Task<double> GetDeclinationAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
         double lat, double lon, CancellationToken token)
     {
         if (_cachedDeclination.HasValue) return _cachedDeclination.Value;
@@ -706,7 +744,7 @@ public class DcsIntelService
     {
         // "bullseye" anywhere in the request forces the bullseye format even when BRAA would be
         // possible - that's a common way to ask for it explicitly.
-        var forceBullseye = MatchesAny(transcript.ToLowerInvariant(), _config.DcsIntelBullseyeTriggers);
+        var forceBullseye = TriggerMatcher.MatchesAny(transcript, _config.DcsIntelBullseyeTriggers);
 
         var (fromLat, fromLon) = requester != null && !forceBullseye
             ? (requester.Position.Lat, requester.Position.Lon)
@@ -903,10 +941,19 @@ public class DcsIntelService
     internal static string SpeakBearing(int bearing, string separator = " ")
     {
         var normalized = ((bearing % 360) + 360) % 360;
-        var digits = normalized.ToString("000");
-        var words = new[] { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "niner" };
-        return string.Join(separator, digits.Select(d => words[d - '0']));
+        return string.Join(separator, normalized.ToString("000").Select(d => SpeakDigit(d - '0')));
     }
+
+    /// <summary>
+    /// The aviation pronunciation of a single digit. "niner" rather than "nine", because "nine"
+    /// and "five" are the classic pair to confuse over a noisy radio - the whole point of the
+    /// brevity word. Used for every number read digit by digit: bearings, wind, pressure.
+    /// </summary>
+    internal static string SpeakDigit(int digit) =>
+        digit is >= 0 and <= 9 ? DigitWords[digit] : digit.ToString();
+
+    private static readonly string[] DigitWords =
+        { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "niner" };
 
     /// <summary>Small counts sound better as words ("two groups" rather than "2 groups").</summary>
     internal static string SpeakCount(int count) => count is >= 0 and < 1000 ? NumberToWords(count) : count.ToString();

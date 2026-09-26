@@ -26,6 +26,7 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 | 🎙️ **Offline wake word** | [Vosk](https://alphacephei.com/vosk/) transcribes locally and watches for your keyword. No account, no per-request cost, no audio leaving the machine for this step. |
 | 📈 **Accuracy you can measure** | Proper anti-alias filtering on the detector's audio, plus `--test-hotword` to replay real recordings and count hits and misses instead of guessing. |
 | 🛰️ **Answers from the live mission** | "bogey dope", "picture" and "threat check" answered from real DCS data via [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA with aspect from the pilot's own aircraft, or bullseye format. |
+| 🛫 **Runway in use and ATIS** | Live wind, temperature and pressure, plus the runway end the wind actually favours. |
 | ⭕ **Threat circle** | A pilot arms a watch that flies with them ("threat circle forty miles") and gets warned the moment a hostile enters it. |
 | 📻 **Several radios at once** | Each frequency with its own wake word, callsign and conversation — "Overlord" on AWACS, "Texaco" on the tanker. |
 | 💬 **Fixed phrases or free answers** | Known question/answer pairs served directly; anything else goes to Google Gemini, or is refused — your choice. |

@@ -48,6 +48,9 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
     }
 
     Logger.Log("The bot is shutting down. Full details are in the log file under logs\\.");
+
+    // The process is about to die: get these lines onto disk now, they are the ones that matter.
+    Logger.Flush();
 };
 
 // A faulted fire-and-forget task (a reply transmission, a threat circle sweep) would otherwise
@@ -72,7 +75,9 @@ catch (Exception ex)
     // in full and stops the host cleanly.
     Logger.Log($"ERROR: the bot could not be started - {ex.GetType().Name}: {ex.Message}");
     Logger.Debug(ex.ToString());
+    Logger.Shutdown();
     return BotService.ExitCodeStartupFailure;
 }
 
+Logger.Shutdown();
 return Environment.ExitCode;

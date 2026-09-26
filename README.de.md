@@ -26,6 +26,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | 🎙️ **Hotword offline** | [Vosk](https://alphacephei.com/vosk/) transkribiert lokal und achtet auf dein Schlüsselwort. Kein Account, keine Kosten pro Anfrage, kein Audio verlässt dafür den Rechner. |
 | 📈 **Messbare Genauigkeit** | Richtige Anti-Aliasing-Filterung im Detektor-Audio, plus `--test-hotword`, um echte Aufnahmen erneut durchlaufen zu lassen und Treffer und Fehlschläge zu zählen statt zu raten. |
 | 🛰️ **Antworten aus der laufenden Mission** | „bogey dope", „picture" und „threat check" aus echten DCS-Daten über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format. |
+| 🛫 **Bahn in Benutzung und ATIS** | Echter Wind, Temperatur und Druck, plus das Bahnende, das der Wind tatsächlich begünstigt. |
 | ⭕ **Threat Circle** | Ein Pilot schaltet eine mitfliegende Überwachung scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt. |
 | 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen und Gesprächsverlauf — „Overlord" für AWACS, „Texaco" für den Tanker. |
 | 💬 **Feste Phrasen oder freie Antworten** | Bekannte Frage-/Antwortpaare werden direkt bedient; alles andere geht an Google Gemini oder wird abgelehnt — deine Entscheidung. |

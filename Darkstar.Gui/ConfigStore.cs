@@ -186,18 +186,32 @@ public sealed class ConfigStore
             var logsDir = Path.Combine(ConfigFolder, "logs");
             if (!Directory.Exists(logsDir)) return new List<string>();
 
-            var newest = new DirectoryInfo(logsDir)
-                .GetFiles("*.log")
-                .OrderByDescending(f => f.LastWriteTimeUtc)
-                .FirstOrDefault();
+            var newest = LogFiles.PickNewest(Directory.GetFiles(logsDir, "*.log"));
             if (newest == null) return new List<string>();
 
-            var lines = File.ReadAllLines(newest.FullName);
-            return lines.Length <= maxLines ? lines.ToList() : lines.Skip(lines.Length - maxLines).ToList();
+            var lines = LogFiles.ReadAllLinesShared(newest);
+            return lines.Count <= maxLines ? lines : lines.Skip(lines.Count - maxLines).ToList();
         }
         catch
         {
             return new List<string>();
+        }
+    }
+
+    /// <summary>The log file the tail is currently reading, so the panel can show which one it is.</summary>
+    public string? CurrentLogFile
+    {
+        get
+        {
+            try
+            {
+                var logsDir = Path.Combine(ConfigFolder, "logs");
+                return Directory.Exists(logsDir) ? LogFiles.PickNewest(Directory.GetFiles(logsDir, "*.log")) : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 

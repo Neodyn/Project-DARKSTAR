@@ -88,24 +88,22 @@ public sealed class BotService : BackgroundService
     /// (trimmed) name if the separator isn't present, so players not following the convention
     /// still get addressed normally instead of breaking.
     /// </summary>
-    private static string ParseCallsign(string rawName, string separator)
-    {
-        if (string.IsNullOrEmpty(rawName)) return "";
-        if (string.IsNullOrEmpty(separator)) return rawName.Trim();
-
-        var index = rawName.IndexOf(separator, StringComparison.Ordinal);
-        return index < 0 ? rawName.Trim() : rawName[..index].Trim();
-    }
+    /// <summary>
+    /// The callsign the bot addresses a pilot by, taken from their SRS name. See PilotNames for
+    /// what gets stripped and why - squadron tags in particular, since "[ISAF] Mobius 1" read out
+    /// by a speech engine is not a radio call.
+    /// </summary>
+    private static string ParseCallsign(string rawName, string separator) =>
+        PilotNames.DisplayCallsign(rawName, separator);
 
     /// <summary>
-    /// Makes a callsign sound natural when spoken via TTS. Military-style callsigns like "1-1"
-    /// should be heard as "one one" (two separate numbers read straight through) rather than
-    /// "one dash one" or "eleven" - replacing the hyphen with a plain space makes most TTS
-    /// engines read the two numbers individually without vocalizing anything for the hyphen
-    /// itself. Only used right before building the text that's actually sent to the TTS engine -
-    /// logs and everywhere else keep showing the original, readable "Titan 1-1" form.
+    /// Makes a callsign sound natural when spoken via TTS: flight numbers digit by digit ("Spare
+    /// 15" as "Spare one five", the way every air force says it), hyphens and underscores as
+    /// pauses rather than as the word "dash", and squadron tags dropped. Only used right before
+    /// building the text that actually goes to the speech engine - logs and everywhere else keep
+    /// showing the original, readable "Titan 1-1" form. See PilotNames.ForSpeech.
     /// </summary>
-    private static string ForSpeech(string text) => text.Replace("-", " ");
+    private static string ForSpeech(string text) => PilotNames.ForSpeech(text);
 
     /// <summary>
     /// Fills the {pilot}/{callsign} placeholders of the acknowledgement text (AckMessage). If the
@@ -220,6 +218,11 @@ public sealed class BotService : BackgroundService
         var vocabulary = VocabularyBook.LoadOrCreateDefault(vocabularyPath);
         Logger.Log($"{vocabulary.Count} vocabulary hint(s) loaded from vocabulary.json.");
 
+        // A trigger phrase in the vocabulary makes the transcriber turn unclear audio into that
+        // very command, which the bot then answers instead of asking for a repeat. Worth a loud
+        // warning, because nothing about the symptom points at vocabulary.json.
+        AppConfig.WarnAboutVocabularyTriggerConflicts(config, vocabulary);
+
         Logger.DebugEnabled = config.DebugLogging;
         if (config.DebugLogging)
             Logger.Log("Verbose debug logging is active (DebugLogging in config.json).");
@@ -274,6 +277,7 @@ public sealed class BotService : BackgroundService
         // Tactical replies from live mission data - only useful when DCS-gRPC is actually enabled.
         DcsIntelService? intel = null;
         ThreatCircleService? threatCircles = null;
+        DcsAirfieldService? airfields = null;
         if (config.DcsIntelEnabled && config.DcsGrpcEnabled)
         {
             intel = new DcsIntelService(config);
@@ -287,6 +291,14 @@ public sealed class BotService : BackgroundService
             if (threatCircles != null)
                 Logger.Log($"[ThreatCircle] Enabled - pilots can request a standing watch (default {config.DcsIntelThreatCircleDefaultRadiusNm:0} NM, " +
                            $"swept every {config.DcsIntelThreatCirclePollSeconds}s, expires after {config.DcsIntelThreatCircleDurationMinutes} min).");
+
+            if (config.DcsAirfieldEnabled)
+            {
+                airfields = new DcsAirfieldService(config, intel);
+                Logger.Log("[Airfield] Enabled - \"runway in use\" and ATIS answered from live weather. " +
+                           "The runway headings need \"evalEnabled = true\" on the DCS-gRPC server; " +
+                           "without it the weather still works and the runway is reported as unknown.");
+            }
         }
         else if (config.DcsIntelEnabled)
         {
@@ -513,10 +525,28 @@ public sealed class BotService : BackgroundService
                 // Tactical requests (bogey dope / picture / threat) are answered from live mission
                 // data and take priority over everything else: a fixed phrase or a Gemini reply
                 // would invent an answer, while this one is actually true for the running mission.
+                // Nothing intelligible came back. Everything below this point would be guessing:
+                // the tactical classifier would match whatever the transcriber invented, and a
+                // fixed phrase or a Gemini reply would answer a request nobody made. Ask for a
+                // repeat instead, which is what a real controller does.
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    var sayAgain = string.IsNullOrWhiteSpace(geminiReply) ? config.UnintelligibleReply : geminiReply;
+                    Logger.Log($"[STT] {freqLabel}: nothing intelligible in the transmission - asking for a repeat.");
+
+                    var spokenSayAgain = string.IsNullOrWhiteSpace(senderName)
+                        ? $"This is {ForSpeech(session.Callsign)}... {sayAgain}"
+                        : $"{ForSpeech(senderName)}, this is {ForSpeech(session.Callsign)}... {sayAgain}";
+
+                    CancelPendingAck(session, ackCts);
+                    await TransmitAsync(session, spokenSayAgain);
+                    return;
+                }
+
                 string? intelReply = null;
                 if (intel != null)
                 {
-                    var kind = intel.Classify(text);
+                    var kind = intel.Classify(text, out var matchedTrigger);
 
                     if (kind is IntelRequestKind.ThreatCircleStart or IntelRequestKind.ThreatCircleCancel && threatCircles != null)
                     {
@@ -526,7 +556,8 @@ public sealed class BotService : BackgroundService
                             ? await threatCircles.StartAsync(senderRawName, senderName, session.FrequencyHz, senderCoalition, text)
                             : threatCircles.Cancel(senderRawName, session.FrequencyHz);
 
-                        Logger.Log($"[Intel] {freqLabel}: {kind} handled ({threatCircles.ActiveCount} threat circle(s) active).");
+                        Logger.Log($"[Intel] {freqLabel}: {kind} handled, triggered by \"{matchedTrigger}\" " +
+                                   $"({threatCircles.ActiveCount} threat circle(s) active).");
                     }
                     else if (kind != IntelRequestKind.None)
                     {
@@ -534,7 +565,29 @@ public sealed class BotService : BackgroundService
                         if (intelResult.Handled)
                         {
                             intelReply = intelResult.Reply;
-                            Logger.Log($"[Intel] {freqLabel}: {kind} request answered from mission data ({intelResult.Detail}).");
+                            // The trigger that fired is logged on purpose: when the bot answers
+                            // the wrong request, this line plus the [STT] line above it are the
+                            // whole diagnosis.
+                            Logger.Log($"[Intel] {freqLabel}: {kind} request, triggered by \"{matchedTrigger}\", " +
+                                       $"answered from mission data ({intelResult.Detail}).");
+                        }
+                    }
+                }
+
+                // Airfield conditions, same principle: real weather and the runway the wind
+                // actually favours, rather than something a language model made up. Checked after
+                // the tactical requests, because a call naming both is more likely about threats.
+                if (intelReply == null && airfields != null)
+                {
+                    var airfieldKind = airfields.Classify(text, out var airfieldTrigger);
+                    if (airfieldKind != AirfieldRequestKind.None)
+                    {
+                        var airfieldResult = await airfields.AnswerAsync(airfieldKind, text, senderRawName, senderCoalition);
+                        if (airfieldResult.Handled)
+                        {
+                            intelReply = airfieldResult.Reply;
+                            Logger.Log($"[Airfield] {freqLabel}: {airfieldKind}, triggered by \"{airfieldTrigger}\", " +
+                                       $"answered ({airfieldResult.Diagnostics}).");
                         }
                     }
                 }
@@ -850,5 +903,9 @@ public sealed class BotService : BackgroundService
         _voskModel?.Dispose();
 
         await base.StopAsync(cancellationToken);
+
+        // Last thing: make sure the shutdown lines themselves are on disk, not just in the OS
+        // cache - a service stop can be followed immediately by the process going away.
+        Logger.Flush();
     }
 }

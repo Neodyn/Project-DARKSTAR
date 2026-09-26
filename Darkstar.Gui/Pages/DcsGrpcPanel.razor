@@ -287,6 +287,135 @@
             <div class="log-tail" style="margin-top:10px;user-select:text">@_intelResult</div>
         }
     </div>
+
+    <!-- ---------------- Airfield: runway in use and ATIS ---------------- -->
+
+    <div class="card">
+        <div class="toggle-row" style="margin:0 0 4px 0">
+            <div>
+                <div>Answer "runway in use" and ATIS calls</div>
+                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                    Live wind, temperature and pressure, plus the runway the wind actually favours.
+                </div>
+            </div>
+            <button class="toggle @(Store.Config.DcsAirfieldEnabled ? "on" : "")" @onclick="() => Store.Config.DcsAirfieldEnabled = !Store.Config.DcsAirfieldEnabled">
+                <span class="knob"></span>
+            </button>
+        </div>
+
+        @if (Store.Config.DcsAirfieldEnabled)
+        {
+            <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:8px 0">
+                <div style="font-size:11.5px;color:#D9A62E;font-weight:600;margin-bottom:4px">
+                    Needs one setting on the DCS-gRPC server
+                </div>
+                <div style="font-size:11px;color:#8CA0A8">
+                    Runway headings come from <code>Airbase.getRunways()</code>, which DCS-gRPC only exposes
+                    through its <code>Eval</code> method — and that is <strong>disabled by default</strong>.
+                    Set <code>evalEnabled = true</code> in the DCS-gRPC server configuration and restart the
+                    mission. Without it the weather still works and the runway is reported as unknown.
+                    <br /><br />
+                    The bot runs exactly one fixed, read-only Lua snippet (built into the code, nothing a pilot
+                    says ever reaches it) and caches the result for the whole mission.
+                    <br /><br />
+                    Taxiways are not available at all — DCS doesn't expose them, through gRPC or otherwise.
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>RUNWAY TRIGGERS</label>
+                    <input type="text" @bind="AirfieldRunwayTriggers" />
+                    <div class="hint">Comma-separated. Asks for the runway only.</div>
+                </div>
+                <div class="field">
+                    <label>ATIS TRIGGERS</label>
+                    <input type="text" @bind="AirfieldAtisTriggers" />
+                    <div class="hint">Checked first — the fuller answer wins.</div>
+                </div>
+            </div>
+
+            <div class="field" style="max-width:460px">
+                <label>ALTIMETER SETTING</label>
+                <div class="row3">
+                    @foreach (var unit in new[] { PressureUnit.Both, PressureUnit.Hectopascals, PressureUnit.InchesHg })
+                    {
+                        var selected = Store.Config.DcsAirfieldPressureUnit == unit;
+                        var label = unit switch
+                        {
+                            PressureUnit.Hectopascals => "QNH (hPa)",
+                            PressureUnit.InchesHg => "inHg",
+                            _ => "Both"
+                        };
+                        <button class="link-action"
+                                style="justify-content:center;border:1px solid @(selected ? "#2E4E4C" : "#2A363C");border-radius:4px;padding:8px;color:@(selected ? "#5FBF7A" : "#5A6A70");background:@(selected ? "#16302A" : "transparent")"
+                                @onclick="() => Store.Config.DcsAirfieldPressureUnit = unit">@label</button>
+                    }
+                </div>
+                <div class="hint"><strong>Both</strong> reads QNH in hectopascals and then the inches setting — for a mixed flight of western and eastern types.</div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>"AT THE FIELD" RADIUS (NM)</label>
+                    <input type="number" step="0.5" min="0.5" @bind="Store.Config.DcsAirfieldAtFieldNm" />
+                    <div class="hint">
+                        Inside this, the pilot's own position decides the airfield — even if the
+                        transcript looked like it named a different one. This is what makes
+                        <em>"active runway for Punch 1-1"</em> work from the ramp without anyone having
+                        to pronounce the airfield well enough for speech recognition.
+                    </div>
+                </div>
+                <div class="field">
+                    <label>MAXIMUM DISTANCE (NM)</label>
+                    <input type="number" step="5" min="5" @bind="Store.Config.DcsAirfieldMaxDistanceNm" />
+                    <div class="hint">
+                        Beyond this the bot asks which airfield rather than naming one far away as
+                        though the pilot were there.
+                    </div>
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>REPLY WHEN NO AIRFIELD COULD BE DETERMINED</label>
+                    <input type="text" @bind="Store.Config.DcsAirfieldUnknownReply" />
+                </div>
+                <div class="field">
+                    <label>REPLY WHEN NO DATA IS AVAILABLE</label>
+                    <input type="text" @bind="Store.Config.DcsAirfieldUnavailableReply" />
+                </div>
+            </div>
+
+            <div class="row3">
+                <div class="field">
+                    <label>REQUEST</label>
+                    <select @bind="_airfieldKind">
+                        <option value="RunwayInUse">Runway in use</option>
+                        <option value="Atis">ATIS</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>AIRFIELD (OR PILOT'S SRS NAME)</label>
+                    <input type="text" @bind="_airfieldQuery" placeholder="e.g. Batumi" />
+                </div>
+                <div class="field">
+                    <label>&nbsp;</label>
+                    <button class="link-action" style="margin:0;padding-top:8px" @onclick="RunAirfieldTest" disabled="@_airfieldTesting">
+                        <span>@(_airfieldTesting ? "Asking..." : "Show reply")</span>
+                    </button>
+                </div>
+            </div>
+            <div class="hint" style="font-size:11px">
+                Naming an airfield asks about that one; leaving it empty and entering a pilot's SRS name
+                instead asks about the airfield nearest them. Nothing is transmitted on SRS.
+            </div>
+            @if (_airfieldResult != null)
+            {
+                <div class="log-tail" style="margin-top:10px;user-select:text">@_airfieldResult</div>
+            }
+        }
+    </div>
 </div>
 
 <!-- ================= Mission data explorer ================= -->
@@ -497,6 +626,11 @@ else
     private bool _testing;
     private DcsGrpcTestResult? _result;
 
+    private string _airfieldKind = "RunwayInUse";
+    private string _airfieldQuery = "";
+    private bool _airfieldTesting;
+    private string? _airfieldResult;
+
     private string _intelKind = "BogeyDope";
     private string _intelPlayerName = "";
     private bool _intelTesting;
@@ -536,6 +670,18 @@ else
         set => Store.Config.DcsIntelThreatCircleCancelTriggers = SplitTriggers(value);
     }
 
+    private string AirfieldRunwayTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsAirfieldRunwayTriggers);
+        set => Store.Config.DcsAirfieldRunwayTriggers = SplitTriggers(value);
+    }
+
+    private string AirfieldAtisTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsAirfieldAtisTriggers);
+        set => Store.Config.DcsAirfieldAtisTriggers = SplitTriggers(value);
+    }
+
     private static List<string> SplitTriggers(string value) =>
         (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
@@ -571,6 +717,48 @@ else
         finally
         {
             _intelTesting = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Runs a real airfield request against the running mission and shows the exact sentence the
+    /// bot would speak, plus where the data came from and why that runway was chosen. Nothing is
+    /// transmitted. Works on the values currently on screen, so settings can be tried before saving.
+    /// </summary>
+    private async Task RunAirfieldTest()
+    {
+        _airfieldTesting = true;
+        _airfieldResult = null;
+        StateHasChanged();
+
+        try
+        {
+            var service = new DcsAirfieldService(Store.Config, new DcsIntelService(Store.Config));
+            var kind = Enum.TryParse<AirfieldRequestKind>(_airfieldKind, out var parsed)
+                ? parsed
+                : AirfieldRequestKind.RunwayInUse;
+
+            // Whatever was typed is used two ways, exactly as on the radio: as an airfield name
+            // inside the transcript, and as the pilot whose nearest airfield to fall back to.
+            var trigger = kind == AirfieldRequestKind.Atis
+                ? Store.Config.DcsAirfieldAtisTriggers.FirstOrDefault() ?? "atis"
+                : Store.Config.DcsAirfieldRunwayTriggers.FirstOrDefault() ?? "runway in use";
+
+            var transcript = $"{_airfieldQuery} {trigger}".Trim();
+
+            var result = await service.AnswerAsync(kind, transcript, _airfieldQuery ?? "", senderCoalition: 0);
+            _airfieldResult = string.IsNullOrWhiteSpace(result.Reply)
+                ? $"No reply produced. ({result.Diagnostics})"
+                : $"{result.Reply}\n\n[{result.Diagnostics}]";
+        }
+        catch (Exception ex)
+        {
+            _airfieldResult = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            _airfieldTesting = false;
             StateHasChanged();
         }
     }

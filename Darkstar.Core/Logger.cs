@@ -17,6 +17,24 @@ public static class Logger
     private static readonly object Lock = new();
     private static StreamWriter? _fileWriter;
 
+    /// <summary>
+    /// The underlying stream, kept separately because only FileStream can force the data all the
+    /// way to disk - see FlushToDiskIfDue for why that is necessary and not just tidy.
+    /// </summary>
+    private static FileStream? _fileStream;
+
+    /// <summary>Full path of the current log file, for telling the user where to look.</summary>
+    public static string? CurrentLogFile { get; private set; }
+
+    private static DateTime _lastDiskFlush = DateTime.MinValue;
+
+    /// <summary>
+    /// How often the log is forced all the way to disk. A forced flush per line would mean a disk
+    /// round trip for every UDP packet at debug level; a second of lag is invisible to someone
+    /// watching a log.
+    /// </summary>
+    private static readonly TimeSpan DiskFlushInterval = TimeSpan.FromSeconds(1);
+
     /// <summary>Whether Debug() messages additionally appear on the console (they always go to the file).</summary>
     public static bool DebugEnabled { get; set; } = false;
 
@@ -81,8 +99,25 @@ public static class Logger
             Directory.CreateDirectory(logsDirectory);
             var fileName = $"darkstar_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log";
             var path = Path.Combine(logsDirectory, fileName);
-            _fileWriter = new StreamWriter(path, append: true) { AutoFlush = true };
-            Log($"Logging started, file: {Path.GetFullPath(path)}");
+
+            // Opened by hand rather than through the StreamWriter constructor, for two reasons.
+            //
+            // FileShare.ReadWrite | Delete: the default only grants readers FileShare.Read, which
+            // is enough for Notepad but not for the tail tools people actually watch logs with
+            // (Get-Content -Wait, baretail, ...) - those ask for write sharing and are refused.
+            //
+            // And keeping the FileStream lets us force the data to disk. StreamWriter.AutoFlush
+            // pushes it into the OS cache, which is enough for another process to READ - but it
+            // does not update the file's size and timestamp in the directory entry. Windows does
+            // that lazily, usually only when the handle closes, which is why an actively written
+            // log looks 0 bytes long in Explorer and older than it is to anything sorting by
+            // modification time.
+            _fileStream = new FileStream(path, FileMode.Append, FileAccess.Write,
+                FileShare.ReadWrite | FileShare.Delete);
+            _fileWriter = new StreamWriter(_fileStream) { AutoFlush = true };
+            CurrentLogFile = Path.GetFullPath(path);
+
+            Log($"Logging started, file: {CurrentLogFile}");
         }
         catch (Exception ex)
         {
@@ -138,8 +173,72 @@ public static class Logger
                 }
             }
 
-            try { _fileWriter?.WriteLine(line); }
+            try
+            {
+                _fileWriter?.WriteLine(line);
+                FlushToDiskIfDue();
+            }
             catch { /* file logging is best-effort, must not stop the bot */ }
+        }
+    }
+
+    /// <summary>
+    /// Forces the log all the way to disk, at most once per <see cref="DiskFlushInterval"/>.
+    ///
+    /// This is what makes the file look right from outside while the bot is running: the content
+    /// is already readable after AutoFlush, but the size and modification time in the directory
+    /// entry are not, and plenty of things - Explorer, and anything picking "the newest log" -
+    /// go by exactly those. Must be called while holding the lock.
+    /// </summary>
+    private static void FlushToDiskIfDue()
+    {
+        var now = DateTime.UtcNow;
+        if (now - _lastDiskFlush < DiskFlushInterval) return;
+
+        _lastDiskFlush = now;
+        try { _fileStream?.Flush(flushToDisk: true); }
+        catch { /* best effort */ }
+    }
+
+    /// <summary>
+    /// Forces everything written so far to disk, regardless of the interval. For the moments where
+    /// the next thing that happens might be the process disappearing.
+    /// </summary>
+    public static void Flush()
+    {
+        lock (Lock)
+        {
+            try
+            {
+                _fileWriter?.Flush();
+                _fileStream?.Flush(flushToDisk: true);
+                _lastDiskFlush = DateTime.UtcNow;
+            }
+            catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
+    /// Closes the log file properly. Without this the file was only ever closed by the runtime on
+    /// process exit - which worked, but meant a crash could lose the last lines, exactly the ones
+    /// explaining the crash.
+    /// </summary>
+    public static void Shutdown()
+    {
+        lock (Lock)
+        {
+            try
+            {
+                _fileWriter?.Flush();
+                _fileStream?.Flush(flushToDisk: true);
+                _fileWriter?.Dispose(); // disposes the stream it wraps
+            }
+            catch { /* best effort */ }
+            finally
+            {
+                _fileWriter = null;
+                _fileStream = null;
+            }
         }
     }
 }

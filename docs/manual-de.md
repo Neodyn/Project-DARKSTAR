@@ -259,7 +259,7 @@ Jedes Radio reagiert **ausschließlich** auf sein eigenes Hotword. Leere `Keywor
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Rufzeichen, mit dem sich der Bot meldet (global, pro Radio überschreibbar). |
-| `PlayerNameCallsignSeparator` | `"\|"` | Schneidet das Rufzeichen aus dem SRS-Namen: `Enfield 1-1 \| neodym` → der Bot sagt „Enfield 1-1“. Fehlt das Trennzeichen, wird der ganze Name verwendet. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Schneidet das Rufzeichen aus dem SRS-Namen: `Enfield 1-1 \| neodym` → der Bot sagt „Enfield 1-1“. `/`, `\`, `:`, `;`, `~` gehen auch; `-` nie (das gehört zu `1-1`). Squadron-Tags wie `[ISAF]` werden entfernt und nie vorgelesen. |
 
 Vor der Sprachausgabe werden Bindestriche durch Leerzeichen ersetzt, damit „1-1“ als „one one“ und nicht als „eleven“ gesprochen wird.
 
@@ -350,7 +350,14 @@ Der Bot funkt nie dazwischen: Läuft die Zeit ab, während der Pilot noch sendet
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Erzwingt das Bullseye-Format statt BRAA. |
 | `DcsIntelNoContactsReply` | `"Picture clean."` | Wenn nichts auf die Filter passt. |
+| `UnintelligibleReply` | `"Say again, your last was unreadable."` | Wird gesagt, wenn nichts Verständliches transkribiert wurde — statt eine Anfrage zu erraten. |
 | `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | Wenn die Missionsdaten gar nicht lesbar sind. |
+| `DcsAirfieldEnabled` | `false` | „runway in use"/ATIS beantworten. Für den Bahn-Teil `evalEnabled = true` am DCS-gRPC-Server nötig — siehe [8.4](#84-bahn-in-benutzung-und-atis). |
+| `DcsAirfieldRunwayTriggers` | siehe [8.4](#84-bahn-in-benutzung-und-atis) | Phrasen nur für die Bahn. |
+| `DcsAirfieldAtisTriggers` | siehe [8.4](#84-bahn-in-benutzung-und-atis) | Phrasen für den vollen Bericht. Wird zuerst geprüft. |
+| `DcsAirfieldPressureUnit` | `"Both"` | `Both` / `Hectopascals` / `InchesHg`. |
+| `DcsAirfieldAtFieldNm` | `5` | Innerhalb dieser Entfernung entscheidet die Position des Piloten den Platz — kein Name nötig. |
+| `DcsAirfieldMaxDistanceNm` | `60` | Darüber fragt der Bot nach, welcher Platz gemeint ist. |
 
 #### Threat Circle (stehende Überwachung)
 
@@ -397,8 +404,12 @@ Der Transkriptionsaufruf findet trotzdem statt — der erkannte Text ist ja die 
 Eine schlichte Liste von Begriffen, die Gemini als Hinweis mitbekommt. Sie ändert nicht, worüber der Bot sprechen kann, sondern verbessert die Erkennung von Wörtern, die kein gewöhnliches Englisch sind:
 
 ```json
-["Viggen", "Overlord", "Bullseye", "Texaco", "Enfield"]
+["Viggen", "Overlord", "Texaco", "Enfield", "Batumi"]
 ```
+
+> **Niemals eine Auslösephrase hier eintragen.** Der Transkription wird gesagt, alles, was auch nur *klingt wie* ein Begriff aus dieser Liste, genau so zu schreiben — das ist der Zweck der Hinweise, und es passiert mit unverständlichem Audio genauso. Eine Kommandophrase in dieser Liste verwandelt damit jedes Gemurmel in dieses Kommando, und weil taktische Anfragen vor Phrasen und Gemini beantwortet werden, antwortet der Bot überzeugt auf eine Anfrage, die niemand gestellt hat.
+>
+> `"Bogey Dope"` war einer der Standardeinträge — genau so wurde das gefunden: Der Bot antwortete mit einem Bogey Dope, sobald er eine Aussendung nicht verstand. Der Eintrag ist entfernt, und der Bot warnt jetzt beim Start — und der Konfigurationseditor markiert die betroffenen Chips rot — wenn ein Vokabeleintrag zugleich eine Auslösephrase ist. Hier gehören Eigennamen hin: Rufzeichen, Flugzeugtypen, Kartennamen.
 
 ---
 
@@ -458,6 +469,16 @@ Der Bot entscheidet in dieser Reihenfolge:
 Peilungen werden ziffernweise gesprochen („zero niner zero“), weil die TTS `090` sonst als „ninety“ liest. Mit `DcsIntelSlowSpeech` (standardmäßig an) steht zwischen den Ziffern ein Komma und die übrigen Zahlen werden als Wörter ausgeschrieben — das hält die Stimme davon ab, sie herunterzurattern. Flugzeug- und Helikoptertypen werden angesagt, wenn `DcsIntelSayContactType` an ist. Der Aspect folgt der üblichen Brevity: **hot** (fliegt auf dich zu), **flanking**, **beaming**, **cold** (fliegt weg).
 
 Für BRAA vom eigenen Flugzeug aus muss der Bot *dein* Flugzeug finden: Er gleicht deinen SRS-Namen mit den DCS-Spielernamen ab. Klappt das nicht — etwa weil dein SRS-Name ganz anders lautet als dein DCS-Name — wechselt er automatisch aufs Bullseye-Format, statt die Anfrage abzulehnen.
+
+### Flugplatz-Anfragen
+
+| Anfrage | Beispielantwort |
+|---|---|
+| *„Overlord, Batumi, runway in use"* | *„Batumi, runway in use one three, wind one three zero at one niner knots."* |
+| *„Overlord, Kobuleti ATIS"* | *„Kobuleti information, wind two one zero at eight knots, temperature one five, QNH one zero one three, altimeter two niner niner two, runway in use two five."* |
+| *„Overlord, runway in use"* (ohne Platznamen) | Der Flugplatz, der deinem Flugzeug am nächsten liegt. |
+
+Die Bahn ist das Ende mit dem meisten Gegenwind, aus dem echten Missionswetter. Für den Bahn-Teil braucht es `evalEnabled = true` am DCS-gRPC-Server — siehe [Kapitel 8.4](#84-bahn-in-benutzung-und-atis). Rollanweisungen sind nicht möglich: DCS gibt Rollwege gar nicht heraus.
 
 ### Threat Circle: die stehende Überwachung
 
@@ -549,7 +570,75 @@ Im **Standardmodus** fragt der Bot zuerst die Sensoren der Einheit und nimmt die
 
 Welche Quelle tatsächlich verwendet wurde, steht in jeder `[Intel]`-Logzeile (`source=AWACS 'Overlord-1' sensors` oder `source=mission data (god's eye)`), und *„Try it without flying“* zeigt dasselbe — die schnellste Kontrolle, dass du nicht unbemerkt im Rückfall läufst.
 
-### 8.4 Der Missionsdaten-Explorer
+### 8.4 Bahn in Benutzung und ATIS
+
+Weiter auf CH8, unter **Answer "runway in use" and ATIS calls**. Sobald es an ist, kann ein Pilot fragen:
+
+> *„Overlord, Batumi, runway in use."*
+> *„Batumi, runway in use one three, wind one three zero at one niner knots."*
+
+> *„Overlord, Kobuleti ATIS."*
+> *„Kobuleti information, wind two one zero at eight knots, temperature one five, QNH one zero one three, altimeter two niner niner two, runway in use two five."*
+
+#### Du musst den Flugplatz nicht aussprechen
+
+Platznamen sind die schwächste Stelle an der ganzen Sache: „Mineralnye Vody", „Kobuleti", „Batumi" sind genau die Wörter, bei denen Spracherkennung daneben liegt — und eine Fehltranskription, die zufällig auf einen *anderen* Platz passt, ergibt eine überzeugt falsche Antwort.
+
+Deshalb benutzt der Bot zuerst, **wo du bist**, und den Namen nur als Feinentscheidung. Auf dem Vorfeld von Batumi:
+
+> *„Overlord, active runway for Punch 1-1."*
+> *„Punch 1-1, this is Overlord… Batumi, runway in use one three, wind one three zero at one niner knots."*
+
+Kein Platzname gesprochen. Zwei Dinge machen das möglich:
+
+- **Innerhalb von `DcsAirfieldAtFieldNm` (Standard 5 NM) um den Platzmittelpunkt entscheidet deine Position** — geparkt, rollend oder in der Platzrunde. Ein verstümmeltes Wort, das nach einem anderen Platznamen aussah, wird ignoriert. Einen *anderen* Platz absichtlich zu nennen funktioniert weiterhin: er wird gemeldet, und das Log notiert, dass du woanders warst.
+- **Das eigene Rufzeichen zu nennen identifiziert dich** — ein zweiter Weg, wenn SRS-Name und DCS-Name nicht zusammenpassen. „for Punch 1-1" und „for Punch one one" funktionieren beide; gesprochene Ziffern werden vor dem Vergleich zurück in Zahlen verwandelt, und zwei in einer Aussendung genannte Piloten werden abgelehnt statt geraten. Das hilft auch den taktischen Antworten: dieselbe Zuordnung entscheidet, ob ein Bogey Dope BRAA von deinem Flugzeug aus geben kann oder auf Bullseye zurückfallen muss.
+
+In der Luft und weiter als `DcsAirfieldMaxDistanceNm` (60 NM) von allem entfernt, ohne genannten Platz, fragt der Bot nach — statt einen Platz hunderte Meilen weit weg zu melden, als wärst du dort.
+
+Die Antwort nennt immer den verwendeten Platz, und die Logzeile sagt, wie er gewählt wurde (`the pilot is at it, 0.3 NM from the centre` / `named in the request` / `nearest to the pilot, 12 NM`) — eine falsche Wahl ist damit hörbar und nachvollziehbar statt stillschweigend.
+
+#### Eine Einstellung am DCS-gRPC-Server
+
+Wind, Temperatur und Druck haben eigene DCS-gRPC-Aufrufe. **Bahnausrichtungen nicht.** Die gibt es nur als `Airbase.getRunways()` in DCS selbst, und DCS-gRPC reicht das ausschließlich über sein `Eval` heraus — das **standardmäßig abgeschaltet** ist.
+
+Also in der DCS-gRPC-Serverkonfiguration:
+
+```lua
+evalEnabled = true
+```
+
+Danach die Mission neu starten. Ohne das meldet der Bot weiterhin das Wetter und sagt *„runway unknown"* — und schreibt eine Logzeile, die genau diese Einstellung nennt, statt stillschweigend zu versagen.
+
+Weil `Eval` beliebiges Lua ausführt, lohnt es zu wissen, was der Bot damit tatsächlich tut:
+
+- Das Lua ist eine **Konstante im Quellcode** (`DcsAirfieldService.RunwayQueryLua`). Nichts, was ein Pilot sagt, und nichts aus einem Konfigurationsfeld wird je hineingeschrieben — der Schnipsel fragt *alle* Flugplätze auf einmal ab, genau damit kein Platzname eingesetzt werden muss.
+- Er **liest nur**. Keine Einheit wird erzeugt, kein Flag gesetzt, keine Nachricht gesendet.
+- Er läuft **einmal pro Mission**. Bahnen bewegen sich nicht, das Ergebnis wird bis zum Wechsel der DCS-Sitzung zwischengespeichert.
+
+Ein Test prüft diese Eigenschaften bei jedem Build.
+
+#### Wie die Bahn gewählt wird
+
+Jede Bahn lässt sich von beiden Enden benutzen. Für jedes Ende berechnet der Bot die Windkomponente längs der Bahn und nimmt die mit dem meisten Gegenwind — das ist die Bedeutung von „runway in use". Echte Gleichstände (Windstille oder reiner Seitenwind) werden zuerst über den geringeren Seitenwind, dann über die größere Länge entschieden, damit die Antwort nicht von der Reihenfolge abhängt, in der DCS die Bahnen zufällig auflistet.
+
+Die Bezeichnung ist der magnetische Kurs auf zehn gerundet, wobei 0 zu 36 wird. Liefert DCS einen eigenen Namen für die Bahn und stimmt der bis auf eins überein, wird dieser genommen — er steht so auf der Karte und im Kneeboard, samt `L`/`R`-Zusatz.
+
+Peilungen folgen `DcsIntelMagneticBearings` wie überall sonst: der von DCS gemeldete Wind ist rechtweisend und wird für die Ansage nach magnetisch umgerechnet, sofern du das nicht abgeschaltet hast.
+
+#### Einstellungen
+
+| | |
+|---|---|
+| **Runway / ATIS triggers** | Die Auslösephrasen für beides. ATIS wird zuerst geprüft, ein Anruf mit beidem bekommt also die vollständigere Antwort. |
+| **Altimeter setting** | `Both` liest QNH in Hektopascal und danach die Zoll-Einstellung — praktisch bei gemischten Flugzeugtypen. Oder eines von beiden. |
+| **Try it without flying** | Führt eine echte Anfrage aus und zeigt den Satz samt verwendetem Flugplatz, Wind und Begründung der Bahnwahl. Es wird nichts gesendet. |
+
+#### Was nicht möglich ist
+
+**Rollwege.** DCS gibt sie nicht heraus — weder über gRPC noch über die eigene Scripting-API. Sie sind Teil des Terrainmodells. Bahnen und Parkplätze sind die Grenze dessen, was irgendein Werkzeug aus einer Mission lesen kann; Rollanweisungen müssten also je Flugplatz von Hand geschrieben werden.
+
+### 8.5 Der Missionsdaten-Explorer
 
 Unter den taktischen Einstellungen zeigt der Explorer, welche Daten eine laufende Mission liefert — als rohes JSON, mit 38 Abfragen zu Mission, Zeit, Welt, Koalition, Spielern, Einheiten, Wetter und Live-Ereignisströmen. Er liest ausschließlich: Es werden nur `Get`/`Stream`-Aufrufe gemacht, an der Mission ändert sich nichts. Er ist damit auch auf einem Server mit Spielern gefahrlos nutzbar.
 
@@ -577,7 +666,8 @@ Jede ändernde Aktion fragt per UAC nach Administratorrechten; der Editor selbst
 Zwei Dinge, die man wissen sollte:
 
 - **Der Dienst führt genau die registrierte EXE aus** und liest die `config.json` aus *deren* Ordner. Wenn du zum Testen eine zweite Kopie des Bots hast, achte darauf, die Konfiguration zu bearbeiten, die der Dienst auch wirklich verwendet — genau dafür zeigt das Panel den registrierten Pfad an.
-- **Ein Dienst hat kein Konsolenfenster.** Was er tut, steht in den Logdateien unter `logs\`.
+- **Ein Dienst hat kein Konsolenfenster.** Was er tut, steht in den Logdateien unter `logs\` — oder in der Live-Ansicht auf CH7 Logging, dieselben Daten ohne den Editor zu verlassen.
+- **Das Log wird laufend geschrieben** und etwa einmal pro Sekunde auf die Platte gezwungen. Zeigt der Explorer die aktuelle Logdatei mit 0 Bytes an, aktualisiert Windows nur den Verzeichniseintrag einer offenen Datei nicht — der Inhalt ist da. Lies sie über CH7, mit einem Tail-Werkzeug (`Get-Content -Wait`) oder in einem Editor, statt der Größenspalte zu glauben.
 
 Alternativ kann der Installer den Dienst während der Installation registrieren, oder du machst es von Hand mit `sc.exe`.
 
@@ -592,7 +682,7 @@ Alles liegt neben der EXE des Bots:
 | `config.json` | Sämtliche Einstellungen. |
 | `phrases.json` | Feste Frage-/Antwortpaare. |
 | `vocabulary.json` | Erkennungshinweise. |
-| `logs\` | Logdateien mit Zeitstempel, immer mit allen Details. |
+| `logs\` | Logdateien mit Zeitstempel, immer mit allen Details. Eine pro Start, benannt `darkstar_<Datum>_<Zeit>.log`. |
 | `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung. |
 | `grpc-dumps\` | Gespeicherte JSON-Ergebnisse aus dem Missionsdaten-Explorer. |
 
@@ -627,6 +717,7 @@ Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *
 |---|---|
 | **Bot beendet sich gleich nach dem Start, im Log steht „the wake word model could not be loaded"** | Der Ordner in `VoskModelPath` fehlt oder enthält kein Vosk-Modell. Das Log nennt den Ordner und was zu tun ist; ein Modellordner enthält `am\`, `conf\`, `graph\` und `ivector\`. Nach einer `-slim`-Installation muss das Modell separat geladen werden. |
 | **Bot erscheint nicht in der SRS-Clientliste** | Falscher `SrsHost`/`SrsPort`, Server läuft nicht, oder Firewall. Verbindungszeile im Log prüfen. |
+| **Bot beantwortet die falsche Anfrage, wenn er dich nicht verstanden hat** | Eine Auslösephrase steht in `vocabulary.json` — siehe [5.3](#53-vocabularyjson). Der Bot warnt beim Start davor, der Konfigurationseditor markiert es rot. Die `[STT]`-Zeile im Log zeigt, was tatsächlich transkribiert wurde, die `[Intel]`-Zeile darunter nennt die Auslösephrase, die gegriffen hat. |
 | **Bot reagiert auf gar nichts** | `VoskModelPath` leer oder falsch (das Log sagt es beim Start), falsche Frequenz/Modulation, oder das Hotword wird nicht erkannt — `[STT]`-Zeilen ansehen und [Kapitel 12](#12-hotword-genauigkeit). |
 | **Hotword wird nur manchmal erkannt** | Modell zu schwach. Auf `Standard` wechseln (`-VoskModelSize Standard`), vorher den alten Modellordner löschen. Das ist mit Abstand die häufigste Ursache. Systematisch nachmessen: [Kapitel 12](#12-hotword-genauigkeit). |
 | **Ein Radio reagiert auf das falsche Hotword** | Fast immer eine Fehltranskription des schwachen Modells — `[STT]` prüfen. Schlüsselwörter werden als ganze Wörter verglichen, ein längeres Wort löst also nicht aus. |

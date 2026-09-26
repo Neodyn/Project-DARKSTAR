@@ -266,8 +266,77 @@ public sealed class AppConfig
     /// <summary>Reply when no hostile aircraft match the filters.</summary>
     public string DcsIntelNoContactsReply { get; set; } = "Picture clean.";
 
+    /// <summary>
+    /// What the bot says when it could not make out the transmission at all - no speech in the
+    /// audio, or nothing the transcriber could turn into words.
+    ///
+    /// This exists because the alternative is worse: without it the bot falls through to whatever
+    /// the phrase list or a guessed transcript produces, which means answering a request nobody
+    /// made. Asking for a repeat is what a real controller does.
+    /// </summary>
+    public string UnintelligibleReply { get; set; } = "Say again, your last was unreadable.";
+
     /// <summary>Reply when the mission data could not be read (DCS-gRPC down, mission not running, call failed).</summary>
     public string DcsIntelUnavailableReply { get; set; } = "Negative, no tactical data available at this time.";
+
+    // ----- Airfield information: runway in use and ATIS -------------------------------------
+
+    /// <summary>
+    /// Answers "runway in use" and ATIS calls from live weather and runway data. Needs
+    /// DcsGrpcEnabled.
+    ///
+    /// One prerequisite that isn't ours to set: the runway headings come from
+    /// Airbase.getRunways(), which DCS-gRPC only exposes through its Eval method - and Eval is
+    /// disabled on the server by default. Without "evalEnabled = true" in the DCS-gRPC server
+    /// configuration, the weather part still works and the runway is reported as unknown. The bot
+    /// says so in the log once, with the setting to change.
+    ///
+    /// The only Lua this bot ever runs is a fixed, read-only snippet built into DcsAirfieldService
+    /// that asks for all airfields' runways at once. Nothing a pilot says is ever passed to it.
+    /// </summary>
+    public bool DcsAirfieldEnabled { get; set; } = false;
+
+    /// <summary>Phrases that ask for the runway in use only.</summary>
+    public List<string> DcsAirfieldRunwayTriggers { get; set; } = new()
+    {
+        "runway in use", "active runway", "runway request", "which runway"
+    };
+
+    /// <summary>Phrases that ask for the full weather report. Checked before the runway triggers.</summary>
+    public List<string> DcsAirfieldAtisTriggers { get; set; } = new()
+    {
+        "atis", "weather", "airfield information", "field conditions"
+    };
+
+    /// <summary>
+    /// Which unit the altimeter setting is read in: "Both" (QNH in hectopascals plus the altimeter
+    /// setting in inches), "Hectopascals", or "InchesHg".
+    /// </summary>
+    public PressureUnit DcsAirfieldPressureUnit { get; set; } = PressureUnit.Both;
+
+    /// <summary>
+    /// How close to an airfield's centre counts as being AT it. Inside this, the pilot's own
+    /// position decides which airfield the request is about, even if the transcript contained
+    /// something that looked like a different airfield's name.
+    ///
+    /// This is the setting that makes "Overlord, active runway for Punch 1-1" work from the ramp
+    /// without anyone having to pronounce "Mineralnye Vody" well enough for a transcriber. 5 NM
+    /// comfortably covers a parked aircraft, taxiing, and the circuit.
+    /// </summary>
+    public double DcsAirfieldAtFieldNm { get; set; } = 5.0;
+
+    /// <summary>
+    /// How far away the nearest airfield may be before the bot stops assuming it is the one meant.
+    /// Beyond this it asks which airfield instead of naming one hundreds of miles away as though
+    /// the pilot were there.
+    /// </summary>
+    public double DcsAirfieldMaxDistanceNm { get; set; } = 60.0;
+
+    /// <summary>Reply when no airfield was named and the requesting pilot couldn't be located.</summary>
+    public string DcsAirfieldUnknownReply { get; set; } = "Say the airfield you want conditions for.";
+
+    /// <summary>Reply when the airfield data couldn't be read at all.</summary>
+    public string DcsAirfieldUnavailableReply { get; set; } = "Negative, no airfield data available at this time.";
 
     /// <summary>
     /// When true: the bot ONLY responds to phrases defined as triggers in phrases.json.
@@ -552,6 +621,51 @@ public sealed class AppConfig
     /// it just makes misconfiguration visible in the log instead of failing silently later
     /// (e.g. a bad SrsPort just leading to "connection refused" with no obvious cause).
     /// </summary>
+    /// <summary>
+    /// Every trigger phrase that also sits in vocabulary.json. That combination is a trap: the
+    /// transcriber is told to snap anything that merely SOUNDS like a vocabulary term onto its
+    /// exact spelling - which is the whole point of the hints - and it does that to unintelligible
+    /// audio as well. A command phrase in the list therefore turns every mumble into that command,
+    /// and since tactical requests are answered before phrases and Gemini, the wrong answer wins.
+    ///
+    /// Kept separate from ValidateValues because the vocabulary isn't part of config.json; the bot
+    /// and the config editor both call this once they have loaded both files.
+    /// </summary>
+    public static List<string> FindVocabularyTriggerConflicts(AppConfig config, IEnumerable<string>? vocabulary)
+    {
+        var allTriggers = new List<string?>();
+
+        void Add(List<string>? triggers)
+        {
+            if (triggers != null) allTriggers.AddRange(triggers);
+        }
+
+        Add(config.DcsIntelBogeyDopeTriggers);
+        Add(config.DcsIntelPictureTriggers);
+        Add(config.DcsIntelThreatTriggers);
+        Add(config.DcsIntelBullseyeTriggers);
+        Add(config.DcsIntelThreatCircleTriggers);
+        Add(config.DcsIntelThreatCircleCancelTriggers);
+        Add(config.DcsAirfieldRunwayTriggers);
+        Add(config.DcsAirfieldAtisTriggers);
+
+        return TriggerMatcher.FindVocabularyConflicts(vocabulary, allTriggers);
+    }
+
+    /// <summary>Logs the conflicts found by <see cref="FindVocabularyTriggerConflicts"/>, if any.</summary>
+    public static void WarnAboutVocabularyTriggerConflicts(AppConfig config, IEnumerable<string>? vocabulary)
+    {
+        var conflicts = FindVocabularyTriggerConflicts(config, vocabulary);
+        if (conflicts.Count == 0) return;
+
+        Logger.Log($"WARNING: vocabulary.json contains {conflicts.Count} term(s) that are also trigger phrases: " +
+                   string.Join(", ", conflicts.Select(c => $"\"{c}\"")));
+        Logger.Log("  The transcriber is told to snap anything that sounds like a vocabulary term onto its exact");
+        Logger.Log("  spelling, so those terms turn unclear transmissions into that request - the bot then answers");
+        Logger.Log("  it instead of asking you to repeat. Remove them from vocabulary.json (CH5 Vocabulary);");
+        Logger.Log("  keep only proper nouns there, such as callsigns, aircraft types and map names.");
+    }
+
     private static void ValidateValues(AppConfig config)
     {
         void Warn(string message) => Logger.Log($"WARNING: config.json - {message}");

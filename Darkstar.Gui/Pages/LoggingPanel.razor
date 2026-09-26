@@ -1,4 +1,5 @@
 @namespace Darkstar.Gui.Pages
+@implements IDisposable
 @inject ConfigStore Store
 
 <h1>LOGGING</h1>
@@ -23,9 +24,24 @@
     <input type="text" value="@System.IO.Path.Combine(Store.ConfigFolder, "logs")" readonly />
 </div>
 
+<div class="field">
+    <label>LOG FILE BEING SHOWN</label>
+    <input type="text" value="@(_currentFile ?? "(none yet)")" readonly />
+    <div class="hint">
+        The newest log, picked by the timestamp in its name — not by the file's modification time,
+        which Windows leaves stale while a file is still being written to.
+    </div>
+</div>
+
 <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
     <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">RECENT ACTIVITY</span>
-    <button class="link-action" style="margin-bottom:0" @onclick="Refresh"><span>Refresh</span></button>
+    <div style="display:flex;align-items:center;gap:12px">
+        <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
+            <span style="font-size:11px;color:#8CA0A8">Live</span>
+            <button class="toggle @(_live ? "on" : "")" @onclick="ToggleLive"><span class="knob"></span></button>
+        </div>
+        <button class="link-action" style="margin-bottom:0" @onclick="Refresh"><span>Refresh</span></button>
+    </div>
 </div>
 <div class="log-tail">
     @if (_lines.Count == 0)
@@ -44,8 +60,53 @@
 
 @code {
     private List<string> _lines = new();
+    private string? _currentFile;
 
-    protected override void OnInitialized() => Refresh();
+    /// <summary>
+    /// Re-reads the log every couple of seconds while this panel is open, so it works as a live
+    /// view instead of something to keep clicking. The bot forces its log to disk about once a
+    /// second, so this is roughly as fresh as it can be.
+    /// </summary>
+    private System.Timers.Timer? _timer;
+    private bool _live = true;
 
-    private void Refresh() => _lines = Store.GetRecentLogLines();
+    private const int RefreshIntervalMs = 2000;
+    private const int TailLines = 40;
+
+    protected override void OnInitialized()
+    {
+        Refresh();
+        StartTimer();
+    }
+
+    private void StartTimer()
+    {
+        _timer = new System.Timers.Timer(RefreshIntervalMs) { AutoReset = true };
+        _timer.Elapsed += (_, _) => InvokeAsync(() =>
+        {
+            if (!_live) return;
+            Refresh();
+            StateHasChanged();
+        });
+        _timer.Start();
+    }
+
+    private void ToggleLive()
+    {
+        _live = !_live;
+        if (_live) Refresh();
+    }
+
+    private void Refresh()
+    {
+        _lines = Store.GetRecentLogLines(TailLines);
+        _currentFile = Store.CurrentLogFile;
+    }
+
+    public void Dispose()
+    {
+        _timer?.Stop();
+        _timer?.Dispose();
+        _timer = null;
+    }
 }

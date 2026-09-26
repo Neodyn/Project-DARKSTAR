@@ -59,7 +59,7 @@ Each radio gets its own independent hotword detector, recording buffer, and repl
 | Field | Default | Description |
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Callsign the bot uses to identify itself in replies (global default; overridable per radio, see above). |
-| `PlayerNameCallsignSeparator` | `"\|"` | Separator used to parse a pilot's callsign out of their SRS player name. With the default `"\|"`, a player named `Enfield 1-1 | neodym` is addressed as `Enfield 1-1` — everything after the separator (typically the player's real name/handle) is ignored. If the separator isn't found in a given name, the full name is used as-is. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Separator used to parse a pilot's callsign out of their SRS player name. With the default `"\|"`, a player named `Enfield 1-1 | neodym` is addressed as `Enfield 1-1` — everything after the separator (typically the player's real name/handle) is ignored. If the separator isn't found, `/`, `\`, `:`, `;` and `~` are tried as well, and failing that the full name is used. `-` is never treated as a separator, since it belongs to flight numbers like `1-1`. Squadron tags in brackets (`[ISAF] Mobius 1`, `Mobius 1 (VF-1)`) are stripped, so the bot doesn't read them out. |
 
 ### Coalition security
 
@@ -158,7 +158,16 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelNoContactsReply` | `"Picture clean."` | Used when nothing matches the filters. |
+| `UnintelligibleReply` | `"Say again, your last was unreadable."` | What the bot says when nothing intelligible came out of the transmission. Without it the bot would fall through to the phrase list or a guessed transcript and answer a request nobody made. |
 | `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | Used when the mission data could not be read at all. |
+| `DcsAirfieldEnabled` | `false` | Answers "runway in use" and ATIS calls from live weather and runway data. Needs `DcsGrpcEnabled`. The runway part additionally needs `evalEnabled = true` on the DCS-gRPC server, since runway headings are only reachable through `Eval`; without it the weather still works and the runway is reported as unknown. The only Lua the bot ever runs is a fixed, read-only snippet built into `DcsAirfieldService`, cached per mission — nothing a pilot says reaches it. See [manual-en.md, chapter 8.4](manual-en.md#84-runway-in-use-and-atis). |
+| `DcsAirfieldRunwayTriggers` | `["runway in use", "active runway", "runway request", "which runway"]` | Phrases that ask for the runway only. |
+| `DcsAirfieldAtisTriggers` | `["atis", "weather", "airfield information", "field conditions"]` | Phrases that ask for the full report. Checked before the runway triggers, so a call containing both gets the fuller answer. |
+| `DcsAirfieldPressureUnit` | `"Both"` | `"Both"` reads QNH in hectopascals and then the altimeter setting in inches; `"Hectopascals"` or `"InchesHg"` for one only. |
+| `DcsAirfieldAtFieldNm` | `5` | How close to an airfield's centre counts as being **at** it. Inside this the pilot's own position decides which airfield the request is about, even if the transcript contained something that looked like another airfield's name — which is what makes *"active runway for Punch 1-1"* work from the ramp without anyone pronouncing the airfield well enough for a transcriber. |
+| `DcsAirfieldMaxDistanceNm` | `60` | How far the nearest airfield may be before the bot asks which one instead of assuming. |
+| `DcsAirfieldUnknownReply` | `"Say the airfield you want conditions for."` | When no airfield was named and the pilot couldn't be located. |
+| `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | When the airfield data couldn't be read at all. |
 
 **Where the contacts come from:** `DcsIntelContactSource` decides this, together with `DcsIntelAwacsUnitName`.
 
@@ -174,7 +183,17 @@ In the default mode the fallback also triggers on an *empty* detection table, no
 
 Every `[Intel]` log line names the source actually used (`source=AWACS '<name>' sensors` or `source=mission data (god's eye)`), and the GUI's *"Try it without flying"* button shows the same — the quickest way to check which one you are really running on.
 
-**How the pilot is located:** the bot matches the requester's SRS name against the DCS player names from `GetPlayerUnits` (full name, the part after `PlayerNameCallsignSeparator`, then the unit's callsign/name). On a match, bearings are given from the pilot's own aircraft (BRAA including aspect: hot / flanking / beaming / cold). If no match is found, the reply falls back to the bullseye format rather than failing.
+**How the pilot is located:** the bot matches the requester's SRS name against the units from `GetPlayerUnits`. Those two names are typed in different places and rarely agree character for character, so matching is tolerant — see `PilotNames` in `Darkstar.Core`. The rules are tried strictest first, and every one is applied across all units before the next is considered, so a weak rule can never beat a strong one:
+
+| Rule | Matches |
+|---|---|
+| `ExactRaw` | The DCS field equals the full SRS name, character for character. |
+| `CanonicalFull` | Equal once case, spaces, hyphens, underscores and squadron tags are ignored — `[ISAF] Mobius 1-1`, `MOBIUS 11` and `mobius_1_1` are one pilot. |
+| `CanonicalHandle` | The part behind the separator matches (usually the DCS player name). |
+| `CanonicalCallsign` | The part in front of the separator matches the unit's callsign or name. |
+| `UniqueSubstring` | Last resort for a handle that differs only by a suffix (`Bernhard` against `Bernhard_S`). Applies **only** to the DCS player name, never to the unit's callsign — that field holds the *flight's* callsign, shared by every aircraft in it, so a partial match there would hand a wingman's call to the flight lead. Refused outright when more than one player would qualify. |
+
+On a match, bearings are given from the pilot's own aircraft (BRAA including aspect: hot / flanking / beaming / cold). If no match is found, the reply falls back to the bullseye format rather than failing — and, since that fallback is silent on the radio, the log says which rule matched or why none did (`DebugLogging`, `[Intel] Pilot "…"`).
 
 ### Threat circle (standing watch)
 

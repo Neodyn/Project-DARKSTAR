@@ -259,7 +259,7 @@ Each radio reacts **only** to its own wake word. Empty `Keyword`/`Callsign` fall
 | Field | Default | Description |
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Callsign the bot identifies with (global default, per radio overridable). |
-| `PlayerNameCallsignSeparator` | `"\|"` | Cuts the pilot's callsign out of their SRS name: `Enfield 1-1 \| neodym` → the bot says "Enfield 1-1". If the separator isn't present, the full name is used. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Cuts the pilot's callsign out of their SRS name: `Enfield 1-1 \| neodym` → the bot says "Enfield 1-1". `/`, `\`, `:`, `;`, `~` work too; `-` never does (it belongs to `1-1`). Squadron tags like `[ISAF]` are stripped and never spoken. |
 
 Hyphens are replaced by spaces before speech, so "1-1" is spoken as "one one" and not "eleven".
 
@@ -350,7 +350,14 @@ The bot never talks over a pilot: if the time expires while they are still trans
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelNoContactsReply` | `"Picture clean."` | When nothing matches the filters. |
+| `UnintelligibleReply` | `"Say again, your last was unreadable."` | Said when nothing intelligible was transcribed — instead of guessing at a request. |
 | `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | When the mission data can't be read at all. |
+| `DcsAirfieldEnabled` | `false` | Answer "runway in use" / ATIS calls. Needs `evalEnabled = true` on the DCS-gRPC server for the runway part — see [8.4](#84-runway-in-use-and-atis). |
+| `DcsAirfieldRunwayTriggers` | see [8.4](#84-runway-in-use-and-atis) | Phrases asking for the runway only. |
+| `DcsAirfieldAtisTriggers` | see [8.4](#84-runway-in-use-and-atis) | Phrases asking for the full report. Checked first. |
+| `DcsAirfieldPressureUnit` | `"Both"` | `Both` / `Hectopascals` / `InchesHg`. |
+| `DcsAirfieldAtFieldNm` | `5` | Within this of an airfield, the pilot's position decides which one — no name needed. |
+| `DcsAirfieldMaxDistanceNm` | `60` | Beyond this the bot asks which airfield. |
 
 #### Threat circle (standing watch)
 
@@ -397,8 +404,12 @@ The transcription call still happens either way — the recognized text is what 
 A plain list of terms passed to Gemini as a hint. It doesn't change what the bot can talk about, it just improves recognition of words that aren't ordinary English:
 
 ```json
-["Viggen", "Overlord", "Bullseye", "Texaco", "Enfield"]
+["Viggen", "Overlord", "Texaco", "Enfield", "Batumi"]
 ```
+
+> **Never put a trigger phrase in here.** The transcriber is told to snap anything that merely *sounds like* a term in this list onto its exact spelling — that is what makes the hints work, and it does it to unintelligible audio too. A command phrase in this list therefore turns every mumble into that command, and since tactical requests are answered before phrases and Gemini, the bot confidently answers a request nobody made.
+>
+> `"Bogey Dope"` used to be one of the defaults, which is exactly how this was found: the bot replied with a bogey dope whenever it couldn't make out a transmission. It has been removed, and the bot now warns at startup — and the config editor marks the offending chips in red — if any vocabulary term is also a trigger phrase. Keep proper nouns here: callsigns, aircraft types, map names.
 
 ---
 
@@ -458,6 +469,16 @@ The bot decides in this order:
 Bearings are spoken digit by digit ("zero niner zero"), because TTS would otherwise read `090` as "ninety". With `DcsIntelSlowSpeech` (on by default) there is a comma between the digits and the other numbers are spelled out as words, which keeps the voice from rushing them. Aircraft and helicopter types are announced when `DcsIntelSayContactType` is on. Aspect follows standard brevity: **hot** (nose on), **flanking**, **beaming**, **cold** (running away).
 
 For BRAA from your own aircraft, the bot has to find *your* aircraft: it matches your SRS name against the DCS player names. If that fails — for example because your SRS name is nothing like your DCS name — it automatically switches to the bullseye format instead of refusing the request.
+
+### Airfield calls
+
+| Request | Example reply |
+|---|---|
+| *"Overlord, Batumi, runway in use"* | *"Batumi, runway in use one three, wind one three zero at one niner knots."* |
+| *"Overlord, Kobuleti ATIS"* | *"Kobuleti information, wind two one zero at eight knots, temperature one five, QNH one zero one three, altimeter two niner niner two, runway in use two five."* |
+| *"Overlord, runway in use"* (no airfield named) | The airfield nearest your aircraft. |
+
+The runway is the end with the most headwind, from live mission weather. Needs `evalEnabled = true` on the DCS-gRPC server for the runway part — see [chapter 8.4](#84-runway-in-use-and-atis). Taxiway instructions are not possible: DCS doesn't expose taxiways at all.
 
 ### Threat circle: a standing watch
 
@@ -549,7 +570,75 @@ In the **default** mode the bot asks the unit's sensors first and uses plain mis
 
 Which source was actually used is in every `[Intel]` log line (`source=AWACS 'Overlord-1' sensors` or `source=mission data (god's eye)`), and *"Try it without flying"* shows the same — the quickest way to check you aren't silently running on the fallback.
 
-### 8.4 The mission data explorer
+### 8.4 Runway in use and ATIS
+
+Still on CH8, under **Answer "runway in use" and ATIS calls**. Once it is on, a pilot can ask:
+
+> *"Overlord, Batumi, runway in use."*
+> *"Batumi, runway in use one three, wind one three zero at one niner knots."*
+
+> *"Overlord, Kobuleti ATIS."*
+> *"Kobuleti information, wind two one zero at eight knots, temperature one five, QNH one zero one three, altimeter two niner niner two, runway in use two five."*
+
+#### You don't have to pronounce the airfield
+
+Airfield names are the weakest part of this: "Mineralnye Vody", "Kobuleti", "Batumi" are exactly the words speech recognition gets wrong, and a mis-transcription that happens to match a *different* airfield gives a confidently wrong answer.
+
+So the bot uses **where you are** first, and the name only as a tiebreaker. Sitting on the ramp at Batumi:
+
+> *"Overlord, active runway for Punch 1-1."*
+> *"Punch 1-1, this is Overlord… Batumi, runway in use one three, wind one three zero at one niner knots."*
+
+No airfield spoken at all. Two things make that work:
+
+- **Within `DcsAirfieldAtFieldNm` (5 NM by default) of an airfield's centre, your position decides** — parked, taxiing or in the circuit. A garbled word that looked like another airfield's name is ignored. Naming a *different* airfield deliberately still works: it is reported, and the log notes that you were somewhere else.
+- **Saying your own callsign identifies you**, as a second route when your SRS name and your DCS name don't line up. "for Punch 1-1" and "for Punch one one" both work — spoken digits are turned back into figures before matching, and two pilots named in one transmission is refused rather than guessed at. This helps the tactical replies too: the same lookup decides whether a bogey dope can give BRAA from your aircraft or has to fall back to bullseye.
+
+Airborne and more than `DcsAirfieldMaxDistanceNm` (60 NM) from anything, with no airfield named, the bot asks which one rather than reporting a field hundreds of miles away as if it were yours.
+
+The reply always names the airfield it used, and the log line says how it was chosen (`the pilot is at it, 0.3 NM from the centre` / `named in the request` / `nearest to the pilot, 12 NM`) — so a wrong pick is audible and traceable rather than silent.
+
+#### One setting on the DCS-gRPC server
+
+Wind, temperature and pressure have proper DCS-gRPC calls. **Runway headings do not.** They exist only as `Airbase.getRunways()` inside DCS, which DCS-gRPC exposes exclusively through its `Eval` method — and `Eval` is **disabled by default**.
+
+So in the DCS-gRPC server configuration:
+
+```lua
+evalEnabled = true
+```
+
+Then restart the mission. Without it the bot still reports the weather and says *"runway unknown"* — and writes one log line naming exactly this setting rather than failing silently.
+
+Since `Eval` runs arbitrary Lua, it is worth knowing what the bot actually does with it:
+
+- The Lua is a **constant in the source** (`DcsAirfieldService.RunwayQueryLua`). Nothing a pilot says, and nothing from any configuration field, is ever pasted into it — the snippet asks for *all* airfields at once precisely so that no airfield name has to be interpolated.
+- It only **reads**. No unit is spawned, no flag is set, no message is sent.
+- It runs **once per mission**. Runways don't move, so the result is cached until the DCS session changes.
+
+A test asserts these properties on every build.
+
+#### How the runway is chosen
+
+Each runway strip can be used from either end. For every end the bot works out the wind component along it and picks the most headwind — which is what "runway in use" means. Exact ties (dead calm, or a pure crosswind) are broken by the smaller crosswind first, then the longer runway, so the answer doesn't depend on the order DCS happened to list the strips in.
+
+The designator is the magnetic heading rounded to the nearest ten, with 0 becoming 36. Where DCS supplies its own name for the strip and it agrees to within one, that name is used instead — it is what the terrain's charts and your kneeboard show, including a `L`/`R` suffix.
+
+Bearings follow `DcsIntelMagneticBearings` like everywhere else: the wind DCS reports is true, and is converted to magnetic for the report unless you turned that off.
+
+#### Settings
+
+| | |
+|---|---|
+| **Runway / ATIS triggers** | The phrases that ask for each. ATIS is checked first, so a call containing both gets the fuller answer. |
+| **Altimeter setting** | `Both` reads QNH in hectopascals and then the inches setting — the practical choice for a mixed flight. Or pick one. |
+| **Try it without flying** | Runs a real request and shows the sentence plus which airfield was used, the wind, and why that runway won. Nothing is transmitted. |
+
+#### What is not possible
+
+**Taxiways.** DCS does not expose them — not through gRPC, not through its own scripting API. They are part of the terrain model. Runways and parking spots are the limit of what any tool can read out of a mission, so taxi instructions would have to be written by hand per airfield.
+
+### 8.5 The mission data explorer
 
 Below the tactical settings, the explorer shows what a running mission exposes — as raw JSON, with 38 queries across mission, time, world, coalition, players, units, weather and live event streams. It is strictly read-only: only `Get`/`Stream` calls are made, nothing in the mission is changed, so it is safe to use on a live server with players on it.
 
@@ -577,7 +666,8 @@ Every operation that changes a service asks for administrator rights via UAC; th
 Two things worth knowing:
 
 - **The service runs the executable you registered**, and reads `config.json` from *that* folder. If you keep a second copy of the bot somewhere for testing, make sure you're editing the config the service actually uses — the panel shows the registered path for exactly this reason.
-- **A service has no console window.** Use the log files under `logs\` to see what it's doing.
+- **A service has no console window.** Use the log files under `logs\` to see what it's doing — or the live tail on CH7 Logging, which is the same data without leaving the editor.
+- **The log is written as it happens**, forced to disk about once a second. If Explorer shows the current log as 0 bytes, that is Windows not updating the directory entry for an open file; the content is there. Read it with the CH7 tail, a tail tool (`Get-Content -Wait`), or any editor — not by trusting the size column.
 
 Alternatively the installer can register the service during installation, or you can do it by hand with `sc.exe`.
 
@@ -592,7 +682,7 @@ Everything lives next to the bot's executable:
 | `config.json` | All settings. |
 | `phrases.json` | Fixed question/answer pairs. |
 | `vocabulary.json` | Transcription hints. |
-| `logs\` | Timestamped log files, always with full detail. |
+| `logs\` | Timestamped log files, always with full detail. One per start, named `darkstar_<date>_<time>.log`. |
 | `Backup\` | Automatic timestamped copies made before any automatic change. |
 | `grpc-dumps\` | JSON results saved from the mission data explorer. |
 
@@ -627,6 +717,7 @@ The `[STT]` lines are the most useful of all: they show what the bot actually *u
 |---|---|
 | **Bot stops right after starting, log says "the wake word model could not be loaded"** | The folder in `VoskModelPath` is missing or doesn't hold a Vosk model. The log names the folder and what to do; a model folder contains `am\`, `conf\`, `graph\` and `ivector\`. After a `-slim` install the model has to be downloaded separately. |
 | **Bot doesn't appear in the SRS client list** | Wrong `SrsHost`/`SrsPort`, server not running, or firewall. Check the log for the connection line. |
+| **Bot answers the wrong request when it didn't understand you** | A trigger phrase is sitting in `vocabulary.json` — see [5.3](#53-vocabularyjson). The bot warns about this at startup and the config editor marks it in red. The `[STT]` line in the log shows what was actually transcribed, and the `[Intel]` line below it names the trigger that fired. |
 | **Bot reacts to nothing** | `VoskModelPath` empty or wrong (the log says so at startup), wrong frequency/modulation, or the wake word isn't being recognized — check the `[STT]` lines and [chapter 12](#12-wake-word-accuracy). |
 | **Wake word is only recognized sometimes** | Model too weak. Switch to `Standard` (`-VoskModelSize Standard`) and delete the old model folder first. This is by far the most common cause. To measure it rather than guess: [chapter 12](#12-wake-word-accuracy). |
 | **A radio reacts to the wrong wake word** | Almost always a mis-transcription by a weak model — check `[STT]`. Keywords are matched as whole words, so a longer word containing the keyword won't trigger it. |

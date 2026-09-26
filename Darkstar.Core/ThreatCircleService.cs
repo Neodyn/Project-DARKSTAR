@@ -68,8 +68,13 @@ public sealed class ThreatCircleService
 
     public int ActiveCount => _circles.Count;
 
+    /// <summary>
+    /// Identifies a circle by pilot and frequency. Uses the canonical form of the name, so a
+    /// pilot who rejoins with their squadron tag written differently - or with a stray space -
+    /// can still cancel the circle they set up, instead of being told they have none.
+    /// </summary>
     private static string KeyFor(string rawPlayerName, double frequencyHz) =>
-        $"{rawPlayerName.Trim()}@{Math.Round(frequencyHz)}";
+        $"{PilotNames.CanonicalKey(rawPlayerName)}@{Math.Round(frequencyHz)}";
 
     /// <summary>
     /// Starts (or replaces) a pilot's threat circle and returns the spoken confirmation. Contacts

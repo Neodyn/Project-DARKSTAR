@@ -33,11 +33,15 @@ An editable table of trigger/response pairs (`phrases.json`), with a header togg
 ### CH5 — Vocabulary
 A chip-based editor for `vocabulary.json`: existing terms are shown as removable chips, and a text field (with an "Add" button and Enter-to-add) appends new ones, case-insensitively deduplicated. The panel notes that this list only affects transcription accuracy, not what the bot responds to (that's CH4).
 
+Any term that is **also a trigger phrase** is drawn in red above a warning card explaining why the two lists must stay separate: speech recognition snaps anything that merely sounds like a vocabulary term onto its exact spelling, so a command phrase here turns an unclear transmission into that command and the bot answers it instead of asking for a repeat. The check is `AppConfig.FindVocabularyTriggerConflicts`, and the bot logs the same warning at startup.
+
 ### CH6 — Discord
 A single toggle for `DiscordEnabled` and the webhook URL field, which is disabled (grayed out) while the toggle is off — reinforcing that the integration is entirely opt-in. Lists the three events that trigger a notification: bot started/connected, SRS connection lost/restored, and bot shutting down.
 
 ### CH7 — Logging
-Toggles for `LoggingEnabled` and `DebugLogging`, a read-only display of the resolved log folder path, and a live-refreshable tail of the most recent log lines read directly from the current log file — so you can check that the bot (running separately) is behaving correctly without leaving the GUI.
+Toggles for `LoggingEnabled` and `DebugLogging`, the resolved log folder, the log file currently being shown, and a tail of its last 40 lines read straight from disk — so you can watch a bot that is running as a service without leaving the editor. A **Live** switch re-reads it every two seconds; the bot forces its log to disk about once a second, so that is as fresh as it gets.
+
+The file is picked by the timestamp in its **name**, not by its modification time. That matters more than it sounds: Windows does not update a file's size or modification time in the directory entry while a handle is still open on it, so the log being written can look older — and 0 bytes long — next to a finished one from an earlier run. Sorting by modification time therefore showed the *previous* run's log until the bot was stopped. See `LogFiles.PickNewest` in `Darkstar.Core`.
 
 ### CH8 — DCS-gRPC
 A toggle for `DcsGrpcEnabled`, fields for the server address and optional API key (both disabled while the toggle is off), and a **"Test connection"** button that calls `DcsGrpcTester.TestConnectionAsync` against `MissionService.GetScenarioCurrentTime` — confirming that a DCS-gRPC server is reachable and actively receiving data from a running mission. Everything below on this channel builds on that connection: the tactical replies, the threat circle and the mission data explorer (see [manual-en.md, chapter 8](manual-en.md#8-live-mission-data-via-dcs-grpc)).
@@ -45,6 +49,8 @@ A toggle for `DcsGrpcEnabled`, fields for the server address and optional API ke
 #### Tactical replies
 
 Between the connection test and the explorer sits the configuration for the bot's tactical replies ("bogey dope", "picture", "threat check", answered from live mission data — see [configuration.md](configuration.md#tactical-replies-from-live-mission-data)): the master switch, the contact source (AWACS sensors with or without a god's-eye fallback, or mission data only) with a warning when the chosen mode leaves no usable source, the AWACS unit name whose sensors gate what may be reported, range/group/timeout limits, toggles for magnetic bearings, helicopters and naming aircraft types, the trigger phrases (one comma-separated line per request type), and the two canned replies for "nothing found" and "no data".
+
+An **airfield** card turns on "runway in use" and ATIS calls: the trigger phrases for each, whether the altimeter setting is read in hectopascals, inches or both, the two distance settings that let a pilot's own position decide the airfield instead of its spoken name (`DcsAirfieldAtFieldNm` / `DcsAirfieldMaxDistanceNm`), the two fallback replies, and a *"Show reply"* test that runs a real request and prints the sentence plus which airfield was used, the wind, and why that runway won. It also states, in the panel itself, that the runway headings need `evalEnabled = true` on the DCS-gRPC server (they come from `Airbase.getRunways()`, which is only reachable through `Eval`), that without it the weather still works and the runway is reported as unknown, and that taxiways are not available from DCS at all.
 
 A **threat circle** card configures the standing watch pilots can request by radio (radius defaults and limits, sweep interval, expiry, how many circles may run at once, how many warnings one sweep may transmit, and the start/cancel phrases).
 

@@ -31,11 +31,21 @@ public static class VocabularyBook
     {
         if (!File.Exists(path))
         {
+            // Proper nouns and jargon that generic speech recognition gets wrong - callsigns,
+            // aircraft types, map names.
+            //
+            // NOT the trigger phrases from config.json. The transcriber is told to snap anything
+            // that merely SOUNDS like one of these terms onto its exact spelling, which is what
+            // makes the hints work - and it does that to unintelligible audio too. A command
+            // phrase in this list therefore turns every mumble into that command: "Bogey Dope"
+            // used to be a default here, and the result was the bot answering bogey dope whenever
+            // it couldn't make out what was said. AppConfig.WarnAboutVocabularyTriggerConflicts now warns about it.
             var defaults = new List<string>
             {
                 "Overlord",
-                "Bullseye",
-                "Bogey Dope",
+                "Enfield",
+                "Springfield",
+                "Batumi",
                 "RTB",
             };
 
