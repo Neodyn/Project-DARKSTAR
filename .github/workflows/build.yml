@@ -1,0 +1,71 @@
+name: Build and test
+
+# Runs on every push and pull request. The point is that nobody has to remember: a change that
+# breaks a spoken reply, the bearing arithmetic, or a documented setting fails here rather than on
+# somebody's server.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # windows-latest, not ubuntu. Darkstar.Gui is WPF, which only builds on Windows, and the bot
+    # targets net8.0-windows through it. Building the whole solution on Linux would mean either
+    # excluding the GUI or a green tick that never covered it.
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Restore once for the whole solution, so the build steps below don't each hit NuGet.
+      - name: Restore
+        run: dotnet restore Darkstar.sln
+
+      - name: Build (Release)
+        run: dotnet build Darkstar.sln --configuration Release --no-restore
+
+      # The tests read source files and documentation from the repository, and find it by walking up
+      # from the assembly to Darkstar.sln - so the working directory here doesn't matter.
+      - name: Test
+        run: dotnet run --project Darkstar.Tests --configuration Release --no-build
+
+  # A second job on purpose: the bot alone has to build without the GUI's WPF dependencies, because
+  # that is what a headless server installs. If a console-only change quietly starts depending on
+  # something WPF brought along, this is what notices.
+  bot-only:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish the bot exactly as the installer does
+        run: dotnet publish Darkstar.csproj -c Release -r win-x64 --self-contained false -o publish-check
+      - name: Check the installer would find what it packs
+        shell: pwsh
+        run: |
+          # Mirrors the inventory in build-installer.ps1: the two settings that keep localized
+          # resource folders and XML documentation out of the installer are easy to lose in a merge,
+          # and nothing else would notice.
+          $unexpected = Get-ChildItem publish-check -Recurse -File |
+            Where-Object { $_.Extension -notin '.exe', '.dll', '.pdb', '.json', '.config' }
+          $languages = Get-ChildItem publish-check -Directory |
+            Where-Object { $_.Name -match '^[a-z]{2}(-[A-Za-z]{2,4})?$' -and $_.Name -ne 'en' }
+
+          if ($unexpected) {
+            Write-Host "::error::Publish output contains files the bot does not need:"
+            $unexpected | ForEach-Object { Write-Host "  $($_.Name)" }
+            exit 1
+          }
+          if ($languages) {
+            Write-Host "::error::Localized resource folders survived: $($languages.Name -join ', ')"
+            Write-Host "Check SatelliteResourceLanguages in Darkstar.csproj."
+            exit 1
+          }
+          Write-Host "Publish output is clean ($((Get-ChildItem publish-check -Recurse -File).Count) files)."

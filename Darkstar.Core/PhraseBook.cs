@@ -32,7 +32,9 @@ public static class PhraseBook
         {
             var defaults = new List<PhraseEntry>
             {
-                new() { Trigger = "radio check", Response = "Radio check, loud and clear, five by five." },
+                // No "radio check" entry: the bot answers that itself (see RadioCheck), and can add
+                // whether it has the caller on scope - something a fixed phrase cannot know. An
+                // entry added here still takes priority, for anyone who wants their own wording.
                 new() { Trigger = "say again", Response = "Copy, say again your last transmission." },
                 new() { Trigger = "status", Response = "All systems nominal." },
                 new() { Trigger = "check in", Response = "Copy your check-in." },

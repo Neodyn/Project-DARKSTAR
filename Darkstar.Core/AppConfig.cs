@@ -21,11 +21,74 @@ public sealed class RadioConfig
     public string Keyword { get; set; } = "";
 
     /// <summary>
+    /// Further spellings that also count as this radio's wake word - see
+    /// <see cref="AppConfig.VoskKeywordVariants"/> for what they are for and how to find them.
+    ///
+    /// Inheritance follows the word, not the radio: a radio using the global wake word also uses
+    /// the global variants, while a radio with its own <see cref="Keyword"/> starts from nothing.
+    /// Otherwise a tanker on "Texaco" would begin answering to "over lord" because that variant was
+    /// configured globally for the AWACS - which is close to impossible to spot in a log.
+    /// </summary>
+    public List<string> KeywordVariants { get; set; } = new();
+
+    /// <summary>
     /// Callsign this radio identifies itself with in replies. Leave empty to use the global
     /// BotCallsign for this radio instead. Usually matches Keyword above (the wake word and the
     /// callsign are typically the same word).
     /// </summary>
     public string Callsign { get; set; } = "";
+
+    /// <summary>
+    /// TTS voice for this radio's replies. Leave empty to use the global <c>VoiceName</c>.
+    ///
+    /// This is what makes several radios sound like several people rather than one bot on three
+    /// frequencies: the AWACS, the tanker and the tower each get their own voice. The name has to
+    /// match exactly what DCS-SR-ExternalAudio.exe reports - the config editor lists them on CH2,
+    /// and a name it doesn't know fails silently, with nothing but no audio to show for it.
+    /// </summary>
+    public string Voice { get; set; } = "";
+
+    /// <summary>
+    /// Whether this radio answers tactical requests - bogey dope, picture, threat check and the
+    /// threat circle.
+    ///
+    /// null (the default) means "whatever DcsIntelEnabled says", which is how every existing
+    /// configuration behaved before this setting existed. true and false decide it for this radio
+    /// alone, letting one frequency be the AWACS and another the tower - the way a real radio
+    /// plan splits them up. The global switch is still the master: false there means off
+    /// everywhere, whatever a radio asks for.
+    /// </summary>
+    public bool? AnswerTacticalRequests { get; set; }
+
+    /// <summary>
+    /// Whether this radio answers airfield requests - "runway in use" and ATIS.
+    /// Same three-way meaning as <see cref="AnswerTacticalRequests"/>.
+    /// </summary>
+    public bool? AnswerAirfieldRequests { get; set; }
+
+    /// <summary>
+    /// Whether this radio tells pilots where other players are.
+    /// Same three-way meaning as <see cref="AnswerTacticalRequests"/>.
+    ///
+    /// Its own setting rather than part of the tactical role, because it is a different kind of
+    /// decision: the tactical replies are about the enemy, this one is about the people on your own
+    /// side. A server may well want it on one squadron frequency and nowhere else.
+    /// </summary>
+    public bool? AnswerFriendlyPositionRequests { get; set; }
+
+    /// <summary>Resolves a three-way radio setting against the global master switch.</summary>
+    public static bool Answers(bool? perRadio, bool globallyEnabled) => globallyEnabled && (perRadio ?? true);
+
+    /// <summary>How this radio's role reads in the startup log.</summary>
+    public string DescribeRole(bool tacticalGloballyOn, bool airfieldGloballyOn,
+        bool friendlyGloballyOn = false)
+    {
+        var parts = new List<string>();
+        if (Answers(AnswerTacticalRequests, tacticalGloballyOn)) parts.Add("tactical");
+        if (Answers(AnswerAirfieldRequests, airfieldGloballyOn)) parts.Add("airfield");
+        if (Answers(AnswerFriendlyPositionRequests, friendlyGloballyOn)) parts.Add("friendly positions");
+        return parts.Count == 0 ? "phrases/Gemini only" : string.Join(" + ", parts);
+    }
 }
 
 public sealed class AppConfig
@@ -263,6 +326,132 @@ public sealed class AppConfig
     /// <summary>Spoken when a cancel request comes in but nothing is running for that pilot.</summary>
     public string DcsIntelThreatCircleNoneActiveReply { get; set; } = "No threat circle active for you.";
 
+    /// <summary>
+    /// Phrases that ask for the pilot's own position from the bullseye. Deliberately does NOT
+    /// include the bare word "bullseye", which already means "give me the answer in bullseye
+    /// format" via DcsIntelBullseyeTriggers - the two would fight over the same transmission.
+    /// </summary>
+    public List<string> DcsIntelAlphaCheckTriggers { get; set; } = new()
+    {
+        "alpha check", "position check", "say my position"
+    };
+
+    /// <summary>
+    /// Reply when the bot cannot work out where the pilot is - it has no unit for them, so there
+    /// is no position to give. The same situation a "no contact" radio check reports.
+    /// </summary>
+    public string DcsIntelNoPositionReply { get; set; } = "Negative, no radar contact on you.";
+
+    // ----- Friendly position ("where is Springfield 2-1?") ----------------------------------
+
+    /// <summary>
+    /// Whether the bot tells one pilot where another one is.
+    ///
+    /// OFF BY DEFAULT ON PURPOSE. On a PvP server a bot that reads out any player's position on
+    /// request changes how the server plays, and that is the owner's call rather than something to
+    /// enable on their behalf. Only human players in the caller's own coalition are ever reported,
+    /// and a caller whose coalition is unknown is refused outright - see <see cref="FriendlyPosition"/>.
+    /// </summary>
+    public bool DcsIntelFriendlyPositionEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Phrases asking where a friendly is. Whatever follows the phrase is taken as the aircraft
+    /// being asked about, so these read naturally at the front of that: "where is Springfield 2-1".
+    /// </summary>
+    public List<string> DcsIntelFriendlyPositionTriggers { get; set; } = new()
+    {
+        "where is", "where's", "position of", "say position of", "posit on", "locate"
+    };
+
+    /// <summary>
+    /// Reply when the named pilot could not be found. <c>{pilot}</c> is replaced with the name as
+    /// the caller said it - repeating it back is what tells them it was a name problem rather than
+    /// the aircraft being gone.
+    /// </summary>
+    public string DcsIntelFriendlyNotFoundReply { get; set; } = "Negative, no contact on {pilot}.";
+
+    /// <summary>
+    /// Reply when the request named nobody at all ("Overlord, where is he?"). A different
+    /// situation from a name that can't be found, and a different answer.
+    /// </summary>
+    public string DcsIntelFriendlyNoNameReply { get; set; } = "Say again, which aircraft?";
+
+    /// <summary>
+    /// Reply when the caller's own coalition is unknown, so the request is refused. Reached by a
+    /// spectator, or by somebody not in the SRS client list.
+    /// </summary>
+    public string DcsIntelFriendlyNoCoalitionReply { get; set; } =
+        "Negative, unable to identify your coalition.";
+
+    /// <summary>
+    /// Whether the friendly's own heading is included, which is what a pilot trying to rejoin
+    /// actually needs - where they are is only half of it.
+    /// </summary>
+    public bool DcsIntelFriendlySayHeading { get; set; } = true;
+
+    // ----- Rate limiting --------------------------------------------------------------------
+
+    /// <summary>
+    /// How many requests one pilot may make inside <see cref="RateLimitWindowSeconds"/>. Zero or
+    /// less switches the limit off.
+    ///
+    /// Every transmission costs a Gemini call and occupies the frequency while the reply is spoken,
+    /// so one pilot repeating the wake word - bored, annoyed that they were misheard, or with a
+    /// stuck transmit key feeding cockpit noise - can exhaust the quota for everybody and keep the
+    /// channel busy at the same time. Six in two minutes is generous for real radio work and still
+    /// catches that.
+    /// </summary>
+    public int RateLimitMaxRequests { get; set; } = 6;
+
+    /// <summary>
+    /// Length of the sliding window the requests are counted in. A window rather than a pause after
+    /// each request, so a pilot asking three things in quick succession and then flying for ten
+    /// minutes is never held up.
+    /// </summary>
+    public double RateLimitWindowSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// Said once when a pilot goes over the limit. <c>{pilot}</c> and <c>{seconds}</c> are filled
+    /// in. Further transmissions while they are still over it get no reply at all - being told
+    /// repeatedly would occupy exactly the frequency the limit is meant to protect.
+    ///
+    /// Empty means never say anything, which is not recommended: a bot that silently stops
+    /// answering is indistinguishable from a broken one, and the pilot's next move is to transmit
+    /// more.
+    /// </summary>
+    public string RateLimitReply { get; set; } = "{pilot}, standby, working other traffic.";
+
+    // ----- Radio check ----------------------------------------------------------------------
+
+    /// <summary>
+    /// Answers "radio check" on every radio, whatever else that radio is configured for. A radio
+    /// check is the most basic thing a radio does, so it is deliberately NOT tied to the tactical
+    /// or airfield role, and it works without DCS-gRPC at all.
+    ///
+    /// With mission data available it also says whether the bot can actually see the pilot on
+    /// scope, which is the quickest way for a pilot to find out that their SRS name and their DCS
+    /// name don't match - the failure that otherwise silently turns BRAA calls into bullseye calls.
+    /// </summary>
+    public bool RadioCheckEnabled { get; set; } = true;
+
+    /// <summary>Phrases that count as a radio check.</summary>
+    public List<string> RadioCheckTriggers { get; set; } = new()
+    {
+        "radio check", "comm check", "how do you read", "how do you hear me"
+    };
+
+    /// <summary>Reply when there is no mission data to say anything about radar contact.</summary>
+    public string RadioCheckReply { get; set; } = "Loud and clear.";
+
+    /// <summary>Reply when the pilot was found in the mission data - the bot has them on scope.</summary>
+    public string RadioCheckReplyWithContact { get; set; } = "Loud and clear, contact.";
+
+    /// <summary>
+    /// Reply when the pilot could NOT be found in the mission data. Worth saying out loud: it
+    /// means tactical replies will fall back to bullseye for this pilot.
+    /// </summary>
+    public string RadioCheckReplyNoContact { get; set; } = "Loud and clear, but no radar contact on you.";
+
     /// <summary>Reply when no hostile aircraft match the filters.</summary>
     public string DcsIntelNoContactsReply { get; set; } = "Picture clean.";
 
@@ -275,6 +464,16 @@ public sealed class AppConfig
     /// made. Asking for a repeat is what a real controller does.
     /// </summary>
     public string UnintelligibleReply { get; set; } = "Say again, your last was unreadable.";
+
+    /// <summary>
+    /// What the bot says when a request arrives on a radio that doesn't handle it, while another
+    /// configured radio does - the pilot asking the AWACS for the runway in use, say.
+    ///
+    /// Rather than refusing, it hands them off the way a real controller would. Placeholders:
+    /// {callsign} = the other radio's callsign, {frequency} = its frequency in MHz. Left empty,
+    /// the request just falls through to the phrase list as any other transmission would.
+    /// </summary>
+    public string WrongChannelReply { get; set; } = "Contact {callsign} on {frequency}.";
 
     /// <summary>Reply when the mission data could not be read (DCS-gRPC down, mission not running, call failed).</summary>
     public string DcsIntelUnavailableReply { get; set; } = "Negative, no tactical data available at this time.";
@@ -417,6 +616,26 @@ public sealed class AppConfig
     public string VoskKeyword { get; set; } = "computer";
 
     /// <summary>
+    /// Further spellings that also count as the wake word, for how the recognizer actually hears
+    /// it rather than how it is spelled.
+    ///
+    /// The wake word runs through a small English model, and on a server where most pilots are not
+    /// native English speakers "Overlord" arrives as "over lord", "oberlord" or worse - and the
+    /// first of those already fails the whole-word match because of the space, so the bot simply
+    /// stays silent. Listing what the model really produces fixes that without touching the model.
+    ///
+    /// Empty by default on purpose: every variant accepted also raises the false-trigger rate, so
+    /// this list is meant to be filled from measurements rather than guesses. Turn on
+    /// <c>SaveRecordings</c>, fly a session, then run
+    /// <c>Darkstar.exe --test-hotword recordings --suggest-variants</c>, which reads out what the
+    /// model heard on the transmissions it missed and proposes the variants worth adding.
+    ///
+    /// A radio that sets its own <c>Keyword</c> does not inherit these - see
+    /// <see cref="RadioConfig.KeywordVariants"/>.
+    /// </summary>
+    public List<string> VoskKeywordVariants { get; set; } = new();
+
+    /// <summary>
     /// How the 48 kHz radio audio is reduced to the 16 kHz Vosk expects.
     ///
     /// "LowPass" (default) filters properly before throwing samples away, which keeps content
@@ -442,6 +661,32 @@ public sealed class AppConfig
     /// 100 KB per second of speech and never cleans up after itself.
     /// </summary>
     public bool SaveRecordings { get; set; } = false;
+
+    /// <summary>
+    /// Delete recordings older than this many days. 0 disables the age rule.
+    /// Recordings are roughly 100 KB per second of speech, so a folder left alone on a busy
+    /// server fills a disk eventually - which is why there is a limit at all.
+    /// </summary>
+    public double RecordingRetentionDays { get; set; } = 7;
+
+    /// <summary>
+    /// Keep the recordings folder below this many megabytes, deleting the oldest first.
+    /// 0 disables the size rule. Applied after the age rule.
+    /// </summary>
+    public double RecordingRetentionMaxMb { get; set; } = 500;
+
+    /// <summary>
+    /// Delete log files older than this many days. 0 disables the age rule. One log is written
+    /// per start, so this matters most on a machine that restarts the service often.
+    /// </summary>
+    public double LogRetentionDays { get; set; } = 30;
+
+    /// <summary>
+    /// Keep the logs folder below this many megabytes, oldest first. 0 disables the size rule.
+    /// The newest few logs are never deleted regardless, so the one currently being written to is
+    /// safe even from a budget somebody set too low.
+    /// </summary>
+    public double LogRetentionMaxMb { get; set; } = 200;
 
     /// <summary>How many consecutive "silent" 20ms frames end the recording (silence detection after the hotword).</summary>
     public int SilenceFramesToStopRecording { get; set; } = 50;
@@ -646,8 +891,10 @@ public sealed class AppConfig
         Add(config.DcsIntelBullseyeTriggers);
         Add(config.DcsIntelThreatCircleTriggers);
         Add(config.DcsIntelThreatCircleCancelTriggers);
+        Add(config.DcsIntelAlphaCheckTriggers);
         Add(config.DcsAirfieldRunwayTriggers);
         Add(config.DcsAirfieldAtisTriggers);
+        Add(config.RadioCheckTriggers);
 
         return TriggerMatcher.FindVocabularyConflicts(vocabulary, allTriggers);
     }
@@ -824,6 +1071,20 @@ public sealed class AppConfig
 
             if (config.DcsIntelTimeoutSeconds <= 0)
                 Warn($"DcsIntelTimeoutSeconds ({config.DcsIntelTimeoutSeconds}) should be greater than 0.");
+
+            // A feature that is on globally but switched off on every radio answers nothing, and
+            // nothing else would ever say so.
+            var radios = config.GetEffectiveRadios();
+            if (radios.Count > 0)
+            {
+                if (radios.All(r => r.AnswerTacticalRequests == false))
+                    Warn("DcsIntelEnabled is true, but every radio has tactical requests switched off - " +
+                         "no radio will answer bogey dope, picture or threat check (CH2 Radios).");
+
+                if (config.DcsAirfieldEnabled && radios.All(r => r.AnswerAirfieldRequests == false))
+                    Warn("DcsAirfieldEnabled is true, but every radio has airfield requests switched off - " +
+                         "no radio will answer \"runway in use\" or ATIS (CH2 Radios).");
+            }
 
             var triggerCount = (config.DcsIntelBogeyDopeTriggers?.Count ?? 0)
                              + (config.DcsIntelPictureTriggers?.Count ?? 0)

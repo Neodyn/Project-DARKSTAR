@@ -38,8 +38,126 @@
                 <input type="text" @bind="radio.Callsign" placeholder="@Store.Config.BotCallsign" />
             </div>
         </div>
+
+        <div class="field" style="margin-top:12px;margin-bottom:0">
+            <label>ALSO ACCEPT AS THE WAKE WORD (comma separated)</label>
+            @* value + onchange rather than @bind: the stored value is a list, the field is one
+               comma-separated line, so the conversion has to happen on the way in and out. *@
+            <input type="text" value="@VariantsFor(radio)" placeholder="@VariantsPlaceholder(radio)"
+                   @onchange="e => SetVariants(radio, e.Value?.ToString() ?? string.Empty)" />
+            <div class="hint">
+                How the recognizer really hears it. A German speaker's "Overlord" often arrives as
+                <code>over lord</code> — which fails the whole-word match on the space, so the bot stays
+                silent. Every entry here also raises the false-trigger rate, so fill it from measurements:
+                turn on <code>SaveRecordings</code> (CH3), fly a session, then run
+                <code>Darkstar.exe --test-hotword recordings --suggest-variants</code>, which reads out what
+                the model heard on the transmissions it missed and proposes the list.
+                @if (string.IsNullOrWhiteSpace(radio.Keyword))
+                {
+                    <text>Empty here means this radio uses the global variants from CH3.</text>
+                }
+                else
+                {
+                    <text><strong>This radio has its own wake word, so it does not inherit the global
+                    variants</strong> — otherwise it would answer to another radio's spellings.</text>
+                }
+            </div>
+        </div>
+
+        <div class="field" style="margin-top:12px;margin-bottom:0">
+            <label>VOICE (empty = global default)</label>
+            <input type="text" @bind="radio.Voice" list="tts-voices" placeholder="@GlobalVoicePlaceholder" />
+        </div>
+
+        <div class="row2" style="margin-top:12px">
+            <div class="field" style="margin-bottom:0">
+                <label>TACTICAL REQUESTS @(TacticalGloballyOn ? "" : "(globally off)")</label>
+                @RoleButtons(radio.AnswerTacticalRequests, v => radio.AnswerTacticalRequests = v, TacticalGloballyOn)
+                <div class="hint">Bogey dope, picture, threat check, threat circle.</div>
+            </div>
+            <div class="field" style="margin-bottom:0">
+                <label>AIRFIELD REQUESTS @(AirfieldGloballyOn ? "" : "(globally off)")</label>
+                @RoleButtons(radio.AnswerAirfieldRequests, v => radio.AnswerAirfieldRequests = v, AirfieldGloballyOn)
+                <div class="hint">Runway in use and ATIS.</div>
+            </div>
+        </div>
+
+        <div class="field" style="margin-top:12px;margin-bottom:0">
+            <label>FRIENDLY POSITIONS @(FriendlyGloballyOn ? "" : "(globally off)")</label>
+            @RoleButtons(radio.AnswerFriendlyPositionRequests, v => radio.AnswerFriendlyPositionRequests = v, FriendlyGloballyOn)
+            <div class="hint">
+                "Where is Springfield 2-1?" — only human players on the caller's own side. Its own role
+                rather than part of the tactical one: that is about the enemy, this is about your own
+                people, and a server may well want it on one squadron frequency and nowhere else.
+                Switched on globally on CH8.
+            </div>
+        </div>
+
+        <div class="hint" style="margin-top:8px">
+            This radio answers: <strong>@radio.DescribeRole(TacticalGloballyOn, AirfieldGloballyOn, FriendlyGloballyOn)</strong>.
+            Phrases and free answers always work on every radio.
+        </div>
     </div>
 }
+
+@* One shared list for every voice field on this page - the browser offers it as autocomplete.
+   Deliberately an autocomplete and not a dropdown: with Azure or Google configured, the valid
+   voice names are the provider's, and this machine has never heard of them. A picker would make
+   exactly the best-sounding option impossible to enter. *@
+@if (Store.TtsVoiceList.Count > 0)
+{
+    <datalist id="tts-voices">
+        @foreach (var voice in Store.TtsVoiceList)
+        {
+            <option value="@voice.Name">@voice.Describe()</option>
+        }
+    </datalist>
+}
+
+<div class="card" style="margin:4px 0 12px">
+    <div class="card-head" style="margin-bottom:6px">
+        <span style="font-size:12.5px;color:#E7EDEF">Voices on this machine</span>
+        <span class="spacer"></span>
+        <button class="link-action" style="margin-bottom:0" disabled="@Store.TtsVoicesLoading"
+                @onclick="() => Store.LoadTtsVoicesAsync(force: true)">
+            <span>@(Store.TtsVoicesLoading ? "Asking..." : "List available voices")</span>
+        </button>
+    </div>
+
+    @if (Store.TtsVoiceStatus != null)
+    {
+        <div style="font-size:11.5px;color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">
+            @Store.TtsVoiceStatus
+        </div>
+    }
+
+    @if (Store.TtsVoiceList.Count > 0)
+    {
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            @foreach (var voice in Store.TtsVoiceList)
+            {
+                <span style="font-size:11px;color:#8CA0A8;border:1px solid #2A363C;border-radius:3px;padding:3px 7px">
+                    @voice.Describe()
+                </span>
+            }
+        </div>
+    }
+
+    <div class="hint" style="margin-top:8px">
+        Read straight out of <code>DCS-SR-ExternalAudio.exe</code>, which is the only list that counts:
+        it speaks through SAPI5, so Windows' own "natural" voices are usually invisible to it even
+        though the system settings show them. A name that isn't here fails silently — no audio, no
+        error. Azure or Google voice names won't appear either; type those in by hand and set the
+        credentials in <code>ExternalAudioExtraArgs</code> on CH3.
+    </div>
+</div>
+
+<p style="color:#8CA0A8;font-size:11.5px;margin:4px 0 12px">
+    Splitting the roles is how you get a tower: give one frequency the airfield requests and turn
+    its tactical requests off, and the other way round on the AWACS frequency. Each gets its own
+    wake word and callsign above. A pilot who calls the wrong one is told where to go instead of
+    being refused — see <code>WrongChannelReply</code>.
+</p>
 
 <button class="link-action" @onclick="AddRadio"><span>+ Add radio</span></button>
 
@@ -62,6 +180,100 @@
 </div>
 
 @code {
+    /// <summary>
+    /// The master switches. A radio can narrow what it answers, never widen it, so the buttons
+    /// are shown greyed out when the feature is off everywhere - otherwise switching one on here
+    /// would look like it did something.
+    /// </summary>
+    private bool TacticalGloballyOn => Store.Config.DcsIntelEnabled && Store.Config.DcsGrpcEnabled;
+    private bool AirfieldGloballyOn => TacticalGloballyOn && Store.Config.DcsAirfieldEnabled;
+    private bool FriendlyGloballyOn => TacticalGloballyOn && Store.Config.DcsIntelFriendlyPositionEnabled;
+
+    /// <summary>
+    /// What an empty voice field falls back to, spelled out rather than left blank - "empty =
+    /// global default" is only useful if you can see what the global default currently is.
+    /// </summary>
+    /// <summary>
+    /// The variant list as one editable line. Bound through a helper rather than directly, because
+    /// the underlying value is a list and the field is comma-separated text.
+    /// </summary>
+    private string VariantsFor(RadioConfig radio)
+    {
+        return string.Join(", ", radio.KeywordVariants);
+    }
+
+    private void SetVariants(RadioConfig radio, string value)
+    {
+        radio.KeywordVariants = value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
+    /// <summary>
+    /// What this radio falls back to - which depends on whether it uses the global wake word, since
+    /// variants follow the word rather than the radio.
+    /// </summary>
+    private string VariantsPlaceholder(RadioConfig radio)
+    {
+        if (!string.IsNullOrWhiteSpace(radio.Keyword)) return "(none — own wake word)";
+
+        return Store.Config.VoskKeywordVariants.Count > 0
+            ? string.Join(", ", Store.Config.VoskKeywordVariants)
+            : "(none)";
+    }
+
+    private string GlobalVoicePlaceholder =>
+        string.IsNullOrWhiteSpace(Store.Config.VoiceName)
+            ? "(whatever ExternalAudio picks)"
+            : Store.Config.VoiceName;
+
+    /// <summary>
+    /// A three-way choice: Default follows the global switch, On and Off decide for this radio.
+    /// Default is kept as its own state rather than resolved into a plain yes/no, so a radio left
+    /// alone keeps following the master switch when that changes later.
+    /// </summary>
+    private RenderFragment RoleButtons(bool? value, Action<bool?> set, bool enabled) => builder =>
+    {
+        var options = new (string Label, bool? Value)[] { ("Default", null), ("On", true), ("Off", false) };
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "row3");
+
+        var sequence = 2;
+        foreach (var (label, optionValue) in options)
+        {
+            var selected = value == optionValue;
+            var colour = optionValue switch
+            {
+                true => selected ? "#5FBF7A" : "#5A6A70",
+                false => selected ? "#E2543A" : "#5A6A70",
+                _ => selected ? "#E7EDEF" : "#5A6A70"
+            };
+            var border = selected
+                ? optionValue switch { true => "#2E4E4C", false => "#6C2E2E", _ => "#3A474D" }
+                : "#2A363C";
+            var background = selected
+                ? optionValue switch { true => "#16302A", false => "#2A1614", _ => "#1B2429" }
+                : "transparent";
+
+            builder.OpenElement(sequence++, "button");
+            builder.AddAttribute(sequence++, "class", "link-action");
+            builder.AddAttribute(sequence++, "style",
+                $"justify-content:center;border:1px solid {border};border-radius:4px;padding:6px;" +
+                $"color:{colour};background:{background};opacity:{(enabled ? "1" : "0.45")}");
+            builder.AddAttribute(sequence++, "disabled", !enabled);
+
+            var captured = optionValue;
+            builder.AddAttribute(sequence++, "onclick",
+                Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => set(captured)));
+
+            builder.AddContent(sequence++, label);
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
+
     private void AddRadio()
     {
         Store.Config.Radios.Add(new RadioConfig { FrequencyHz = 251_000_000, Modulation = "AM" });

@@ -35,8 +35,35 @@ public static class Logger
     /// </summary>
     private static readonly TimeSpan DiskFlushInterval = TimeSpan.FromSeconds(1);
 
-    /// <summary>Whether Debug() messages additionally appear on the console (they always go to the file).</summary>
+    /// <summary>
+    /// Whether verbose Debug() messages are recorded at all.
+    ///
+    /// They used to always go to the file regardless, on the theory that a bug report should
+    /// carry full detail. Measured, that theory cost about 123 MB of string garbage per hour per
+    /// radio and wrote the same again to disk - the UDP receive path alone logs two or three
+    /// lines for every 20 ms packet. The detail is still there when it is wanted: turning this on
+    /// records everything, and an error dumps the last <see cref="RecentDebugCapacity"/> debug
+    /// lines to the file even when it is off, so the run-up to a failure is never lost.
+    /// </summary>
     public static bool DebugEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Cheap check for call sites that would otherwise build an expensive string for nothing.
+    /// The hot paths (per-packet UDP logging) test this before interpolating.
+    /// </summary>
+    public static bool IsDebugEnabled => Enabled && DebugEnabled;
+
+    /// <summary>How many recent debug lines are kept in memory to give an error its context.</summary>
+    private const int RecentDebugCapacity = 200;
+
+    /// <summary>
+    /// The last few debug lines, kept in memory rather than written out. Costs one small array
+    /// and no I/O, and turns "the error says X and nothing else" into "here is the minute before
+    /// it". Dumped to the file by <see cref="Log"/> when the message looks like a failure.
+    /// </summary>
+    private static readonly string?[] RecentDebug = new string?[RecentDebugCapacity];
+    private static int _recentDebugNext;
+    private static bool _recentDebugWrapped;
 
     /// <summary>
     /// Global kill switch: when false, Log()/Debug() do nothing at all - no console output,
@@ -131,13 +158,81 @@ public static class Logger
     }
 
     /// <summary>Essential message - always to console and file.</summary>
-    public static void Log(string message) => Write(message, forceConsole: true);
+    public static void Log(string message)
+    {
+        // An error is the one moment the verbose detail is worth having, so hand over whatever
+        // was kept in memory before writing the error itself.
+        if (LooksLikeFailure(message))
+            DumpRecentDebug();
+
+        Write(message, forceConsole: true);
+    }
 
     /// <summary>
-    /// Verbose/raw message (e.g. every UDP packet, raw TCP lines, volume readings) - always
-    /// goes to the log file, on the console only when DebugEnabled is on.
+    /// Verbose/raw message (e.g. every UDP packet, raw TCP lines, volume readings). Recorded in
+    /// full when DebugEnabled is on; otherwise kept in a small in-memory ring so an error can
+    /// still show what led up to it.
+    ///
+    /// Callers on a hot path should test <see cref="IsDebugEnabled"/> first: the argument is
+    /// evaluated whether or not anything is done with it, and interpolating a string per UDP
+    /// packet is most of what this method used to cost.
     /// </summary>
-    public static void Debug(string message) => Write(message, forceConsole: false);
+    public static void Debug(string message)
+    {
+        if (!Enabled) return;
+
+        if (DebugEnabled)
+        {
+            Write(message, forceConsole: false);
+            return;
+        }
+
+        lock (Lock)
+        {
+            RecentDebug[_recentDebugNext] = message;
+            _recentDebugNext = (_recentDebugNext + 1) % RecentDebugCapacity;
+            if (_recentDebugNext == 0) _recentDebugWrapped = true;
+        }
+    }
+
+    /// <summary>Markers that make a message worth spending the kept-back detail on.</summary>
+    private static bool LooksLikeFailure(string message) =>
+        message.Contains("ERROR", StringComparison.Ordinal) ||
+        message.Contains("FATAL", StringComparison.Ordinal) ||
+        message.Contains("[Error]", StringComparison.Ordinal) ||
+        message.Contains(":ERR]", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Writes the kept-back debug lines to the file and empties the ring, so the same context is
+    /// not repeated for every follow-up error.
+    /// </summary>
+    private static void DumpRecentDebug()
+    {
+        lock (Lock)
+        {
+            var count = _recentDebugWrapped ? RecentDebugCapacity : _recentDebugNext;
+            if (count == 0) return;
+
+            try
+            {
+                _fileWriter?.WriteLine($"--- last {count} verbose line(s) before the message below ---");
+
+                var start = _recentDebugWrapped ? _recentDebugNext : 0;
+                for (var i = 0; i < count; i++)
+                {
+                    var entry = RecentDebug[(start + i) % RecentDebugCapacity];
+                    if (entry != null) _fileWriter?.WriteLine($"    {entry}");
+                }
+
+                _fileWriter?.WriteLine("--- end of verbose context ---");
+            }
+            catch { /* best effort */ }
+
+            Array.Clear(RecentDebug);
+            _recentDebugNext = 0;
+            _recentDebugWrapped = false;
+        }
+    }
 
     private static void Write(string message, bool forceConsole)
     {

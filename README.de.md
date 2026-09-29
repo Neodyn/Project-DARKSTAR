@@ -25,10 +25,13 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 |---|---|
 | 🎙️ **Hotword offline** | [Vosk](https://alphacephei.com/vosk/) transkribiert lokal und achtet auf dein Schlüsselwort. Kein Account, keine Kosten pro Anfrage, kein Audio verlässt dafür den Rechner. |
 | 📈 **Messbare Genauigkeit** | Richtige Anti-Aliasing-Filterung im Detektor-Audio, plus `--test-hotword`, um echte Aufnahmen erneut durchlaufen zu lassen und Treffer und Fehlschläge zu zählen statt zu raten. |
-| 🛰️ **Antworten aus der laufenden Mission** | „bogey dope", „picture" und „threat check" aus echten DCS-Daten über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format. |
+| 🗣️ **Für Nicht-Muttersprachler gebaut** | Ein Hotword kann die Schreibweisen akzeptieren, die der Erkenner wirklich produziert („over lord" für „Overlord"), und `--suggest-variants` ermittelt diese Liste aus deinen eigenen Aufnahmen — inklusive Warnung bei Varianten, die Fehltrigger verursachen würden. |
+| 🛰️ **Antworten aus der laufenden Mission** | „bogey dope", „picture", „threat check" und „alpha check" aus echten DCS-Daten über [DCS-gRPC](https://github.com/DCS-gRPC/rust-server) — BRAA mit Aspect vom eigenen Flugzeug aus oder im Bullseye-Format. |
+| 🤝 **Wo ist mein Rottenflieger?** | Optional, standardmäßig aus: die Position eines anderen menschlichen Spielers deiner Seite, gemessen von deinem Flugzeug. Nie KI, nie die Gegenseite, und nie für einen Anrufer, dessen Seite nicht bestimmbar ist. |
+| ✅ **Radio Check, der etwas aussagt** | „Loud and clear" auf jeder Frequenz — und mit Missionsdaten dazu, ob der Bot dich wirklich auf dem Schirm hat. Antwortet, bevor irgendetwas anderes schiefgehen kann. |
 | 🛫 **Bahn in Benutzung und ATIS** | Echter Wind, Temperatur und Druck, plus das Bahnende, das der Wind tatsächlich begünstigt. |
 | ⭕ **Threat Circle** | Ein Pilot schaltet eine mitfliegende Überwachung scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt. |
-| 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen und Gesprächsverlauf — „Overlord" für AWACS, „Texaco" für den Tanker. |
+| 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen, **eigener Stimme**, Gesprächsverlauf **und Aufgabe** — Taktik auf der AWACS-Frequenz, Bahn und ATIS auf dem Tower. Drei Radios klingen nach drei Personen. Wer den falschen anruft, wird weitergeleitet. |
 | 💬 **Feste Phrasen oder freie Antworten** | Bekannte Frage-/Antwortpaare werden direkt bedient; alles andere geht an Google Gemini oder wird abgelehnt — deine Entscheidung. |
 | 🎯 **Realistische Sensorlogik** | Nur melden, was eine konfigurierte KI-AWACS tatsächlich erfasst — oder alles, was in der Mission fliegt. |
 | 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
@@ -61,13 +64,23 @@ Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](
 Darkstar.csproj, *.cs        Der Bot: SRS-Verbindung, Audio, Hotword, Antworten
   └── Darkstar.Core/         Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
   └── Darkstar.Gui/          Konfigurationseditor (Blazor Hybrid über WPF)
+  └── Darkstar.Tests/        Die Testsuite — dotnet run --project Darkstar.Tests
 installer/                   Inno-Setup-Skript für die auslieferbare Setup.exe
 docs/                        Die gesamte Dokumentation
+.github/workflows/           Baut und testet jeden Push
 build-installer.ps1          Baut die Setup.exe (Release, Abhängigkeiten, Sprachmodell, ein Befehl)
 setup-dev-environment.ps1    Richtet einen Entwicklungsrechner ein
 ```
 
 `Darkstar.csproj` liegt bewusst direkt im Wurzelverzeichnis — seine Projektverweise zeigen relativ zu sich selbst auf `Darkstar.Core\`. In einem Unterordner lässt sich die Solution nicht mehr laden.
+
+### Tests ausführen
+
+```powershell
+dotnet run --project Darkstar.Tests
+```
+
+Gibt ein lesbares Protokoll aus und endet mit 0, wenn alles gehalten hat. Dafür braucht es keinen SRS-Server, kein DCS, keinen Gemini-Key und kein Sprachmodell — geprüft werden Rechenwege, gesprochene Sätze, und ob Code und Dokumentation noch übereinstimmen.
 
 ## Lizenz
 

@@ -33,6 +33,21 @@
     </div>
 </div>
 
+<div class="row2">
+    <div class="field">
+        <label>DELETE LOGS OLDER THAN (DAYS, 0 = NEVER)</label>
+        <input type="number" min="0" step="1" @bind="Store.Config.LogRetentionDays" />
+    </div>
+    <div class="field">
+        <label>KEEP <code>logs\</code> UNDER (MB, 0 = NO LIMIT)</label>
+        <input type="number" min="0" step="10" @bind="Store.Config.LogRetentionMaxMb" />
+    </div>
+</div>
+<div class="hint" style="margin-top:-6px">
+    A log file is written per start, so this folder grows on its own. Checked at start and once an hour.
+    The three newest logs are never deleted, whatever the limits say — the one being written to is among them.
+</div>
+
 <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
     <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">RECENT ACTIVITY</span>
     <div style="display:flex;align-items:center;gap:12px">

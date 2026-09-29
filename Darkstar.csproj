@@ -9,6 +9,25 @@
     <AssemblyName>Darkstar</AssemblyName>
     <AssemblyTitle>D.A.R.K.S.T.A.R.</AssemblyTitle>
     <Product>D.A.R.K.S.T.A.R. - Digital Assistant for Radio Keyword-activated Speech Transcription And Response</Product>
+
+    <!--
+      What ends up in the installer. Everything here is about NOT shipping files the bot never
+      reads on the target machine - see docs\building-the-installer.md.
+
+      SatelliteResourceLanguages: the gRPC and protobuf packages ship localized resource DLLs in
+      a subfolder per language (cs\, de\, es\, fr\, ja\, ru\, zh-Hans\ ...). This bot's own output
+      is English throughout - the radio phraseology is not translatable - so those folders are
+      pure freight in the installer.
+
+      AllowedReferenceRelatedFileExtensions: the default also copies each referenced assembly's
+      XML API documentation next to its DLL. That is for people writing code against a library,
+      not for running one. Narrowed to .pdb, which is kept ON PURPOSE: a Windows Service leaves no
+      trace anywhere except its log file, and without the symbols the stack traces in that log
+      lose their line numbers - which is precisely when they stop being useful. A few hundred KB
+      against diagnosable failures is a trade worth making.
+    -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <!--

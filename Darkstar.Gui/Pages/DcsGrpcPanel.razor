@@ -182,12 +182,96 @@
 
     <div class="row2">
         <div class="field">
+            <label>ALPHA CHECK TRIGGERS</label>
+            <input type="text" @bind="AlphaCheckTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                "Overlord, Punch 1-1, alpha check bullseye." Answers the caller's own position as a
+                bearing, range and altitude from the bullseye — how a pilot confirms their navigation
+                still agrees with everyone else's.
+            </div>
+        </div>
+        <div class="field">
+            <label>REPLY WHEN THE CALLER CANNOT BE FOUND</label>
+            <input type="text" @bind="Store.Config.DcsIntelNoPositionReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                Used for an alpha check when the SRS name cannot be matched to a unit in the mission —
+                usually a name mismatch rather than a missing aircraft.
+            </div>
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
             <label>REPLY WHEN NOTHING IS FOUND</label>
             <input type="text" @bind="Store.Config.DcsIntelNoContactsReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
         </div>
         <div class="field">
             <label>REPLY WHEN MISSION DATA IS UNAVAILABLE</label>
             <input type="text" @bind="Store.Config.DcsIntelUnavailableReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head" style="margin-bottom:6px">
+            <span style="font-size:12.5px;color:#E7EDEF">Friendly positions ("where is Springfield 2-1?")</span>
+            <span class="spacer"></span>
+            <button class="toggle @(Store.Config.DcsIntelFriendlyPositionEnabled ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
+                    @onclick="() => Store.Config.DcsIntelFriendlyPositionEnabled = !Store.Config.DcsIntelFriendlyPositionEnabled">
+                <span class="knob"></span>
+            </button>
+        </div>
+
+        <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:8px 0">
+            <div style="font-size:11.5px;color:#F2A93B">
+                <strong>Off by default, and that is a decision about your server rather than a setting.</strong>
+                A bot that reads out any player's position on request changes how a PvP server plays. Only
+                <em>human players on the caller's own side</em> are ever reported, and a caller whose coalition
+                cannot be determined from the SRS client list — a spectator, for instance — is refused outright.
+                Assign it to specific frequencies on CH2 if you want it on a squadron channel only.
+            </div>
+        </div>
+
+        <div class="field">
+            <label>TRIGGERS (comma separated)</label>
+            <input type="text" @bind="FriendlyPositionTriggers" disabled="@FriendlyDisabled" />
+            <div class="hint">
+                Whatever follows the phrase is taken as the aircraft being asked about, so these belong at
+                the front of a name: "where is <em>Springfield 2-1</em>". That is how a transmission naming
+                two pilots — the caller and the target — stays answerable at all.
+            </div>
+        </div>
+
+        <div class="row2">
+            <div class="field">
+                <label>REPLY WHEN THE NAMED PILOT ISN'T FOUND</label>
+                <input type="text" @bind="Store.Config.DcsIntelFriendlyNotFoundReply" disabled="@FriendlyDisabled" />
+                <div class="hint"><code>{pilot}</code> is replaced with the name as it was said. Repeating it
+                back is what tells the caller it was a name problem, not a missing aircraft.</div>
+            </div>
+            <div class="field">
+                <label>REPLY WHEN NOBODY WAS NAMED</label>
+                <input type="text" @bind="Store.Config.DcsIntelFriendlyNoNameReply" disabled="@FriendlyDisabled" />
+                <div class="hint">For "Overlord, where is he?" — a different situation from a name that can't be found.</div>
+            </div>
+        </div>
+
+        <div class="field">
+            <label>REPLY WHEN THE CALLER'S COALITION IS UNKNOWN</label>
+            <input type="text" @bind="Store.Config.DcsIntelFriendlyNoCoalitionReply" disabled="@FriendlyDisabled" />
+        </div>
+
+        <div class="toggle-row">
+            <div>
+                <div>Also say the friendly's heading</div>
+                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                    Where they are is only half of a rejoin. Aspect is deliberately never given — that
+                    describes a contact closing on you, which is a question about an enemy.
+                </div>
+            </div>
+            <button class="toggle @(Store.Config.DcsIntelFriendlySayHeading ? "on" : "")" disabled="@FriendlyDisabled"
+                    @onclick="() => Store.Config.DcsIntelFriendlySayHeading = !Store.Config.DcsIntelFriendlySayHeading">
+                <span class="knob"></span>
+            </button>
         </div>
     </div>
 
@@ -650,6 +734,12 @@ else
         set => Store.Config.DcsIntelPictureTriggers = SplitTriggers(value);
     }
 
+    private string AlphaCheckTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelAlphaCheckTriggers);
+        set => Store.Config.DcsIntelAlphaCheckTriggers = SplitTriggers(value);
+    }
+
     private string ThreatTriggers
     {
         get => string.Join(", ", Store.Config.DcsIntelThreatTriggers);
@@ -657,6 +747,14 @@ else
     }
 
     private bool ThreatCircleDisabled => !Store.Config.DcsIntelEnabled || !Store.Config.DcsIntelThreatCircleEnabled;
+
+    private bool FriendlyDisabled => !Store.Config.DcsIntelEnabled || !Store.Config.DcsIntelFriendlyPositionEnabled;
+
+    private string FriendlyPositionTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelFriendlyPositionTriggers);
+        set => Store.Config.DcsIntelFriendlyPositionTriggers = SplitTriggers(value);
+    }
 
     private string ThreatCircleTriggers
     {

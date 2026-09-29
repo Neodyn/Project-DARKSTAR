@@ -136,6 +136,14 @@ public sealed class DecimatingLowPass
     /// Filters and decimates one chunk of PCM16 (48 kHz mono) to PCM16 (16 kHz mono).
     /// Call repeatedly with consecutive chunks; the filter state carries over.
     /// </summary>
+    /// <summary>
+    /// Scratch space for one call, kept between calls. Frames arrive at fifty a second per radio
+    /// and are almost always the same size, so allocating this each time produced about 15 MB of
+    /// garbage per minute per radio - measured, and the only reason this instance holds buffers
+    /// at all. Safe because one instance belongs to exactly one radio and one thread at a time.
+    /// </summary>
+    private float[] _scratch = Array.Empty<float>();
+
     public byte[] Process(byte[] pcm16Mono48k)
     {
         int inputCount = pcm16Mono48k.Length / 2;
@@ -144,21 +152,25 @@ public sealed class DecimatingLowPass
 
         // The filter window reaches back over the tail of the previous chunk, so work on
         // history + new samples as one contiguous stream.
-        var stream = new float[_history.Length + inputCount];
+        var needed = _history.Length + inputCount;
+        if (_scratch.Length < needed) _scratch = new float[needed];
+        var stream = _scratch;
+
         Array.Copy(_history, stream, _history.Length);
         for (int i = 0; i < inputCount; i++)
             stream[_history.Length + i] = BitConverter.ToInt16(pcm16Mono48k, i * 2);
 
-        // How many outputs fall inside this chunk.
+        // How many outputs fall inside this chunk. Counted against the data length, not the
+        // buffer length - the scratch buffer can be larger than this chunk needs.
         int outputCount = 0;
-        for (int k = _nextOutputIndex; k < stream.Length; k += DecimationFactor)
+        for (int k = _nextOutputIndex; k < needed; k += DecimationFactor)
             outputCount++;
 
         var output = new byte[outputCount * 2];
         int written = 0;
         int index = _nextOutputIndex;
 
-        for (; index < stream.Length; index += DecimationFactor)
+        for (; index < needed; index += DecimationFactor)
         {
             // The window ends at 'index' and reaches _taps.Length-1 samples back into the past.
             float accumulator = 0f;
@@ -178,7 +190,7 @@ public sealed class DecimatingLowPass
 
         // Carry the tail over: the next call's stream starts with these samples, so translate
         // the pending output position into that coordinate system.
-        Array.Copy(stream, stream.Length - _history.Length, _history, 0, _history.Length);
+        Array.Copy(stream, needed - _history.Length, _history, 0, _history.Length);
         _nextOutputIndex = index - inputCount;
 
         return output;

@@ -22,7 +22,19 @@ public enum IntelRequestKind
     /// <summary>Set up a standing watch around the requesting pilot ("threat circle forty miles").</summary>
     ThreatCircleStart,
     /// <summary>Drop the requesting pilot's standing watch.</summary>
-    ThreatCircleCancel
+    ThreatCircleCancel,
+
+    /// <summary>
+    /// The pilot's own position, as a bearing and range from their coalition's bullseye - the
+    /// standard way a controller confirms a pilot knows where they are.
+    /// </summary>
+    AlphaCheck,
+
+    /// <summary>
+    /// Where another human player on the caller's own side is. See <see cref="FriendlyPosition"/>
+    /// for why this one is off by default and why it refuses a caller with no known coalition.
+    /// </summary>
+    FriendlyPosition
 }
 
 /// <summary>One hostile contact found inside a threat circle, ready to be read out.</summary>
@@ -173,6 +185,21 @@ public class DcsIntelService
             if (matchedTrigger != null) return IntelRequestKind.ThreatCircleStart;
         }
 
+        // Alpha check first: it is about the pilot, not about contacts, and its phrases share no
+        // words with the others.
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelAlphaCheckTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.AlphaCheck;
+
+        // Then "where is somebody" - also about people rather than the enemy, and checked before the
+        // contact requests so that a call naming both ("where is Springfield, and bogey dope")
+        // answers the more specific question first. Only when the feature is on at all, so its
+        // fairly generic phrases ("locate", "where's") cannot swallow anything while it is off.
+        if (_config.DcsIntelFriendlyPositionEnabled)
+        {
+            matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelFriendlyPositionTriggers);
+            if (matchedTrigger != null) return IntelRequestKind.FriendlyPosition;
+        }
+
         // Bogey dope before picture: "bogey dope, and picture" should give the more specific answer.
         matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelBogeyDopeTriggers);
         if (matchedTrigger != null) return IntelRequestKind.BogeyDope;
@@ -201,10 +228,10 @@ public class DcsIntelService
 
         try
         {
-            using var channel = GrpcChannel.ForAddress(_config.DcsGrpcAddress);
-            var headers = new Metadata();
-            if (!string.IsNullOrWhiteSpace(_config.DcsGrpcApiKey))
-                headers.Add("X-API-Key", _config.DcsGrpcApiKey);
+            // Shared, not per call: a channel owns an HTTP/2 connection, and this runs on every
+            // request and every threat circle sweep. See DcsGrpcChannels.
+            var channel = DcsGrpcChannels.For(_config.DcsGrpcAddress);
+            var headers = DcsGrpcChannels.HeadersFor(_config.DcsGrpcApiKey);
             var deadline = DateTime.UtcNow.AddSeconds(Math.Max(1, _config.DcsIntelTimeoutSeconds));
 
             var friendlyCoalition = ResolveFriendlyCoalition(senderCoalition);
@@ -214,6 +241,48 @@ public class DcsIntelService
             // otherwise their coalition's bullseye (still a useful, standard reference).
             var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, transcript, friendlyCoalition, cancellationToken);
             var bullseye = await GetBullseyeAsync(channel, headers, deadline, friendlyCoalition, cancellationToken);
+
+            // An alpha check is about the pilot, not about the enemy, so it answers here - before
+            // the sensor or god's-eye query. That also means it still works when the contact
+            // source is unusable, which is exactly when a pilot most wants to know the bot has
+            // them on scope.
+            if (kind == IntelRequestKind.AlphaCheck)
+            {
+                if (requester?.Position == null)
+                    return new IntelResult
+                    {
+                        Kind = kind,
+                        Reply = _config.DcsIntelNoPositionReply,
+                        Detail = "pilot could not be matched to a unit"
+                    };
+
+                if (bullseye == null)
+                    return new IntelResult
+                    {
+                        Kind = kind,
+                        Reply = _config.DcsIntelUnavailableReply,
+                        Detail = "no bullseye for this coalition"
+                    };
+
+                var alphaDeclination = _config.DcsIntelMagneticBearings
+                    ? await GetDeclinationAsync(channel, headers, deadline, requester.Position.Lat, requester.Position.Lon, cancellationToken)
+                    : 0.0;
+
+                return new IntelResult
+                {
+                    Kind = kind,
+                    Reply = BuildAlphaCheck(requester, bullseye, alphaDeclination, _config),
+                    Detail = $"unit '{requester.Name}' from bullseye"
+                };
+            }
+
+            // Where another player is. Answered here for the same reason the alpha check is: it needs
+            // nothing from the hostile side, so a broken or empty contact source must not stop it.
+            if (kind == IntelRequestKind.FriendlyPosition)
+            {
+                return await AnswerFriendlyPositionAsync(channel, headers, deadline, transcript,
+                    requester, bullseye, friendlyCoalition, senderCoalition, cancellationToken);
+            }
 
             var contactSet = await GetHostileContactsAsync(channel, headers, deadline, hostileCoalition, cancellationToken);
 
@@ -271,6 +340,133 @@ public class DcsIntelService
         }
     }
 
+    /// <summary>
+    /// "Punch 1-1, where is Springfield 2-1?" - the position of another human player on the
+    /// caller's own side, as a BRAA from the caller's aircraft when that is known and from the
+    /// bullseye otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The coalition guard comes first and is absolute: everywhere else an unknown sender coalition
+    /// falls back to the bot's own side, which is harmless when the answer concerns the enemy. Here
+    /// it would let somebody in a spectator slot ask where the players on the bot's side are.
+    /// </remarks>
+    private async Task<IntelResult> AnswerFriendlyPositionAsync(GrpcChannel channel, Metadata headers,
+        DateTime deadline, string transcript, Unit? requester, Position? bullseye,
+        Coalition friendlyCoalition, int senderCoalition, CancellationToken cancellationToken)
+    {
+        var kind = IntelRequestKind.FriendlyPosition;
+
+        if (!FriendlyPosition.CoalitionIsKnown(senderCoalition))
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelFriendlyNoCoalitionReply,
+                Detail = "sender coalition unknown - refused"
+            };
+
+        var request = FriendlyPosition.Parse(_config, transcript);
+        if (request == null)
+            return new IntelResult { Kind = kind, Reply = _config.DcsIntelFriendlyNoNameReply, Detail = "not a position request" };
+
+        if (!request.NamesSomebody)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelFriendlyNoNameReply,
+                Detail = $"\"{request.Trigger}\" with no aircraft named after it"
+            };
+
+        // Human players on the caller's own side, and nothing else. AI units are deliberately not
+        // considered - see FriendlyPosition for why.
+        var response = await new CoalitionService.CoalitionServiceClient(channel)
+            .GetPlayerUnitsAsync(new GetPlayerUnitsRequest { Coalition = friendlyCoalition }, headers, deadline, cancellationToken);
+
+        // Matched against the text AFTER the trigger only. That is what makes a transmission naming
+        // two pilots answerable at all, without touching PilotNames' refusal to guess between them.
+        var target = PilotNames.FindMatchInTranscript(response.Units, request.TargetText,
+            u => u.PlayerName, u => u.Callsign, u => u.Name);
+
+        if (!target.Found || target.Match?.Position == null)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelFriendlyNotFoundReply
+                    .Replace("{pilot}", PilotNames.ForSpeech(request.TargetText)),
+                Detail = $"\"{request.TargetText}\" not matched ({target.Explanation}), " +
+                         $"{response.Units.Count} player unit(s) on {friendlyCoalition}"
+            };
+
+        // Never answer a request about the caller themselves with a BRAA to themselves - that is an
+        // alpha check, and reads as nonsense here ("bearing 000, 0 miles").
+        if (requester != null && requester.Name == target.Match.Name)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = BuildAlphaCheck(requester, bullseye ?? new Position(),
+                    bullseye == null ? 0 : await GetDeclinationAsync(channel, headers, deadline,
+                        requester.Position.Lat, requester.Position.Lon, cancellationToken),
+                    _config),
+                Detail = $"caller asked about themselves ('{target.Match.Name}') - answered as an alpha check"
+            };
+
+        var referenceLat = requester?.Position?.Lat ?? bullseye?.Lat ?? 0;
+        var referenceLon = requester?.Position?.Lon ?? bullseye?.Lon ?? 0;
+
+        if (requester?.Position == null && bullseye == null)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelUnavailableReply,
+                Detail = "neither the caller's aircraft nor a bullseye could be located"
+            };
+
+        var declination = _config.DcsIntelMagneticBearings
+            ? await GetDeclinationAsync(channel, headers, deadline, referenceLat, referenceLon, cancellationToken)
+            : 0.0;
+
+        return new IntelResult
+        {
+            Kind = kind,
+            Reply = BuildFriendlyPosition(target.Match, requester, bullseye, declination, _config),
+            Detail = $"unit '{target.Match.Name}' via {target.Rule}, " +
+                     $"reference={(requester?.Position != null ? "caller's aircraft" : "bullseye")}"
+        };
+    }
+
+    /// <summary>
+    /// Whether the bot can currently see the caller on scope - the one piece of mission data a
+    /// radio check needs. Deliberately the cheapest possible question: one unit lookup, no contact
+    /// query, no declination, so answering "loud and clear" is never delayed by the sensor side
+    /// of the mission being slow or broken.
+    /// </summary>
+    /// <remarks>
+    /// Any failure answers <see cref="RadioCheck.ScopeState.Unknown"/> rather than
+    /// <c>NoContact</c>. A pilot whose radio works should not be told the bot cannot see them
+    /// because DCS-gRPC happened to time out; the reply then simply leaves radar out of it.
+    /// </remarks>
+    /// <remarks>Virtual so the radio-check wiring can be exercised without a running mission.</remarks>
+    public virtual async Task<RadioCheck.ScopeState> LookUpScopeStateAsync(string rawPlayerName, string? transcript,
+        int senderCoalition, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var channel = DcsGrpcChannels.For(_config.DcsGrpcAddress);
+            var headers = DcsGrpcChannels.HeadersFor(_config.DcsGrpcApiKey);
+            var deadline = DateTime.UtcNow.AddSeconds(Math.Max(1, _config.DcsIntelTimeoutSeconds));
+
+            var friendlyCoalition = ResolveFriendlyCoalition(senderCoalition);
+            var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, transcript,
+                friendlyCoalition, cancellationToken);
+
+            return requester != null ? RadioCheck.ScopeState.Contact : RadioCheck.ScopeState.NoContact;
+        }
+        catch (Exception ex)
+        {
+            Logger.Debug($"[RadioCheck] Could not check whether the caller is on scope: {ex.Message}");
+            return RadioCheck.ScopeState.Unknown;
+        }
+    }
+
     // ---------------------------------------------------------------------------------
     // Threat circle
     // ---------------------------------------------------------------------------------
@@ -287,10 +483,10 @@ public class DcsIntelService
     {
         try
         {
-            using var channel = GrpcChannel.ForAddress(_config.DcsGrpcAddress);
-            var headers = new Metadata();
-            if (!string.IsNullOrWhiteSpace(_config.DcsGrpcApiKey))
-                headers.Add("X-API-Key", _config.DcsGrpcApiKey);
+            // Shared, not per call: a channel owns an HTTP/2 connection, and this runs on every
+            // request and every threat circle sweep. See DcsGrpcChannels.
+            var channel = DcsGrpcChannels.For(_config.DcsGrpcAddress);
+            var headers = DcsGrpcChannels.HeadersFor(_config.DcsGrpcApiKey);
             var deadline = DateTime.UtcNow.AddSeconds(Math.Max(1, _config.DcsIntelTimeoutSeconds));
 
             var friendlyCoalition = ResolveFriendlyCoalition(senderCoalition);
@@ -855,6 +1051,88 @@ public class DcsIntelService
     // ---------------------------------------------------------------------------------
 
     /// <summary>Great-circle distance in nautical miles.</summary>
+    /// <summary>
+    /// "Punch 1-1, alpha check, bullseye zero one zero, one two two." Bearing and range measured
+    /// FROM the bullseye TO the aircraft, which is the direction a bullseye call always runs.
+    /// </summary>
+    internal static string BuildAlphaCheck(Unit requester, Position bullseye, double declination, AppConfig config)
+    {
+        var bearing = config.DcsIntelMagneticBearings
+            ? MagneticBearing(bullseye.Lat, bullseye.Lon, requester.Position.Lat, requester.Position.Lon, declination)
+            : (int)Math.Round(TrueBearing(bullseye.Lat, bullseye.Lon, requester.Position.Lat, requester.Position.Lon));
+
+        var range = DistanceNm(bullseye.Lat, bullseye.Lon, requester.Position.Lat, requester.Position.Lon);
+
+        var spokenBearing = config.DcsIntelSlowSpeech
+            ? SpeakBearing(bearing, config.DcsIntelSlowSpeech ? ", " : " ")
+            : BearingText(bearing);
+
+        var spokenRange = config.DcsIntelSlowSpeech
+            ? SpeakCount((int)Math.Round(range))
+            : ((int)Math.Round(range)).ToString();
+
+        var altitude = AltitudeThousands(requester.Position.Alt, config.DcsIntelSlowSpeech);
+
+        return $"Alpha check, bullseye {spokenBearing}, {spokenRange} miles, {altitude}.";
+    }
+
+    /// <summary>
+    /// "Springfield 2-1, bearing zero four zero, twenty five miles, eighteen thousand, heading zero
+    /// niner zero." Measured FROM the caller's aircraft when that is known, which is what somebody
+    /// trying to rejoin needs - otherwise from the bullseye, the same fallback a bogey dope uses.
+    /// </summary>
+    /// <remarks>
+    /// The target's own heading is included because where they are is only half of a rejoin. Aspect
+    /// is deliberately not: that describes whether a contact is closing on you, which is a question
+    /// about an enemy and would be nonsense about a wingman.
+    /// </remarks>
+    internal static string BuildFriendlyPosition(Unit target, Unit? requester, Position? bullseye,
+        double declination, AppConfig config)
+    {
+        // The instance BearingSeparator isn't reachable from a static method; same rule, spelled out.
+        var separator = config.DcsIntelSlowSpeech ? ", " : " ";
+
+        var fromCaller = requester?.Position != null;
+        var fromLat = fromCaller ? requester!.Position.Lat : bullseye!.Lat;
+        var fromLon = fromCaller ? requester!.Position.Lon : bullseye!.Lon;
+
+        var bearing = config.DcsIntelMagneticBearings
+            ? MagneticBearing(fromLat, fromLon, target.Position.Lat, target.Position.Lon, declination)
+            : (int)Math.Round(TrueBearing(fromLat, fromLon, target.Position.Lat, target.Position.Lon));
+
+        var range = DistanceNm(fromLat, fromLon, target.Position.Lat, target.Position.Lon);
+
+        var spokenBearing = config.DcsIntelSlowSpeech
+            ? SpeakBearing(bearing, separator)
+            : BearingText(bearing);
+
+        var spokenRange = config.DcsIntelSlowSpeech
+            ? SpeakCount((int)Math.Round(range))
+            : ((int)Math.Round(range)).ToString();
+
+        var altitude = AltitudeThousands(target.Position.Alt, config.DcsIntelSlowSpeech);
+
+        // The flight callsign DCS knows them by reads better on the radio than a player name with
+        // squadron tags in it; ForSpeech turns "2-1" into "two one" rather than "twenty one".
+        var name = PilotNames.ForSpeech(!string.IsNullOrWhiteSpace(target.Callsign)
+            ? target.Callsign
+            : PilotNames.DisplayCallsign(target.PlayerName, config.PlayerNameCallsignSeparator));
+
+        var reference = fromCaller ? "bearing" : "bullseye";
+
+        var heading = "";
+        if (config.DcsIntelFriendlySayHeading)
+        {
+            var targetHeading = target.Velocity?.Heading ?? target.Orientation?.Heading ?? 0;
+            var magnetic = (int)Math.Round(NormalizeBearing(targetHeading - declination));
+            heading = config.DcsIntelSlowSpeech
+                ? $", heading {SpeakBearing(magnetic, separator)}"
+                : $", heading {BearingText(magnetic)}";
+        }
+
+        return $"{name}, {reference} {spokenBearing}, {spokenRange} miles, {altitude}{heading}.";
+    }
+
     internal static double DistanceNm(double lat1, double lon1, double lat2, double lon2)
     {
         const double earthRadiusMeters = 6371000.0;
@@ -938,9 +1216,23 @@ public class DcsIntelService
     /// bearing: with a comma between the digits, TTS engines insert a short pause after each one
     /// instead of running "zeroninerzero" together.
     /// </summary>
-    internal static string SpeakBearing(int bearing, string separator = " ")
+    /// <summary>
+    /// A bearing as it is read on the radio: 1 to 360, never 0. Due north is "three six zero" -
+    /// "zero zero zero" is not something a controller says, and a pilot hearing it would wonder
+    /// whether the bot had lost the track.
+    /// </summary>
+    internal static int BearingForSpeech(int bearing)
     {
         var normalized = ((bearing % 360) + 360) % 360;
+        return normalized == 0 ? 360 : normalized;
+    }
+
+    /// <summary>The same bearing written out, for the fast (non-spelled) replies.</summary>
+    internal static string BearingText(int bearing) => BearingForSpeech(bearing).ToString("000");
+
+    internal static string SpeakBearing(int bearing, string separator = " ")
+    {
+        var normalized = BearingForSpeech(bearing);
         return string.Join(separator, normalized.ToString("000").Select(d => SpeakDigit(d - '0')));
     }
 

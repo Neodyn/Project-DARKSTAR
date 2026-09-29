@@ -9,6 +9,15 @@
     <RootNamespace>Darkstar.Gui</RootNamespace>
     <AssemblyName>Darkstar.ConfigEditor</AssemblyName>
     <AssemblyTitle>D.A.R.K.S.T.A.R. Config Editor</AssemblyTitle>
+
+    <!--
+      Same reasoning as in Darkstar.csproj, and it matters more here: the Blazor WebView package
+      brings a localized resource DLL per language for the ASP.NET Core components, and every one
+      of those languages would be installed alongside a UI whose labels are hardcoded English.
+      See docs\building-the-installer.md.
+    -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>

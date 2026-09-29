@@ -155,10 +155,10 @@ public sealed class DcsAirfieldService
 
         try
         {
-            using var channel = GrpcChannel.ForAddress(_config.DcsGrpcAddress);
-            var headers = new Metadata();
-            if (!string.IsNullOrWhiteSpace(_config.DcsGrpcApiKey))
-                headers.Add("X-API-Key", _config.DcsGrpcApiKey);
+            // Shared, not per call: a channel owns an HTTP/2 connection, and this runs on every
+            // request and every threat circle sweep. See DcsGrpcChannels.
+            var channel = DcsGrpcChannels.For(_config.DcsGrpcAddress);
+            var headers = DcsGrpcChannels.HeadersFor(_config.DcsGrpcApiKey);
             var deadline = DateTime.UtcNow.AddSeconds(Math.Max(1, _config.DcsIntelTimeoutSeconds));
 
             var friendly = _intel.ResolveFriendlyCoalition(senderCoalition);
@@ -668,7 +668,7 @@ public sealed class DcsAirfieldService
 
         var direction = config.DcsIntelSlowSpeech
             ? DcsIntelService.SpeakBearing(conditions.WindFromMagnetic)
-            : conditions.WindFromMagnetic.ToString("000", CultureInfo.InvariantCulture);
+            : DcsIntelService.BearingText(conditions.WindFromMagnetic);
 
         var speed = config.DcsIntelSlowSpeech
             ? SpeakDigits(knots)

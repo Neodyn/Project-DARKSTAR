@@ -30,7 +30,7 @@ The result is `installer\output\DARKSTAR-Setup-<version>.exe`.
 | `-Version` | `1.0` | Stamped into the installer and its file name. |
 | `-Slim` / `-SkipVoskModel` | off | Slim installer without a bundled model: a few MB instead of up to ~2 GB. Produces `DARKSTAR-Setup-<version>-slim.exe`; `VoskModelPath` then has to be set by hand on the target machine. |
 | `-SkipDependencyDownload` | off | Don't fetch the dependency installers; anything missing simply isn't bundled. |
-| `-Clean` | off | Delete previous publish output and installers first. |
+| `-Clean` | off | Delete previous publish output and installers first, plus the `obj\` and `bin\` folders of all three projects — so it really is a build from scratch, not just a fresh copy of a stale one. |
 | `-DryRun` | off | Only check prerequisites and print the plan. |
 
 It is safe to re-run: every step skips itself when its result is already in place. To swap the
@@ -113,6 +113,46 @@ Inno Setup via winget when it's missing).
   installer should assume you want).
 - Adds a Start Menu shortcut for the config GUI, and a clean uninstaller that also removes the
   Windows Service if one was installed.
+
+## What goes into the installer, and what doesn't
+
+`Setup.iss` packs exactly four things: `publish\bot\*`, `publish\gui\*`, `vosk-model\*` and the three dependency installers. No `bin\`, no `obj\`, no sources, no docs.
+
+The important word is **publish**. `installer\publish\` is not the compiler's output folder — it is produced by
+
+```
+dotnet publish <project> -c Release -r win-x64 --self-contained false -o installer\publish\<bot|gui>
+```
+
+and that differs from `bin\Release\` in ways that matter here:
+
+- **`-r win-x64` is what keeps the foreign native libraries out.** Without a RID, the build output carries a `runtimes\` tree holding every platform the referenced packages support — for Vosk that means the Linux `libvosk.so` and the macOS build travelling along to a Windows machine that can never load them. With the RID, only the win-x64 assets remain, flattened into the app folder.
+- **The target folder is wiped before every publish**, so a file from an earlier build — or Debug output someone copied in by hand — cannot survive into the installer.
+- `--self-contained false` leaves out the whole .NET runtime, because the installer brings the .NET 8 Desktop Runtime as a dependency instead. That is the single biggest saving.
+
+Two more things publishing would include that the bot never reads, both excluded in the project files:
+
+| Property (in `Darkstar.csproj` and `Darkstar.Gui.csproj`) | Keeps out |
+|---|---|
+| `SatelliteResourceLanguages` = `en` | The localized resource DLLs the gRPC, protobuf and Blazor WebView packages ship in a subfolder per language (`cs\`, `de\`, `es\`, `fr\`, `ja\`, `ru\`, `zh-Hans\` …). Everything this bot says is English — radio phraseology isn't translatable — so those folders are pure freight. |
+| `AllowedReferenceRelatedFileExtensions` = `.pdb` | The XML API documentation that gets copied next to each referenced assembly by default. That file is for someone writing code against a library, not for running one. |
+
+**The `.pdb` symbol files are kept on purpose.** A Windows Service leaves no trace anywhere except its log file, and without the symbols the stack traces in that log lose their line numbers — which is exactly when they stop being useful. A few hundred KB against diagnosable failures is a trade worth making. If you disagree, `<DebugType>none</DebugType>` in both app projects removes them.
+
+### The build script checks this for you
+
+Because `Setup.iss` packs those folders wholesale, whatever a NuGet package decides to drop in there gets installed on somebody's machine. So after publishing, `build-installer.ps1` inventories both folders and prints what is going in:
+
+```
+==> Checking what goes into the installer
+    Bot: 41 file(s), 12.3 MB
+    GUI: 96 file(s), 24.7 MB
+    [OK] publish folders inventoried (warnings above, if any, are advisory)
+```
+
+It warns — without failing the build — when a file turns up whose extension a running bot has no use for, and separately when a localized resource folder survived, which is how you'd notice that one of the two properties above got lost in a merge. It never fails the build on its own: a new file type may well be legitimate, and only a person can tell which.
+
+That output is also the honest way to answer "how big is it and why": run `.\build-installer.ps1 -SkipVoskModel -SkipDependencyDownload` and read the two lines. Nothing here is estimated.
 
 ## Internet access on the target machine
 

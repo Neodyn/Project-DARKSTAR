@@ -452,18 +452,22 @@ public sealed class SrsConnection : IAsyncDisposable
                 var packet = SrsAudioPacket.TryParse(result.Buffer);
                 if (packet == null)
                 {
-                    Logger.Debug($"[SRS UDP] Packet received ({result.Buffer.Length} bytes) - " +
-                                       "parsing failed (format differs or it's not a voice packet).");
+                    // Guarded: this runs per UDP packet, and building the string is most of what
+                    // it costs. Measured at ~123 MB of garbage an hour per talking pilot.
+                    if (Logger.IsDebugEnabled)
+                        Logger.Debug($"[SRS UDP] Packet received ({result.Buffer.Length} bytes) - " +
+                                     "parsing failed (format differs or it's not a voice packet).");
                     DumpForensics(result.Buffer);
                     continue;
                 }
 
-                Logger.Debug($"[SRS UDP] Packet parsed: {result.Buffer.Length} bytes total, " +
-                                   $"{packet.OpusAudio.Length} bytes Opus audio, " +
-                                   $"frequencies=[{string.Join(",", packet.Frequencies)}], " +
-                                   $"modulation=[{string.Join(",", packet.Modulations)}], " +
-                                   $"packetNumber={packet.PacketNumber}, " +
-                                   $"clientGuid={packet.OriginalClientGuid}");
+                if (Logger.IsDebugEnabled)
+                    Logger.Debug($"[SRS UDP] Packet parsed: {result.Buffer.Length} bytes total, " +
+                                 $"{packet.OpusAudio.Length} bytes Opus audio, " +
+                                 $"frequencies=[{string.Join(",", packet.Frequencies)}], " +
+                                 $"modulation=[{string.Join(",", packet.Modulations)}], " +
+                                 $"packetNumber={packet.PacketNumber}, " +
+                                 $"clientGuid={packet.OriginalClientGuid}");
 
                 if (packet.OpusAudio.Length == 0)
                 {
@@ -471,8 +475,9 @@ public sealed class SrsConnection : IAsyncDisposable
                     continue;
                 }
 
-                var pcm = OpusCodec.Decode(packet.OpusAudio);
-                Logger.Debug($"[SRS UDP] Opus decoded -> {pcm.Length} bytes PCM16.");
+                var pcm = OpusCodec.Decode(packet.OriginalClientGuid, packet.OpusAudio);
+                if (Logger.IsDebugEnabled)
+                    Logger.Debug($"[SRS UDP] Opus decoded -> {pcm.Length} bytes PCM16.");
 
                 if (pcm.Length > 0)
                 {
@@ -511,8 +516,9 @@ public sealed class SrsConnection : IAsyncDisposable
                         // first entry so audio still reaches a session rather than being silently
                         // dropped outright, matching the previous behavior for that edge case.
                         var fallbackFreq = packet.Frequencies.Length > 0 ? packet.Frequencies[0] : _radios[0].FrequencyHz;
-                        Logger.Debug($"[SRS UDP] None of frequencies=[{string.Join(",", packet.Frequencies)}] matched a configured radio - " +
-                                           $"falling back to {fallbackFreq} Hz.");
+                        if (Logger.IsDebugEnabled)
+                            Logger.Debug($"[SRS UDP] None of frequencies=[{string.Join(",", packet.Frequencies)}] matched a configured radio - " +
+                                         $"falling back to {fallbackFreq} Hz.");
                         OnAudioReceived?.Invoke(pcm, fallbackFreq, senderName, senderCoalition);
                     }
                 }

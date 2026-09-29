@@ -31,7 +31,29 @@ public sealed class BotService : BackgroundService
         public double FrequencyHz;
         public string Modulation = "AM";
         public string Callsign = "Overlord";
+
+        /// <summary>
+        /// TTS voice for this radio's replies, resolved once at startup (radio's own, else the
+        /// global one, else empty for whatever ExternalAudio picks). Empty is passed through
+        /// rather than substituted, so the decision stays in one place.
+        /// </summary>
+        public string Voice = "";
+
         public IHotwordDetector Hotword = null!;
+
+        /// <summary>
+        /// What this radio is for. Resolved once at startup from the radio's own three-way
+        /// setting and the global master switch, so the hot path is a plain bool.
+        /// </summary>
+        public bool AnswersTactical = true;
+        public bool AnswersAirfield = true;
+
+        /// <summary>
+        /// Whether this radio tells pilots where other players are. Its own role rather than part
+        /// of the tactical one, because it is a different decision - the tactical replies are about
+        /// the enemy, this is about your own side.
+        /// </summary>
+        public bool AnswersFriendlyPosition;
 
         public readonly object Lock = new();
         public readonly List<byte> RecordingBuffer = new();
@@ -223,6 +245,10 @@ public sealed class BotService : BackgroundService
         // warning, because nothing about the symptom points at vocabulary.json.
         AppConfig.WarnAboutVocabularyTriggerConflicts(config, vocabulary);
 
+        // Tidy up before doing anything else, so a folder that filled up during the last session
+        // is dealt with rather than added to.
+        PruneOwnFiles(config);
+
         Logger.DebugEnabled = config.DebugLogging;
         if (config.DebugLogging)
             Logger.Log("Verbose debug logging is active (DebugLogging in config.json).");
@@ -237,6 +263,13 @@ public sealed class BotService : BackgroundService
         string? eamPassword = string.IsNullOrWhiteSpace(config.ExternalAwacsPassword) ? null : config.ExternalAwacsPassword;
 
         var radioConfigs = config.GetEffectiveRadios();
+
+        // Which features exist at all this run. Each radio can then narrow that further - one
+        // frequency as the AWACS, another as the tower - but nothing can switch on what the
+        // global settings turned off.
+        var tacticalGloballyOn = config.DcsIntelEnabled && config.DcsGrpcEnabled;
+        var airfieldGloballyOn = tacticalGloballyOn && config.DcsAirfieldEnabled;
+        var friendlyGloballyOn = tacticalGloballyOn && config.DcsIntelFriendlyPositionEnabled;
 
         // Load the Vosk model once (it's often 40MB+) and share it across one lightweight
         // VoskRecognizer per radio, instead of loading the whole model from disk per radio.
@@ -322,13 +355,30 @@ public sealed class BotService : BackgroundService
         {
             var effectiveKeyword = string.IsNullOrWhiteSpace(radioConfig.Keyword) ? config.VoskKeyword : radioConfig.Keyword;
             var effectiveCallsign = string.IsNullOrWhiteSpace(radioConfig.Callsign) ? config.BotCallsign : radioConfig.Callsign;
+            var effectiveVoice = string.IsNullOrWhiteSpace(radioConfig.Voice) ? config.VoiceName : radioConfig.Voice.Trim();
+
+            // Variants follow the wake word, not the radio: a radio with its own Keyword starts
+            // from an empty variant list rather than inheriting another word's spellings.
+            var acceptedPhrases = HotwordVariants.Resolve(
+                radioConfig.Keyword, radioConfig.KeywordVariants,
+                config.VoskKeyword, config.VoskKeywordVariants);
 
             IHotwordDetector hotword = _voskModel != null
-                ? new VoskHotwordDetector(_voskModel, effectiveKeyword, config.HotwordAudioFilter, config.HotwordAutoGain)
+                ? new VoskHotwordDetector(_voskModel, effectiveKeyword, config.HotwordAudioFilter,
+                    config.HotwordAutoGain, acceptedPhrases.Skip(1))
                 : new EnergyThresholdPlaceholderDetector(config.HotwordEnergyThreshold, config.HotwordConsecutiveFramesNeeded);
 
             if (_voskModel != null)
-                Logger.Log($"  {radioConfig.FrequencyHz / 1_000_000:0.000} MHz ({radioConfig.Modulation}): wake word \"{effectiveKeyword}\", callsign \"{effectiveCallsign}\"");
+                Logger.Log($"  {radioConfig.FrequencyHz / 1_000_000:0.000} MHz ({radioConfig.Modulation}): wake word \"{effectiveKeyword}\"" +
+                           // Spelled out because an accepted variant is the one thing that can make
+                           // a radio react to something that isn't its wake word.
+                           (acceptedPhrases.Count > 1
+                               ? $" (also: {string.Join(", ", acceptedPhrases.Skip(1).Select(p => $"\"{p}\""))})"
+                               : "") + ", " +
+                           $"callsign \"{effectiveCallsign}\", answers: {radioConfig.DescribeRole(tacticalGloballyOn, airfieldGloballyOn, friendlyGloballyOn)}" +
+                           // Named here because a wrong voice name is otherwise invisible: the
+                           // transmission simply doesn't arrive, and nothing says why.
+                           (string.IsNullOrWhiteSpace(effectiveVoice) ? "" : $", voice \"{effectiveVoice}\""));
 
             var key = (long)Math.Round(radioConfig.FrequencyHz);
             sessions[key] = new RadioSession
@@ -336,9 +386,20 @@ public sealed class BotService : BackgroundService
                 FrequencyHz = radioConfig.FrequencyHz,
                 Modulation = radioConfig.Modulation,
                 Callsign = effectiveCallsign,
-                Hotword = hotword
+                Voice = effectiveVoice,
+                Hotword = hotword,
+                AnswersTactical = RadioConfig.Answers(radioConfig.AnswerTacticalRequests, tacticalGloballyOn),
+                AnswersAirfield = RadioConfig.Answers(radioConfig.AnswerAirfieldRequests, airfieldGloballyOn),
+                AnswersFriendlyPosition = RadioConfig.Answers(radioConfig.AnswerFriendlyPositionRequests, friendlyGloballyOn)
             };
         }
+
+        // Who can serve what, for handing a pilot off to the right frequency when they call the
+        // wrong one. Built once: the radio set doesn't change while the bot runs.
+        var radioRoles = sessions.Values
+            .Select(r => (r.FrequencyHz, r.Callsign, Tactical: r.AnswersTactical, Airfield: r.AnswersAirfield,
+                          FriendlyPosition: r.AnswersFriendlyPosition))
+            .ToList();
 
         if (string.IsNullOrWhiteSpace(config.GeminiApiKey))
         {
@@ -352,6 +413,15 @@ public sealed class BotService : BackgroundService
             fallbackModel: config.GeminiFallbackModel,
             maxRetries: config.GeminiMaxRetries,
             retryDelayMs: config.GeminiRetryDelayMs);
+
+        // One pilot must not be able to spend the whole Gemini quota and hold the frequency by
+        // themselves - see RateLimiter for what that failure looks like from the outside.
+        var rateLimiter = new RateLimiter(config.RateLimitMaxRequests, config.RateLimitWindowSeconds);
+        if (rateLimiter.Enabled)
+            Logger.Log($"Rate limit active: {config.RateLimitMaxRequests} request(s) per pilot " +
+                       $"every {config.RateLimitWindowSeconds:0} seconds.");
+        else
+            Logger.Log("Rate limit disabled (RateLimitMaxRequests is 0) - one pilot can use the whole Gemini quota.");
 
         var audioSender = new ExternalAudioSender(
             config.ExternalAudioExePath,
@@ -386,7 +456,9 @@ public sealed class BotService : BackgroundService
             {
                 // Runs entirely through the official DCS-SR-ExternalAudio.exe - no need for our
                 // own Opus encoding/UDP sending, which makes it protocol-safe.
-                await audioSender.SendTextAsync(spokenText, session.FrequencyHz, session.Modulation);
+                // The voice travels with the radio, not with the bot: on a mission with an AWACS,
+                // a tanker and a tower configured, each answers in its own voice.
+                await audioSender.SendTextAsync(spokenText, session.FrequencyHz, session.Modulation, session.Voice);
 
                 // Small safety margin in case the transmission trails off slightly before it
                 // arrives back at the bot itself as incoming audio.
@@ -514,6 +586,40 @@ public sealed class BotService : BackgroundService
                 return;
             }
 
+            // Checked here for the same reason the coalition check is: before the Gemini call, which
+            // is what costs money, and before the reply, which is what occupies the frequency. The
+            // pilot's name is known by now, which is what the limit is per.
+            var verdict = rateLimiter.Check(senderRawName, DateTime.UtcNow);
+            if (verdict != RateLimiter.Verdict.Allow)
+            {
+                CancelPendingAck(session, ackCts);
+
+                var retryAfter = rateLimiter.RetryAfter(senderRawName, DateTime.UtcNow);
+
+                if (verdict == RateLimiter.Verdict.RejectAndSay)
+                {
+                    var limitReply = RateLimiter.BuildReply(config.RateLimitReply, senderName, retryAfter);
+
+                    Logger.Log($"[Rate limit] {freqLabel}: \"{senderRawName}\" is over " +
+                               $"{config.RateLimitMaxRequests} request(s) per {config.RateLimitWindowSeconds:0}s - " +
+                               $"told to stand by for {retryAfter.TotalSeconds:0}s. " +
+                               $"({rateLimiter.TrackedPilots} pilot(s) tracked.)");
+
+                    if (!string.IsNullOrWhiteSpace(limitReply))
+                        await TransmitAsync(session, limitReply);
+                }
+                else
+                {
+                    // Already told. Saying it again would occupy exactly the frequency this is
+                    // protecting, so the transmission is dropped - but it is still logged, because
+                    // otherwise a pilot complaining about being ignored leaves no trace.
+                    Logger.Log($"[Rate limit] {freqLabel}: \"{senderRawName}\" still over the limit " +
+                               $"({retryAfter.TotalSeconds:0}s remaining) - transmission ignored, already advised.");
+                }
+
+                return;
+            }
+
             try
             {
                 Logger.Log($"[Recording finished] {freqLabel}: {audio.Length} bytes of PCM, transcribing...");
@@ -544,9 +650,41 @@ public sealed class BotService : BackgroundService
                 }
 
                 string? intelReply = null;
-                if (intel != null)
+
+                // "Overlord, radio check." Answered on every radio regardless of its role - a
+                // tower, an AWACS and a tanker all answer a radio check, and refusing one because
+                // this frequency is "only for airfield requests" would be absurd. So this sits
+                // above the role gating rather than inside it.
+                //
+                // An entry in phrases.json wins, though: somebody who wrote their own radio-check
+                // text there meant it, and an upgrade must not silently start answering something
+                // else. New installations no longer get that entry by default.
+                if (RadioCheck.Matches(config, text) && PhraseBook.TryMatch(text, phrases) == null)
+                {
+                    var scope = intel != null
+                        ? await intel.LookUpScopeStateAsync(senderRawName, text, senderCoalition)
+                        : RadioCheck.ScopeState.Unknown;
+
+                    intelReply = RadioCheck.Reply(config, scope);
+                    Logger.Log($"[RadioCheck] {freqLabel}: triggered by \"{RadioCheck.MatchedTrigger(config, text)}\", " +
+                               $"answered (scope: {scope}).");
+                }
+
+                if (intelReply == null && intel != null)
                 {
                     var kind = intel.Classify(text, out var matchedTrigger);
+
+                    // Which role this radio needs depends on what was asked. "Where is Springfield
+                    // 2-1" is answered by the friendly-position role, everything else here by the
+                    // tactical one - a squadron frequency may well have the first and not the second.
+                    var radioServesIt = kind switch
+                    {
+                        IntelRequestKind.None => false,
+                        IntelRequestKind.FriendlyPosition => session.AnswersFriendlyPosition,
+                        _ => session.AnswersTactical
+                    };
+
+                    if (!radioServesIt) kind = IntelRequestKind.None;
 
                     if (kind is IntelRequestKind.ThreatCircleStart or IntelRequestKind.ThreatCircleCancel && threatCircles != null)
                     {
@@ -577,7 +715,7 @@ public sealed class BotService : BackgroundService
                 // Airfield conditions, same principle: real weather and the runway the wind
                 // actually favours, rather than something a language model made up. Checked after
                 // the tactical requests, because a call naming both is more likely about threats.
-                if (intelReply == null && airfields != null)
+                if (intelReply == null && airfields != null && session.AnswersAirfield)
                 {
                     var airfieldKind = airfields.Classify(text, out var airfieldTrigger);
                     if (airfieldKind != AirfieldRequestKind.None)
@@ -588,6 +726,41 @@ public sealed class BotService : BackgroundService
                             intelReply = airfieldResult.Reply;
                             Logger.Log($"[Airfield] {freqLabel}: {airfieldKind}, triggered by \"{airfieldTrigger}\", " +
                                        $"answered ({airfieldResult.Diagnostics}).");
+                        }
+                    }
+                }
+
+                // Called the wrong frequency? A real controller doesn't refuse, they hand you off.
+                // Only when exactly one other radio serves it - with two towers configured there
+                // is no single right answer, and naming one would be a guess dressed as an
+                // instruction.
+                if (intelReply == null && !string.IsNullOrWhiteSpace(config.WrongChannelReply))
+                {
+                    RadioCapability? wanted = null;
+
+                    var wrongChannelKind = intel?.Classify(text) ?? IntelRequestKind.None;
+
+                    if (wrongChannelKind == IntelRequestKind.FriendlyPosition && !session.AnswersFriendlyPosition)
+                        wanted = RadioCapability.FriendlyPosition;
+                    else if (wrongChannelKind != IntelRequestKind.None && !session.AnswersTactical)
+                        wanted = RadioCapability.Tactical;
+                    else if (airfields != null && !session.AnswersAirfield &&
+                             airfields.Classify(text) != AirfieldRequestKind.None)
+                        wanted = RadioCapability.Airfield;
+
+                    if (wanted != null)
+                    {
+                        var handoff = RadioRoles.FindHandoff(radioRoles, session.FrequencyHz, wanted.Value);
+                        if (handoff != null)
+                        {
+                            intelReply = RadioRoles.BuildHandoffReply(config.WrongChannelReply, handoff, config.DcsIntelSlowSpeech);
+                            Logger.Log($"[Radio] {freqLabel}: {wanted} request on a radio that doesn't serve it - " +
+                                       $"handing off to \"{handoff.Callsign}\" on {handoff.FrequencyHz / 1_000_000:0.000} MHz.");
+                        }
+                        else
+                        {
+                            Logger.Log($"[Radio] {freqLabel}: {wanted} request on a radio that doesn't serve it, " +
+                                       "and no single other radio does - falling through to phrases/Gemini.");
                         }
                     }
                 }
@@ -666,8 +839,16 @@ public sealed class BotService : BackgroundService
             }
         }
 
+        // NOTE ON THE SHAPE OF THIS HANDLER: the event is an Action, so an async lambda on it is
+        // async void. That is deliberate - the UDP read loop must not wait for a reply that takes
+        // a Gemini round trip, or packets would pile up in the socket buffer and audio would be
+        // lost. The price is that an exception escaping here has nowhere to go and takes the
+        // process down with it, so the whole body is wrapped. Anything that throws costs one
+        // transmission and a log line, never the bot.
         srs.OnAudioReceived += async (pcm, freq, senderName, senderCoalition) =>
         {
+          try
+          {
             var key = (long)Math.Round(freq);
             if (!sessions.TryGetValue(key, out var session)) return; // audio on an unmonitored frequency - ignore
 
@@ -730,11 +911,26 @@ public sealed class BotService : BackgroundService
             {
                 await FinalizeRecordingAsync(session);
             }
+          }
+          catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+          {
+              // Shutting down mid-transmission.
+          }
+          catch (Exception ex)
+          {
+              // Unreachable in normal operation - FinalizeRecordingAsync has its own handler -
+              // but an async void handler is the one place where "unreachable" means "kills the
+              // process", so it is caught here rather than assumed away.
+              Logger.Log($"[Error] {freq / 1_000_000:0.000} MHz: audio handling failed - {ex.Message}");
+              Logger.Debug(ex.ToString());
+          }
         };
 
         // Watchdog: ends an active recording even when no further UDP packets arrive at all on
         // that radio (e.g. because the other side ended the transmission completely, without
         // trailing off into silence). Checks every configured radio independently.
+        var nextPrune = DateTime.UtcNow.AddHours(1);
+
         _ = Task.Run(async () =>
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -742,6 +938,19 @@ public sealed class BotService : BackgroundService
                 try
                 {
                     await Task.Delay(250, stoppingToken);
+
+                    // Piggy-backing on the watchdog rather than starting another timer: it
+                    // already ticks, and this needs to happen about once an hour, not exactly.
+                    if (DateTime.UtcNow >= nextPrune)
+                    {
+                        nextPrune = DateTime.UtcNow.AddHours(1);
+                        PruneOwnFiles(config);
+
+                        // Otherwise the limiter keeps a record for every name that ever connected.
+                        var forgotten = rateLimiter.Prune(DateTime.UtcNow);
+                        if (forgotten > 0)
+                            Logger.Debug($"[Rate limit] Forgot {forgotten} pilot(s) who stopped transmitting.");
+                    }
                     foreach (var session in sessions.Values)
                     {
                         if (session.IsRecording && DateTime.UtcNow - session.LastAudioReceivedAt > noAudioTimeout)
@@ -828,6 +1037,25 @@ public sealed class BotService : BackgroundService
     private static string RecordingsDirectory => Path.Combine(AppContext.BaseDirectory, "recordings");
 
     /// <summary>
+    /// Keeps the bot's own folders from growing until somebody notices. Run at startup and then
+    /// hourly - both are things that only accumulate, so there is no hurry, and doing it rarely
+    /// keeps it off the audio path entirely.
+    /// </summary>
+    private static void PruneOwnFiles(AppConfig config)
+    {
+        // Recordings only exist when they were asked for, but a folder left behind from an
+        // earlier session should still be tidied.
+        FileRetention.Prune(RecordingsDirectory, "*.wav",
+            config.RecordingRetentionDays, config.RecordingRetentionMaxMb,
+            alwaysKeepNewest: 0, label: "recording");
+
+        // Never the newest few logs: the one being written to lives in this folder.
+        FileRetention.Prune(Path.Combine(AppContext.BaseDirectory, "logs"), "*.log",
+            config.LogRetentionDays, config.LogRetentionMaxMb,
+            alwaysKeepNewest: 3, label: "log file");
+    }
+
+    /// <summary>
     /// Writes one transmission's audio to recordings\ as a WAV file. Best-effort by design: a
     /// full disk or a locked folder must never interfere with the radio work, so failures are
     /// logged at debug level and otherwise ignored.
@@ -903,6 +1131,10 @@ public sealed class BotService : BackgroundService
         _voskModel?.Dispose();
 
         await base.StopAsync(cancellationToken);
+
+        // Close the shared gRPC connections before the process goes away, so the server sees a
+        // clean disconnect rather than a dropped socket.
+        DcsGrpcChannels.DisposeAll();
 
         // Last thing: make sure the shutdown lines themselves are on disk, not just in the OS
         // cache - a service stop can be followed immediately by the process going away.

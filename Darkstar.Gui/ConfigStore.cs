@@ -178,6 +178,67 @@ public sealed class ConfigStore
         NotifyStateChanged();
     }
 
+    // ---------------------------------------------------------------------------------------
+    // TTS voices
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The TTS voices this machine reported, shared between the Radios and Speech panels: asking
+    /// costs a process start, and both panels want the same answer. Empty until loaded.
+    /// </summary>
+    public List<TtsVoice> TtsVoiceList { get; private set; } = new();
+
+    /// <summary>What happened on the last attempt, for the panels to show. Null = never asked.</summary>
+    public string? TtsVoiceStatus { get; private set; }
+
+    public bool TtsVoiceStatusIsError { get; private set; }
+    public bool TtsVoicesLoading { get; private set; }
+
+    /// <summary>
+    /// Asks DCS-SR-ExternalAudio.exe which voices it can use. Cached: a second call returns the
+    /// previous answer unless <paramref name="force"/> is set, so switching panels doesn't start
+    /// the tool again.
+    /// </summary>
+    public async Task LoadTtsVoicesAsync(bool force = false)
+    {
+        if (TtsVoicesLoading) return;
+        if (!force && TtsVoiceList.Count > 0) return;
+
+        TtsVoicesLoading = true;
+        TtsVoiceStatus = "Asking DCS-SR-ExternalAudio.exe...";
+        TtsVoiceStatusIsError = false;
+        NotifyStateChanged();
+
+        try
+        {
+            var result = await TtsVoices.ListAsync(Config.ExternalAudioExePath);
+
+            if (result.Ok)
+            {
+                TtsVoiceList = result.Voices;
+                TtsVoiceStatus = $"{result.Voices.Count} voice(s) available on this machine.";
+                TtsVoiceStatusIsError = false;
+            }
+            else
+            {
+                TtsVoiceStatus = result.Error;
+                TtsVoiceStatusIsError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // TtsVoices.ListAsync already turns failures into a message; this is the belt-and-braces
+            // case, since an exception escaping here would take the whole editor down.
+            TtsVoiceStatus = $"Could not list the voices: {ex.Message}";
+            TtsVoiceStatusIsError = true;
+        }
+        finally
+        {
+            TtsVoicesLoading = false;
+            NotifyStateChanged();
+        }
+    }
+
     /// <summary>Reads the tail of the newest log file under ConfigFolder/logs, for the Logging panel's live preview.</summary>
     public List<string> GetRecentLogLines(int maxLines = 12)
     {

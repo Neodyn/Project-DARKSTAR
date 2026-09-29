@@ -35,7 +35,51 @@
     <div class="hint">Used when RestrictToKnownPhrases is on and nothing matches.</div>
 </div>
 
+<div class="card" style="margin-top:16px">
+    <div class="card-head" style="margin-bottom:6px">
+        <span style="font-size:12.5px;color:#E7EDEF">Radio check</span>
+        <span class="spacer"></span>
+        <button class="toggle @(Store.Config.RadioCheckEnabled ? "on" : "")"
+                @onclick="() => Store.Config.RadioCheckEnabled = !Store.Config.RadioCheckEnabled">
+            <span class="knob"></span>
+        </button>
+    </div>
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        Answered on <em>every</em> radio, whatever that radio is configured for on CH2 — a tower, an AWACS
+        and a tanker all answer a radio check. With DCS-gRPC on (CH8) the reply also says whether the bot
+        has the caller on scope, which is the quickest way to find out that an SRS name and a DCS name do
+        not line up. A <code>radio check</code> row in the table above takes priority over all of this.
+    </div>
+
+    <div class="field">
+        <label>TRIGGERS (comma separated)</label>
+        <input type="text" @bind="RadioCheckTriggers" disabled="@(!Store.Config.RadioCheckEnabled)" />
+    </div>
+    <div class="field">
+        <label>REPLY WITHOUT MISSION DATA</label>
+        <input type="text" @bind="Store.Config.RadioCheckReply" disabled="@(!Store.Config.RadioCheckEnabled)" />
+    </div>
+    <div class="row2">
+        <div class="field" style="margin-bottom:0">
+            <label>REPLY WHEN THE CALLER IS ON SCOPE</label>
+            <input type="text" @bind="Store.Config.RadioCheckReplyWithContact" disabled="@(!Store.Config.RadioCheckEnabled)" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>REPLY WHEN THE CALLER IS NOT ON SCOPE</label>
+            <input type="text" @bind="Store.Config.RadioCheckReplyNoContact" disabled="@(!Store.Config.RadioCheckEnabled)" />
+        </div>
+    </div>
+</div>
+
 @code {
+    private string RadioCheckTriggers
+    {
+        get => string.Join(", ", Store.Config.RadioCheckTriggers);
+        set => Store.Config.RadioCheckTriggers = value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
     private void AddPhrase()
     {
         Store.Phrases.Add(new PhraseEntry { Trigger = "", Response = "" });

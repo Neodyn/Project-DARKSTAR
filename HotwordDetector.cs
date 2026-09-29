@@ -53,7 +53,8 @@ public sealed class EnergyThresholdPlaceholderDetector : IHotwordDetector
         if (_framesSinceLastDebugLog >= DebugLogEveryNFrames)
         {
             _framesSinceLastDebugLog = 0;
-            Logger.Debug($"[Hotword Debug] Current volume: {avg} (threshold: {_threshold})");
+            if (Logger.IsDebugEnabled)
+                Logger.Debug($"[Hotword Debug] Current volume: {avg} (threshold: {_threshold})");
         }
 
         if (avg > _threshold)

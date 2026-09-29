@@ -26,6 +26,10 @@ public static class HotwordTestRunner
         public bool AutoGain;
         public HotwordAudioFilter Filter = HotwordAudioFilter.LowPass;
         public bool Verbose;
+        public bool SuggestVariants;
+
+        /// <summary>Accepted spellings besides the wake word, from config.json unless overridden.</summary>
+        public List<string>? Variants;
     }
 
     private sealed record FileResult(string Name, bool? Expected, bool Detected, double DetectedAtSeconds, string Transcript);
@@ -62,6 +66,7 @@ public static class HotwordTestRunner
 
         var keyword = options.Keyword ?? config?.VoskKeyword;
         var modelPath = options.ModelPath ?? config?.VoskModelPath;
+        var variants = options.Variants ?? config?.VoskKeywordVariants;
 
         if (string.IsNullOrWhiteSpace(keyword))
         {
@@ -85,7 +90,11 @@ public static class HotwordTestRunner
             return 1;
         }
 
+        var accepted = HotwordVariants.Resolve(keyword, variants);
+
         Console.WriteLine($"Wake word : \"{keyword}\"");
+        if (accepted.Count > 1)
+            Console.WriteLine($"Variants  : {string.Join(", ", accepted.Skip(1).Select(p => $"\"{p}\""))}");
         Console.WriteLine($"Model     : {check.ResolvedPath}");
         Console.WriteLine($"Files     : {files.Count}");
         Console.WriteLine();
@@ -108,11 +117,22 @@ public static class HotwordTestRunner
                 return RunComparison(model, keyword!, files, options);
 
             var results = files
-                .Select(f => RunOneFile(model, keyword!, f, options.Filter, options.AutoGain))
+                .Select(f => RunOneFile(model, keyword!, f, options.Filter, options.AutoGain, variants))
                 .ToList();
 
             PrintTable(results, options.Verbose);
-            return Summarise(results, options.Filter.ToString()) ? 0 : 2;
+            var allAsExpected = Summarise(results, options.Filter.ToString());
+
+            if (options.SuggestVariants)
+            {
+                PrintSuggestions(results, keyword!, accepted);
+
+                // Always 0: this mode exists to look at the misses, so having some is the normal
+                // case and not a failure of the run.
+                return 0;
+            }
+
+            return allAsExpected ? 0 : 2;
         }
         finally
         {
@@ -126,8 +146,8 @@ public static class HotwordTestRunner
     /// </summary>
     private static int RunComparison(Model model, string keyword, List<string> files, Options options)
     {
-        var lowPass = files.Select(f => RunOneFile(model, keyword, f, HotwordAudioFilter.LowPass, options.AutoGain)).ToList();
-        var average = files.Select(f => RunOneFile(model, keyword, f, HotwordAudioFilter.Average, options.AutoGain)).ToList();
+        var lowPass = files.Select(f => RunOneFile(model, keyword, f, HotwordAudioFilter.LowPass, options.AutoGain, options.Variants)).ToList();
+        var average = files.Select(f => RunOneFile(model, keyword, f, HotwordAudioFilter.Average, options.AutoGain, options.Variants)).ToList();
 
         Console.WriteLine($"{"file",-46} {"expected",-9} {"Average",-9} {"LowPass",-9}");
         Console.WriteLine(new string('-', 78));
@@ -166,7 +186,7 @@ public static class HotwordTestRunner
     }
 
     private static FileResult RunOneFile(Model model, string keyword, string file,
-        HotwordAudioFilter filter, bool autoGain)
+        HotwordAudioFilter filter, bool autoGain, IEnumerable<string>? variants = null)
     {
         var name = Path.GetFileName(file);
 
@@ -186,7 +206,7 @@ public static class HotwordTestRunner
             return new FileResult(name, ExpectationFromName(name), false, 0,
                 $"(needs {DecimatingLowPass.InputSampleRate} Hz, file is {wav.SampleRate} Hz)");
 
-        using var detector = new VoskHotwordDetector(model, keyword, filter, autoGain);
+        using var detector = new VoskHotwordDetector(model, keyword, filter, autoGain, variants);
 
         double detectedAt = 0;
         bool detected = false;
@@ -322,6 +342,17 @@ public static class HotwordTestRunner
                     options.Verbose = true;
                     break;
 
+                case "--suggest-variants":
+                    options.SuggestVariants = true;
+                    options.Verbose = true; // The transcripts are the evidence - always show them here.
+                    break;
+
+                case "--variants":
+                    options.Variants = Next(args, ref i, "--variants")
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .ToList();
+                    break;
+
                 default:
                     if (arg.StartsWith("--"))
                         throw new ArgumentException($"Unknown option '{arg}'.");
@@ -344,6 +375,78 @@ public static class HotwordTestRunner
         return args[++i];
     }
 
+    /// <summary>
+    /// Reads the variant list off the recordings the detector missed: what the model produced on
+    /// transmissions where the pilot did say the wake word is exactly the set of spellings worth
+    /// accepting. Candidates that also turn up on recordings where nobody called are listed
+    /// separately rather than recommended, because accepting those buys hits with false triggers.
+    /// </summary>
+    private static void PrintSuggestions(List<FileResult> results, string keyword, List<string> accepted)
+    {
+        // Only files that were supposed to trigger and didn't. A file that already triggers needs
+        // no new spelling, and one with no expectation in its name says nothing either way.
+        var missed = results
+            .Where(r => r.Expected == true && !r.Detected && !r.Transcript.StartsWith('('))
+            .Select(r => r.Transcript)
+            .ToList();
+
+        var unwanted = results
+            .Where(r => r.Expected == false && !r.Transcript.StartsWith('('))
+            .Select(r => r.Transcript)
+            .ToList();
+
+        Console.WriteLine();
+        Console.WriteLine($"Variant suggestions from {missed.Count} missed recording(s)" +
+                          (unwanted.Count > 0 ? $", checked against {unwanted.Count} recording(s) where nobody called" : "") + ":");
+        Console.WriteLine();
+
+        if (missed.Count == 0)
+        {
+            Console.WriteLine("  Nothing was missed, so there is nothing to add. Every variant accepted also");
+            Console.WriteLine("  raises the false-trigger rate, so leave the list as it is.");
+            return;
+        }
+
+        var suggestions = HotwordVariants.Suggest(keyword, missed, unwanted, accepted);
+
+        if (suggestions.Count == 0)
+        {
+            Console.WriteLine($"  Nothing in those recordings resembles \"{keyword}\" closely enough to propose.");
+            Console.WriteLine("  The transcripts above show what the model did hear - if the wake word isn't in");
+            Console.WriteLine("  them at all, a bigger model is the fix, not a variant (see the manual's chapter");
+            Console.WriteLine("  on wake word accuracy).");
+            return;
+        }
+
+        Console.WriteLine($"  {"phrase",-28} {"missed files",-13} {"edits",-6} note");
+        Console.WriteLine("  " + new string('-', 74));
+
+        foreach (var suggestion in suggestions)
+        {
+            var note = suggestion.AlsoWhenNobodyCalled
+                ? "ALSO heard when nobody called - would cause false triggers"
+                : "";
+            Console.WriteLine($"  {Shorten(suggestion.Phrase, 28),-28} {suggestion.Count,-13} {suggestion.Distance,-6} {note}");
+        }
+
+        var recommended = suggestions.Where(s => s.Recommended).Select(s => s.Phrase).ToList();
+        if (recommended.Count == 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("  Every candidate also appeared when nobody called, so none is recommended.");
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  For config.json (add to the radio's KeywordVariants, or VoskKeywordVariants globally):");
+        Console.WriteLine();
+        Console.WriteLine($"    \"VoskKeywordVariants\": [{string.Join(", ", recommended.Select(p => $"\"{p}\""))}]");
+        Console.WriteLine();
+        Console.WriteLine("  Then run this again with the new list: the same recordings should now be hits, and");
+        Console.WriteLine("  the _silence_ files should still be quiet. That second number is the one that");
+        Console.WriteLine("  decides whether a variant was worth it.");
+    }
+
     private static void PrintUsage()
     {
         Console.WriteLine("Usage: Darkstar.exe --test-hotword [file-or-folder] [options]");
@@ -358,6 +461,10 @@ public static class HotwordTestRunner
         Console.WriteLine("  --compare             run both audio paths and print them side by side");
         Console.WriteLine("  --autogain            also apply the optional automatic gain");
         Console.WriteLine("  --verbose             print what Vosk actually transcribed");
+        Console.WriteLine("  --variants <a,b,c>    extra spellings to accept (default: VoskKeywordVariants)");
+        Console.WriteLine("  --suggest-variants    propose extra spellings from what the model heard on the");
+        Console.WriteLine("                        recordings it missed - for pilots whose accent the model");
+        Console.WriteLine("                        mangles. Implies --verbose and always exits 0.");
         Console.WriteLine();
         Console.WriteLine("Files whose names contain _hit_ or _missed_ are expected to trigger,");
         Console.WriteLine("_silence_ is expected not to. Exit code 0 means every expectation was met.");

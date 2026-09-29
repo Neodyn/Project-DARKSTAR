@@ -42,6 +42,18 @@ public sealed class VoskHotwordDetector : IHotwordDetector, IDisposable
     private readonly Regex _keywordRegex;
 
     /// <summary>
+    /// Every spelling this detector accepts, wake word first. Kept for the startup log: when a
+    /// radio reacts to something surprising, this is what it was allowed to react to.
+    /// </summary>
+    public IReadOnlyList<string> AcceptedPhrases { get; }
+
+    /// <summary>
+    /// Which spelling actually fired last. Usually the wake word itself; when it is a variant,
+    /// that is worth seeing in the log rather than guessing at.
+    /// </summary>
+    public string? LastMatchedPhrase { get; private set; }
+
+    /// <summary>
     /// Anti-alias filter + decimation 48 kHz → 16 kHz. One per detector, i.e. one per radio,
     /// because it carries state across frames (see AudioFrontEnd for why that matters).
     /// Null when the old averaging path is selected for comparison.
@@ -62,13 +74,15 @@ public sealed class VoskHotwordDetector : IHotwordDetector, IDisposable
     /// <summary>Reuses an already-loaded Model (see VoskModelLoader) - use this when creating one
     /// detector per radio, so the model is only ever loaded from disk once.</summary>
     public VoskHotwordDetector(Model sharedModel, string keyword,
-        HotwordAudioFilter filter = HotwordAudioFilter.LowPass, bool autoGain = false)
-        : this(sharedModel, keyword, ownsModel: false, filter, autoGain)
+        HotwordAudioFilter filter = HotwordAudioFilter.LowPass, bool autoGain = false,
+        IEnumerable<string>? keywordVariants = null)
+        : this(sharedModel, keyword, ownsModel: false, filter, autoGain, keywordVariants)
     {
     }
 
     private VoskHotwordDetector(Model model, string keyword, bool ownsModel,
-        HotwordAudioFilter filter = HotwordAudioFilter.LowPass, bool autoGain = false)
+        HotwordAudioFilter filter = HotwordAudioFilter.LowPass, bool autoGain = false,
+        IEnumerable<string>? keywordVariants = null)
     {
         _model = model;
         _ownsModel = ownsModel;
@@ -80,13 +94,12 @@ public sealed class VoskHotwordDetector : IHotwordDetector, IDisposable
         if (autoGain)
             _autoGain = new SpeechAutoGain();
 
-        // Whole-word match with a word boundary on each side, instead of a plain substring
-        // Contains() check - a substring match would (rarely, but it happens) fire on a keyword
-        // that's merely part of a longer recognized word, and more importantly makes each
-        // radio's detector strictly about ITS OWN configured word rather than any accidental
-        // textual overlap with another radio's keyword. Case-insensitive so config.json casing
-        // doesn't matter.
-        _keywordRegex = new Regex($@"\b{Regex.Escape(keyword.Trim())}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        // The wake word plus any accepted variants, still matched as whole words: a substring
+        // check would (rarely, but it happens) fire on a wake word that is merely part of a longer
+        // recognized word, and would make one radio's detector sensitive to another radio's word.
+        // See HotwordVariants for why variants exist and how the list is meant to be arrived at.
+        AcceptedPhrases = HotwordVariants.Resolve(keyword, keywordVariants);
+        _keywordRegex = HotwordVariants.BuildRegex(AcceptedPhrases);
     }
 
     /// <summary>
@@ -222,7 +235,11 @@ public sealed class VoskHotwordDetector : IHotwordDetector, IDisposable
         if (!string.IsNullOrWhiteSpace(text)) LastText = text;
 
         if (string.IsNullOrWhiteSpace(text)) return false;
-        if (!_keywordRegex.IsMatch(text)) return false;
+
+        var match = _keywordRegex.Match(text);
+        if (!match.Success) return false;
+
+        LastMatchedPhrase = match.Value;
 
         // Match: reset the recognizer so the same word doesn't keep re-triggering and the next
         // recording cycle starts from a "clean" state again.

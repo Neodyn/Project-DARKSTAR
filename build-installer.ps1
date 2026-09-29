@@ -257,6 +257,22 @@ if ($Clean) {
             Write-Ok "removed $dir"
         }
     }
+
+    # Also the per-project intermediate and build folders. Publishing wipes its own target, so
+    # these can't leak into the installer - but leaving them means "-Clean" doesn't actually
+    # rebuild from scratch, and a stale obj\ is exactly what hides a restore or asset problem
+    # that would otherwise show up now rather than on somebody else's machine.
+    foreach ($projectDir in @($ProjectRoot,
+                              (Join-Path $ProjectRoot "Darkstar.Core"),
+                              (Join-Path $ProjectRoot "Darkstar.Gui"))) {
+        foreach ($name in @("obj", "bin")) {
+            $dir = Join-Path $projectDir $name
+            if (Test-Path -LiteralPath $dir) {
+                if (-not $DryRun) { Remove-Item -LiteralPath $dir -Recurse -Force }
+                Write-Ok "removed $dir"
+            }
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -304,6 +320,64 @@ if (-not $botOk -or -not $guiOk) {
 }
 
 $summary.Add("$(if ($DryRun) { "[OK] Bot and GUI would be published ($Configuration)" } else { "[OK] Bot and GUI published ($Configuration)" })")
+
+# ---------------------------------------------------------------------------------------------
+# 5b. What actually goes into the installer
+# ---------------------------------------------------------------------------------------------
+
+# Setup.iss packs publish\bot\* and publish\gui\* wholesale, so whatever a NuGet package decides
+# to drop in there gets installed on somebody's machine. The two publish folders are therefore
+# inventoried rather than trusted: this prints what is going in, and says so when something turns
+# up that a running bot has no use for. It never fails the build - a new file type might be
+# legitimate, and only a human can tell.
+#
+# The project files already exclude the two known offenders (localized resource DLLs and the XML
+# API documentation of referenced assemblies) via SatelliteResourceLanguages and
+# AllowedReferenceRelatedFileExtensions. This check is what notices when a package finds a third
+# way, or when one of those properties gets lost in a merge.
+
+function Show-PublishInventory($path, $label) {
+    if (-not (Test-Path -LiteralPath $path)) { return }
+
+    $files = Get-ChildItem -LiteralPath $path -Recurse -File
+    if ($files.Count -eq 0) { return }
+
+    $totalMb = [math]::Round(($files | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
+    Write-Info "$label`: $($files.Count) file(s), $totalMb MB"
+
+    # Everything a framework-dependent app legitimately needs at runtime: its own assemblies and
+    # their symbols, the dependency/runtime manifests, and the GUI's web assets under wwwroot.
+    $expected = @(".exe", ".dll", ".pdb", ".json", ".config",
+                  ".html", ".htm", ".css", ".js", ".mjs", ".map",
+                  ".woff", ".woff2", ".ttf", ".eot", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico",
+                  ".wasm", ".dat", ".br", ".gz", ".txt")
+
+    $unexpected = $files | Where-Object { $expected -notcontains $_.Extension.ToLowerInvariant() }
+    if ($unexpected) {
+        Write-Warn2 "$label contains $($unexpected.Count) file(s) that a running bot has no use for:"
+        foreach ($file in ($unexpected | Sort-Object -Property Length -Descending | Select-Object -First 8)) {
+            $relative = $file.FullName.Substring($path.Length).TrimStart('\', '/')
+            Write-Info "  $relative ($([math]::Round($file.Length / 1KB, 1)) KB)"
+        }
+        if ($unexpected.Count -gt 8) { Write-Info "  ... and $($unexpected.Count - 8) more" }
+        Write-Info "  These will be installed on the target machine. Exclude them in the .csproj if they are not needed."
+    }
+
+    # A surviving language folder means SatelliteResourceLanguages didn't take effect.
+    $languageDirs = Get-ChildItem -LiteralPath $path -Directory |
+        Where-Object { $_.Name -match '^[a-z]{2}(-[A-Za-z]{2,4})?$' -and $_.Name -ne 'en' }
+    if ($languageDirs) {
+        Write-Warn2 "$label still has localized resource folder(s): $(($languageDirs | ForEach-Object { $_.Name }) -join ', ')"
+        Write-Info "  Expected none - check that SatelliteResourceLanguages is still set in the .csproj."
+    }
+}
+
+if (-not $DryRun) {
+    Write-Step "Checking what goes into the installer"
+    Show-PublishInventory $publishBot "Bot"
+    Show-PublishInventory $publishGui "GUI"
+    Write-Ok "publish folders inventoried (warnings above, if any, are advisory)"
+}
 
 # ---------------------------------------------------------------------------------------------
 # 6. Dependency installers

@@ -226,7 +226,9 @@ Der Bot liest drei JSON-Dateien neben seiner EXE. Alle drei werden bei Bedarf mi
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `LoggingEnabled` | `true` | Hauptschalter. `false` = es wird überhaupt nichts protokolliert. |
-| `DebugLogging` | `false` | Ausführliche Konsolenausgabe (UDP-Pakete, rohes JSON, Pegelwerte). Die Log*datei* enthält ohnehin immer alle Details. |
+| `DebugLogging` | `false` | Zeichnet ausführliche Ausgaben (UDP-Pakete, rohes JSON, Pegelwerte) in Konsole **und** Datei auf. Standardmäßig aus, weil teuer — aber die letzten 200 ausführlichen Zeilen liegen im Speicher und werden bei einem Fehler automatisch ins Log geschrieben, ein Fehlschlag kommt also weiterhin mit seiner Vorgeschichte. |
+| `LogRetentionDays` | `30` | Logdateien, die älter sind, werden gelöscht. `0` = für immer behalten. |
+| `LogRetentionMaxMb` | `200` | Hält `logs\` unter dieser Größe, älteste zuerst. `0` = kein Limit. Die drei neuesten Logs werden nie gelöscht — darunter das, in das gerade geschrieben wird. |
 
 #### SRS-Verbindung
 
@@ -241,7 +243,9 @@ Der Bot liest drei JSON-Dateien neben seiner EXE. Alle drei werden bei Bedarf mi
 
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
-| `Radios` | `[]` | Die gleichzeitig überwachten Radios. Je Eintrag: `FrequencyHz`, `Modulation` (`"AM"`/`"FM"`), optional `Keyword`, optional `Callsign`. |
+| `Radios` | `[]` | Die gleichzeitig überwachten Radios. Je Eintrag: `FrequencyHz`, `Modulation` (`"AM"`/`"FM"`), optional `Keyword`, optional `Callsign`, optional `Voice`. |
+| `Radios[].Voice` | `""` | TTS-Stimme für die Antworten dieses Radios. Leer = die globale `VoiceName`. Damit klingen mehrere Radios nach mehreren Personen. |
+| `Radios[].KeywordVariants` | `[]` | Weitere Schreibweisen für das Hotword dieses Radios. Ein Radio mit eigenem `Keyword` erbt die globalen Varianten **nicht**. |
 | `FrequencyHz` | `251000000` | Altes Einzelradio in Hz, nur verwendet solange `Radios` leer ist. |
 | `Modulation` | `"AM"` | Modulation des alten Einzelradios. |
 
@@ -260,6 +264,8 @@ Jedes Radio reagiert **ausschließlich** auf sein eigenes Hotword. Leere `Keywor
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Rufzeichen, mit dem sich der Bot meldet (global, pro Radio überschreibbar). |
 | `PlayerNameCallsignSeparator` | `"\|"` | Schneidet das Rufzeichen aus dem SRS-Namen: `Enfield 1-1 \| neodym` → der Bot sagt „Enfield 1-1“. `/`, `\`, `:`, `;`, `~` gehen auch; `-` nie (das gehört zu `1-1`). Squadron-Tags wie `[ISAF]` werden entfernt und nie vorgelesen. |
+| `Radios[].AnswerTacticalRequests` | `null` | Ob dieses Radio taktische Anfragen beantwortet. `null` = dem globalen Schalter folgen. |
+| `Radios[].AnswerAirfieldRequests` | `null` | Dasselbe für Bahn-/ATIS-Anfragen. So entsteht eine Tower-Frequenz. |
 
 Vor der Sprachausgabe werden Bindestriche durch Leerzeichen ersetzt, damit „1-1“ als „one one“ und nicht als „eleven“ gesprochen wird.
 
@@ -276,9 +282,12 @@ Vor der Sprachausgabe werden Bindestriche durch Leerzeichen ersetzt, damit „1-
 |---|---|---|
 | `VoskModelPath` | `""` | Ordner des entpackten Vosk-Modells. Ohne ihn greift ein reiner Lautstärke-Platzhalter, der keine Wörter erkennt. |
 | `VoskKeyword` | `"computer"` | Globales Hotword für Radios ohne eigenes. |
+| `VoskKeywordVariants` | `[]` | Weitere Schreibweisen, die ebenfalls als Hotword gelten — dafür, wie der Erkenner es wirklich hört, z. B. `["over lord"]` für `"Overlord"`. Aus einer Messung füllen, nicht raten: siehe [12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt). |
 | `HotwordAudioFilter` | `"LowPass"` | Audio-Aufbereitung vor Vosk. `"Average"` ist der alte Weg, nur zum Vergleich — siehe [Kapitel 12](#12-hotword-genauigkeit). |
 | `HotwordAutoGain` | `false` | Leise Piloten für die Erkennung verstärken. Standardmäßig aus; kann Fehlauslösungen verursachen. |
 | `SaveRecordings` | `false` | Jede Aussendung nach `recordings\` speichern, um die Genauigkeit zu messen. |
+| `RecordingRetentionDays` | `7` | Aufnahmen, die älter sind, werden gelöscht. `0` = für immer behalten. |
+| `RecordingRetentionMaxMb` | `500` | Hält `recordings\` unter dieser Größe, älteste zuerst. `0` = kein Limit. |
 | `SilenceFramesToStopRecording` | `50` | Stille 20-ms-Frames, die eine Aufnahme beenden (50 = 1 Sekunde). |
 | `PreRollSeconds` | `2.0` | Sekunden Audio, die vor dem Hotword gepuffert und der Aufnahme vorangestellt werden, damit der Anfang nicht fehlt. |
 | `HotwordEnergyThreshold` | `2000` | Nur für den Platzhalter-Detektor (kein Vosk-Modell). |
@@ -310,7 +319,7 @@ Transkription und Antwort sind ein einziger API-Aufruf — das halbiert den Kont
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | Das SRS-Werkzeug für die Aussendung. Wird vom Installer aus der tatsächlichen SRS-Installation übernommen; **Detect SRS installation** auf CH1 sucht ihn jederzeit erneut. |
-| `VoiceName` | `""` | Windows-TTS-Stimme, z. B. `"Microsoft David Desktop"`. Leer = Standardstimme. `DCS-SR-ExternalAudio.exe --help` listet die Optionen. |
+| `VoiceName` | `""` | TTS-Stimme für jedes Radio, das keine eigene setzt, z. B. `"Microsoft David Desktop"`. Leer = was ExternalAudio selbst wählt. **List available voices** auf CH2 oder CH3 drücken, oder `DCS-SR-ExternalAudio.exe --help` aufrufen. Siehe [7 → Verschiedene Stimmen](#verschiedene-stimmen-pro-radio). |
 | `ExternalAudioExtraArgs` | `""` | Zusätzliche Argumente für jede Aussendung, für Optionen, die der Bot nicht selbst setzt. Ob deine SRS-Version einen Parameter fürs Sprechtempo hat und wie er heißt, hängt von der Version ab — in `--help` nachsehen und hier eintragen (z. B. `--speed=-1`). |
 
 #### Zwischenansage bei langsamer Antwort
@@ -320,6 +329,19 @@ Transkription und Antwort sind ein einziger API-Aufruf — das halbiert den Kont
 | `AckEnabled` | `false` | Hauptschalter für die Zwischenansage. |
 | `AckAfterSeconds` | `4.0` | Wie lange der Bot schweigen darf, gezählt **ab dem Hotword**. Ist die echte Antwort früher fertig, wird nichts gesendet. |
 | `AckMessage` | `"{pilot}, this is {callsign}, message received, standby."` | `{pilot}` = Rufzeichen des Piloten, `{callsign}` = Rufzeichen dieses Radios. Ist der Pilot unbekannt, entfällt `"{pilot}, "` automatisch. |
+
+#### Rate-Limit pro Pilot
+
+| Feld | Standard | Beschreibung |
+|---|---|---|
+| `RateLimitMaxRequests` | `6` | Anfragen, die ein Pilot pro Fenster stellen darf. `0` schaltet das Limit ab. |
+| `RateLimitWindowSeconds` | `120` | Länge des gleitenden Fensters. |
+| `RateLimitReply` | `"{pilot}, standby, working other traffic."` | Wird **einmal** gesagt, wenn ein Pilot darüber liegt. `{pilot}` und `{seconds}` werden eingesetzt. Leer = nichts sagen, nicht empfohlen. |
+
+Jede Aussendung kostet einen Gemini-Aufruf und belegt die Frequenz, solange die Antwort gesprochen wird. Ein Pilot, der das Weckwort in Dauerschleife sagt — aus Langeweile, aus Ärger über eine Fehlerkennung, oder mit klemmender Sendetaste, die ihm Cockpitgeräusch einspeist — kann damit das Kontingent für alle verbrauchen und gleichzeitig den Kanal blockieren. Keiner der beiden Ausfälle sieht nach dem Piloten aus, der ihn verursacht hat.
+
+Es ist ein **gleitendes Fenster**, keine Pause nach jedem Aufruf: drei Fragen in kurzer Folge und danach zehn ruhige Minuten werden nie gebremst. Eine abgelehnte Aussendung wird **nicht mitgezählt**, ein Pilot kann seine eigene Wartezeit also nicht durch weitere Versuche verlängern — ein Limit, das zur Sperre wird, war nicht gemeint. Die Ablehnung wird einmal gesprochen, danach schweigt der Bot, weil Wiederholen genau die Frequenz belegen würde, die das Limit schützt. Beide Fälle stehen im Log, damit eine Beschwerde über „ignoriert werden" eine Spur hat.
+
 
 Der Bot funkt nie dazwischen: Läuft die Zeit ab, während der Pilot noch sendet, geht die Ansage direkt nach dessen Übertragung raus. Ansage und Antwort können sich nie überlappen.
 
@@ -349,8 +371,18 @@ Der Bot funkt nie dazwischen: Läuft die Zeit ab, während der Pilot noch sendet
 | `DcsIntelPictureTriggers` | `["picture", "request picture", "say picture"]` | |
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Erzwingt das Bullseye-Format statt BRAA. |
+| `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Gibt die *eigene* Position des Anrufers vom Bullseye aus zurück. |
+| `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha Check, wenn der Anrufer keiner Einheit zugeordnet werden kann — meist ein Namensunterschied. |
+| `DcsIntelFriendlyPositionEnabled` | `false` | Einem Piloten sagen, wo ein anderer **menschlicher Spieler** seiner Seite ist. Standardmäßig aus — siehe [7 → Wo ist jemand](#wo-ist-jemand). |
+| `DcsIntelFriendlyPositionTriggers` | `["where is", "where's", "position of", "say position of", "posit on", "locate"]` | Was auf die Phrase folgt, gilt als das gefragte Flugzeug. |
+| `DcsIntelFriendlyNotFoundReply` | `"Negative, no contact on {pilot}."` | Genannter Pilot nicht gefunden. `{pilot}` ist der Name, wie er gesagt wurde. |
+| `DcsIntelFriendlyNoNameReply` | `"Say again, which aircraft?"` | Die Anfrage nannte niemanden („where is he?"). |
+| `DcsIntelFriendlyNoCoalitionReply` | `"Negative, unable to identify your coalition."` | Die Seite des Anrufers war nicht bestimmbar, die Anfrage wird abgelehnt. |
+| `DcsIntelFriendlySayHeading` | `true` | Den Kurs des Freundes mitansagen — die halbe Information für einen Rejoin. |
+| `Radios[].AnswerFriendlyPositionRequests` | `null` | Dreiwertig wie die anderen zwei Rollen: `null` folgt dem globalen Schalter. |
 | `DcsIntelNoContactsReply` | `"Picture clean."` | Wenn nichts auf die Filter passt. |
 | `UnintelligibleReply` | `"Say again, your last was unreadable."` | Wird gesagt, wenn nichts Verständliches transkribiert wurde — statt eine Anfrage zu erraten. |
+| `WrongChannelReply` | `"Contact {callsign} on {frequency}."` | Weiterleitung, wenn eine Anfrage auf einem Radio landet, das sie nicht bedient. Leer = keine Weiterleitung. |
 | `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | Wenn die Missionsdaten gar nicht lesbar sind. |
 | `DcsAirfieldEnabled` | `false` | „runway in use"/ATIS beantworten. Für den Bahn-Teil `evalEnabled = true` am DCS-gRPC-Server nötig — siehe [8.4](#84-bahn-in-benutzung-und-atis). |
 | `DcsAirfieldRunwayTriggers` | siehe [8.4](#84-bahn-in-benutzung-und-atis) | Phrasen nur für die Bahn. |
@@ -358,6 +390,8 @@ Der Bot funkt nie dazwischen: Läuft die Zeit ab, während der Pilot noch sendet
 | `DcsAirfieldPressureUnit` | `"Both"` | `Both` / `Hectopascals` / `InchesHg`. |
 | `DcsAirfieldAtFieldNm` | `5` | Innerhalb dieser Entfernung entscheidet die Position des Piloten den Platz — kein Name nötig. |
 | `DcsAirfieldMaxDistanceNm` | `60` | Darüber fragt der Bot nach, welcher Platz gemeint ist. |
+| `DcsAirfieldUnknownReply` | `"Say again the airfield, unable to identify."` | Aus Position und Name ließ sich kein Platz ermitteln. |
+| `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | Die Flugplatzdaten waren gar nicht lesbar — meist `evalEnabled = false` auf dem DCS-gRPC-Server, siehe [8.4](#84-bahn-in-benutzung-und-atis). |
 
 #### Threat Circle (stehende Überwachung)
 
@@ -399,6 +433,51 @@ Feste Trigger-/Antwortpaare. Taucht ein Trigger irgendwo im transkribierten Text
 
 Der Transkriptionsaufruf findet trotzdem statt — der erkannte Text ist ja die Grundlage für den Trigger-Vergleich; ersetzt wird nur die *Antwort*.
 
+**Ein Eintrag `radio check` wird nicht mehr standardmäßig angelegt**, weil der Bot das inzwischen selbst beantwortet — und dabei sagen kann, ob er dich auf dem Radar hat, was eine feste Phrase nicht wissen kann. Ein vorhandener Eintrag in deiner `phrases.json` hat weiterhin Vorrang, ein Update ändert also niemals einen Wortlaut, den du selbst gewählt hast. Lösche den Eintrag, wenn du das eingebaute Verhalten möchtest.
+
+#### Wo ist jemand
+
+*„Overlord, Punch 1-1, where is Springfield 2-1?"* → *„Springfield 2 1, bearing 040, 25 miles, 18 thousand, heading 090."*
+
+**Standardmäßig aus** (`DcsIntelFriendlyPositionEnabled`, CH8) — und das ist eine Entscheidung über deinen Server, keine Einstellung zum Durchklicken. Ein Bot, der auf Zuruf jede Spielerposition verrät, verändert, wie ein PvP-Server gespielt wird. Die Funktion lässt sich auf CH2 außerdem auf bestimmte Frequenzen beschränken, genau wie die Tower- und AWACS-Rollen — ein Staffelkanal, der nur das beantwortet, ist ein sinnvoller Aufbau.
+
+Drei Grenzen sind eingebaut und nicht konfigurierbar:
+
+| | |
+|---|---|
+| **Nur menschliche Spieler** | KI-Wingmen werden nicht gemeldet. Sie stehen nicht in der Liste, die DCS für spielerbesetzte Einheiten liefert, und alle KI-Einheiten der Koalition hereinzuholen würde die Kandidatenliste so vergrößern, dass Verwechslungen wahrscheinlich werden — was bei *dieser* Anfrage bedeutet, jemandem voller Überzeugung die falsche Position zu geben. |
+| **Nur die eigene Koalition** | Abgefragt wird die Seite des Anrufers. Nach der Gegenseite zu fragen ist nicht möglich. |
+| **Ein Anrufer ohne bekannte Koalition bekommt nichts** | Überall sonst im Bot fällt eine unbekannte Senderkoalition auf die eigene Seite des Bots zurück — harmlos, solange die Antwort den Feind betrifft. Hier könnte damit jemand aus dem Zuschauerslot fragen, wo deine Spieler sind. Diese eine Anfrage lehnt deshalb ab. |
+
+Gemessen wird vom Flugzeug des Anrufers, wenn es gefunden wird, sonst vom Bullseye — derselbe Rückfall wie beim Bogey Dope:
+
+| Situation | Antwort |
+|---|---|
+| Anrufer geortet | *„Springfield 2 1, bearing 040, 25 miles, 18 thousand, heading 090."* |
+| Anrufer nicht geortet | *„Springfield 2 1, bullseye 270, 40 miles, 18 thousand, heading 090."* |
+| Genannter Pilot nicht gefunden | *„Negative, no contact on Springfield 2 1."* |
+| Niemand genannt | *„Say again, which aircraft?"* |
+
+Der **Kurs** des Freundes ist dabei, weil seine Position nur die Hälfte eines Rejoins ist; abschaltbar. **Aspect wird nie gegeben** — hot, cold, flanking und beaming beschreiben, ob ein Kontakt auf dich zufliegt. Das ist eine Frage über einen Feind und über einen Wingman sinnlos.
+
+#### Warum der Name hinter der Phrase stehen muss
+
+So eine Anfrage nennt zwei Piloten, den Anrufer und das Ziel — und der Bot weigert sich absichtlich zu wählen, wenn in einer Aussendung mehr als ein Pilot genannt wird. Genau diese Absicherung verhindert, dass ein Wingman als sein Rottenführer gemeldet wird. Das Ziel wird deshalb aus dem Text **nach** der Triggerphrase genommen, und dort gibt es genau eine Antwort.
+
+Praktisch heißt das: die Formulierung zählt. *„where is Springfield 2-1"* funktioniert, *„Springfield 2-1, where is he"* nicht. Pronomen werden als „niemand genannt" erkannt, die zweite Variante fragt also *„say again, which aircraft?"* statt „kein Kontakt auf he" zu melden.
+
+Wird ein Pilot nicht gefunden, wird der Name zurückgelesen — das sagt dir, dass es ein Namensproblem war und nicht ein fehlendes Flugzeug. Derselbe Unterschied zwischen SRS- und DCS-Namen, der auch aus BRAA-Angaben Bullseye-Angaben macht.
+
+### Radio Check
+
+| Feld | Standard | Beschreibung |
+|---|---|---|
+| `RadioCheckEnabled` | `true` | Beantwortet „radio check“ auf **jedem** Funkkanal, unabhängig davon, wofür dieser konfiguriert ist. |
+| `RadioCheckTriggers` | `["radio check", "comm check", "how do you read", "how do you hear me"]` | Als ganze Wörter verglichen. |
+| `RadioCheckReply` | `"Loud and clear."` | Ohne DCS-gRPC — über Radar wird nichts behauptet. |
+| `RadioCheckReplyWithContact` | `"Loud and clear, contact."` | Mit DCS-gRPC, wenn der SRS-Name einer Einheit in der Mission zugeordnet werden konnte. |
+| `RadioCheckReplyNoContact` | `"Loud and clear, but no radar contact on you."` | Mit DCS-gRPC, wenn nicht. |
+
 ### 5.3 `vocabulary.json`
 
 Eine schlichte Liste von Begriffen, die Gemini als Hinweis mitbekommt. Sie ändert nicht, worüber der Bot sprechen kann, sondern verbessert die Erkennung von Wörtern, die kein gewöhnliches Englisch sind:
@@ -422,13 +501,13 @@ Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen
 | Kanal | Inhalt |
 |---|---|
 | **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, der Pfad zu `DCS-SR-ExternalAudio.exe` samt Knopf **Detect SRS installation**, Koalition, Koalitionsbeschränkung. |
-| **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword und Rufzeichen je Radio, hinzufügen/entfernen. |
-| **CH3 Speech** | Gemini-Key/-Modell/-Wiederholungen, TTS-Stimme, Pre-Roll, Vosk-Modellordner, globales Hotword, Stille-Frames, die Zwischenansage und die Werte des Platzhalter-Detektors. |
-| **CH4 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases` und die Fallback-Antwort. |
-| **CH5 Vocabulary** | Die Hinweiswortliste als Chips. |
+| **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword, akzeptierte Hotword-Schreibweisen, Rufzeichen und Stimme je Radio, die drei Rollenschalter (Taktik / Flugplatz / Positionen von Freunden), ein Knopf **List available voices**, hinzufügen/entfernen. |
+| **CH3 Speech** | Gemini-Key/-Modell/-Wiederholungen, die globale TTS-Stimme samt **List available voices**, Pre-Roll, Vosk-Modellordner, globales Hotword und seine akzeptierten Schreibweisen, Stille-Frames, die Zwischenansage, das Rate-Limit pro Pilot, die Karte zur Hotword-Genauigkeit samt Aufnahmen-Aufräumgrenzen und die Werte des Platzhalter-Detektors. |
+| **CH4 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases`, die Fallback-Antwort und die Radio-Check-Karte. |
+| **CH5 Vocabulary** | Die Hinweiswortliste als Chips, wobei alles, was auch eine Triggerphrase ist, rot markiert wird. |
 | **CH6 Discord** | Hauptschalter und Webhook-URL. |
-| **CH7 Logging** | Log-Schalter, ermittelter Log-Ordner und eine Live-Ansicht der neuesten Logzeilen. |
-| **CH8 DCS-gRPC** | Verbindungstest, Einstellungen der taktischen Antworten mit Testknopf, Missionsdaten-Explorer. |
+| **CH7 Logging** | Log-Schalter, ermittelter Log-Ordner, Aufräumgrenzen für Logs und eine Live-Ansicht der neuesten Logzeilen. |
+| **CH8 DCS-gRPC** | Verbindungstest, taktische Antworten (inklusive Alpha Check) mit Testknopf, die Flugplatz-Karte, die Karte für Positionen von Freunden, der Threat Circle und der Missionsdaten-Explorer. |
 | **CH9 Service** | Windows-Dienst installieren, starten, stoppen und sauber entfernen. |
 
 Fußzeile: **Discard (reload from disk)** und **Save changes**. Vor jedem Speichern wird eine Sicherungskopie mit Zeitstempel angelegt.
@@ -465,10 +544,29 @@ Der Bot entscheidet in dieser Reihenfolge:
 | *„Overlord, picture“* | *„Picture: two groups. Lead group, bullseye two, seven, zero, for forty miles, twenty five thousand, two contacts, Su-27. …“* |
 | *„Overlord, threat check“* | *„Nearest contact zero, niner, zero at thirty five miles, twenty two thousand.“* |
 | *„Overlord, bogey dope bullseye“* | Wie bogey dope, aber Positionen relativ zum Bullseye. |
+| *„Overlord, Punch 1-1, alpha check bullseye“* | *„Alpha check, bullseye zero, one, zero, one hundred twenty two miles, twenty two thousand.“* |
+
+Der **Alpha Check** ist der Sonderfall: Er meldet die *eigene* Position, nicht die des Gegners — damit ein Pilot prüfen kann, ob seine Navigation noch mit der aller anderen übereinstimmt. Er wird vor der Kontaktabfrage beantwortet und funktioniert daher auch dann, wenn die Sensorquelle unbrauchbar ist — genau der Moment, in dem man am meisten wissen will, ob der Bot einen überhaupt sieht. Lässt sich der Name keiner Einheit zuordnen, kommt `DcsIntelNoPositionReply` statt einer Position aus dem Nichts.
 
 Peilungen werden ziffernweise gesprochen („zero niner zero“), weil die TTS `090` sonst als „ninety“ liest. Mit `DcsIntelSlowSpeech` (standardmäßig an) steht zwischen den Ziffern ein Komma und die übrigen Zahlen werden als Wörter ausgeschrieben — das hält die Stimme davon ab, sie herunterzurattern. Flugzeug- und Helikoptertypen werden angesagt, wenn `DcsIntelSayContactType` an ist. Der Aspect folgt der üblichen Brevity: **hot** (fliegt auf dich zu), **flanking**, **beaming**, **cold** (fliegt weg).
 
 Für BRAA vom eigenen Flugzeug aus muss der Bot *dein* Flugzeug finden: Er gleicht deinen SRS-Namen mit den DCS-Spielernamen ab. Klappt das nicht — etwa weil dein SRS-Name ganz anders lautet als dein DCS-Name — wechselt er automatisch aufs Bullseye-Format, statt die Anfrage abzulehnen.
+
+### Radio Check
+
+*„Overlord, radio check“* → *„Loud and clear.“*
+
+Wird auf **jedem** Funkkanal beantwortet, egal wofür dieser auf CH2 konfiguriert ist — ein Tower, ein AWACS und ein Tanker beantworten alle einen Radio Check; einen abzulehnen, weil dieser Kanal „nur für Flugplatz-Anfragen“ ist, wäre absurd. Und es braucht überhaupt keine Missionsdaten: Genau darum geht es, wenn man herausfinden will, ob überhaupt etwas funktioniert.
+
+Mit aktiviertem DCS-gRPC sagt die Antwort etwas mehr:
+
+| Antwort | Was sie bedeutet |
+|---|---|
+| *„Loud and clear.“* | Der Funk funktioniert. Missionsdaten wurden nicht abgefragt. |
+| *„Loud and clear, contact.“* | Der Funk funktioniert **und** dein SRS-Name wurde deinem Flugzeug zugeordnet — BRAA-Angaben werden von dort gemessen. |
+| *„Loud and clear, but no radar contact on you.“* | Der Funk funktioniert, aber dein Name konnte nicht zugeordnet werden. Taktische Anfragen fallen aufs Bullseye zurück. Namen anpassen, dann verschwindet das. |
+
+Die dritte Antwort ist die wichtige: Ein Namensunterschied ist sonst unsichtbar und macht stillschweigend aus jeder BRAA-Angabe eine Bullseye-Angabe. Ist DCS-gRPC nur langsam oder gerade weg, kommt das schlichte *„Loud and clear.“* — einem funktionierenden Funkgerät soll nie gesagt werden, der Bot sehe dich nicht, wenn das gar nichts mit dem Funk zu tun hat.
 
 ### Flugplatz-Anfragen
 
@@ -501,6 +599,76 @@ Ein Kreis endet per Sprachkommando, nach dem konfigurierten Zeitlimit oder wenn 
 ### Mehrere Radios
 
 Jedes Radio antwortet nur auf sein eigenes Hotword und mit seinem eigenen Rufzeichen. Eine Tankerfrequenz kann als „Texaco“ laufen, während die AWACS-Frequenz gleichzeitig als „Overlord“ arbeitet — jede mit eigenem Gesprächsverlauf.
+
+### Verschiedene Stimmen pro Radio
+
+Jedes Radio kann auch **seine eigene Stimme** haben (`Radios[].Voice`, oder das Feld auf CH2). Bleibt es leer, nimmt das Radio die globale `VoiceName` von CH3; ist auch die leer, wählt ExternalAudio selbst. Bei drei konfigurierten Radios ist das der Unterschied zwischen einem Bot auf drei Frequenzen und drei Personen im Funkkreis:
+
+```json
+"Radios": [
+  { "FrequencyHz": 251000000, "Modulation": "AM", "Callsign": "Overlord", "Voice": "Microsoft Hazel Desktop" },
+  { "FrequencyHz": 127500000, "Modulation": "AM", "Callsign": "Texaco",   "Voice": "Microsoft David Desktop" },
+  { "FrequencyHz": 133000000, "Modulation": "AM", "Callsign": "Tower",    "Voice": "Microsoft Zira Desktop" }
+]
+```
+
+**Was du wirklich hast**, zeigt der Knopf **List available voices** auf CH2 (oder CH3): Er ruft `DCS-SR-ExternalAudio.exe --help` auf und zeigt das Ergebnis. Diese Liste ist die einzige, die zählt — und sie ist meist kürzer als erwartet:
+
+> ExternalAudio spricht über die ältere SAPI5-Schnittstelle von Windows. Die modernen „natürlichen“ Stimmen von Windows 11 — Aria, Guy, Ryan und die anderen — sind OneCore-Stimmen, und SAPI5 sieht sie in der Regel nicht. Wenn eine Stimme in den Windows-Einstellungen auftaucht, aber nicht in dieser Liste, ist das der Grund und kein Konfigurationsfehler. Ein englisches Standard-Windows hat meist *David* und *Zira* (en-US); *Hazel*, *George* und *Susan* (en-GB) kommen mit dem britischen Sprachpaket.
+
+Ein nicht vorhandener Name schlägt **stumm** fehl — die Aussendung passiert einfach nicht. Zwei Dinge machen das sichtbar: Das Startup-Log nennt die Stimme jedes Radios, und bei einer Beschwerde des Tools erscheint eine `[ExternalAudio:ERR]`-Zeile. Wenn ein Radio nach einem Stimmenwechsel verstummt, dort zuerst nachsehen.
+
+#### Deutlich bessere Stimmen: Azure oder Google
+
+Lokal installierte Stimmen klingen nach Sprachcomputer. ExternalAudio kann auch über Azure AI Speech oder Google Cloud Text-to-Speech sprechen, deren neuronale Stimmen nach einem Menschen klingen. Beide brauchen ein Konto und kosten pro Zeichen — und beide funktionieren heute schon über `ExternalAudioExtraArgs` (CH3):
+
+```json
+"ExternalAudioExtraArgs": "--azureCredentials=\"DEIN_KEY;westeurope\"",
+"VoiceName": "en-US-AndrewNeural"
+```
+
+Bei Google entsprechend `--googleCredentials="C:\pfad\credentials.json"` mit einem Namen wie `en-US-Wavenet-D`. Die Zugangsdaten gelten für alle Radios, der Stimmenname bleibt pro Radio — ein Cloud-Konto bringt dir also drei wirklich unterschiedlich klingende Controller.
+
+Diese Namen erscheinen **nie** unter **List available voices** — dieser Knopf fragt *diesen Rechner*, und der kennt sie nicht. Von Hand eintippen.
+
+#### Eine Art Stimme statt eines Namens verlangen
+
+Auch über `ExternalAudioExtraArgs`: `--gender=male`, `--culture=en-GB`. ExternalAudio nimmt dann irgendeine passende Stimme. Vorzuziehen, wenn der Bot auf Rechner kommt, deren Stimmenliste du nicht kennst — ein dort nicht existierender Name schlägt fehl, eine Geschlechtsangabe nicht.
+
+
+### Einer Frequenz eine Aufgabe geben
+
+Standardmäßig beantwortet jedes Radio alles. Die Aufteilung ist der Weg zu einem Tower: auf **CH2 Radios** hat jedes Radio einen Dreifachschalter für **taktische Anfragen** (Bogey Dope, Picture, Threat Check, Threat Circle) und für **Flugplatz-Anfragen** (Bahn in Benutzung, ATIS).
+
+| | Bedeutung |
+|---|---|
+| **Default** | Folgt dem globalen Schalter — so wie es sich vor dieser Einstellung überall verhielt. |
+| **On** | Dieses Radio beantwortet sie. |
+| **Off** | Dieses Radio nie, egal was global eingestellt ist. |
+
+Ein Plan mit zwei Frequenzen sieht dann so aus:
+
+| Frequenz | Hotword | Rufzeichen | Taktisch | Flugplatz |
+|---|---|---|---|---|
+| 251.000 | Overlord | Overlord | On | **Off** |
+| 252.000 | Tower | Batumi Tower | **Off** | On |
+
+Fragst du den Tower nach einem Bogey Dope, wirst du dorthin geschickt, wo du hättest anrufen sollen:
+
+> *„Tower, bogey dope."*
+> *„Punch 1-1, this is Batumi Tower… Contact Overlord on two five one decimal zero."*
+
+Das passiert nur, wenn **genau ein** anderes Radio die Anfrage bedient. Sind zwei Tower konfiguriert, gibt es keine eindeutige Antwort — dann erfindet der Bot keine, und die Aussendung fällt wie jede andere auf `phrases.json` durch. `WrongChannelReply` leeren schaltet die Weiterleitung ganz ab.
+
+Die globalen Schalter bleiben der Hauptschalter: ein Radio kann einschränken, nie erweitern. Ist `DcsAirfieldEnabled` aus, beantwortet kein Radio ATIS, egal wie sein eigener Schalter steht — der Konfigurationseditor gräut die Knöpfe aus und sagt es dazu. Phrasen und freie Antworten funktionieren immer auf jedem Radio.
+
+Das Startlog nennt die Aufgabe jedes Radios — der schnellste Weg zu prüfen, ob der Plan stimmt:
+
+```
+Wake word detection active (Vosk, offline), 2 radio(s):
+  251.000 MHz (AM): wake word "Overlord", callsign "Overlord", answers: tactical
+  252.000 MHz (AM): wake word "Tower", callsign "Batumi Tower", answers: airfield
+```
 
 ### Was normal ist
 
@@ -551,6 +719,13 @@ Ebenfalls auf CH8, unter **Tactical replies**:
 - **Contact source** und **AWACS unit name:** zusammen bestimmen sie, woher die Kontakte kommen dürfen — siehe unten.
 - Reichweite, Gruppenzahl und Triggerphrasen nach Geschmack anpassen.
 - **„Try it without flying“** zeigt den exakten Satz, den der Bot sagen würde, samt Datenquelle — gesendet wird dabei nichts.
+
+Mit diesem Schalter kommen auch die Anfragen dazu, die **Personen** betreffen statt des Feindes. Beide werden vor der Kontaktabfrage beantwortet und funktionieren deshalb weiter, wenn die Sensorquelle unbrauchbar ist:
+
+- **Alpha Check** — die eigene Position des Anrufers vom Bullseye aus. Mit den taktischen Antworten standardmäßig an; die Triggerphrasen stehen in derselben Karte.
+- **Positionen von Freunden** — wo ein anderer menschlicher Spieler derselben Seite ist. Eigene Karte, und bewusst **aus**, auch wenn die taktischen Antworten an sind: siehe [7 → Wo ist jemand](#wo-ist-jemand) für die Begründung und für das, was abgelehnt wird.
+
+Ein **Radio Check** braucht davon nichts und funktioniert ganz ohne DCS-gRPC, gewinnt mit Verbindung aber die Angabe, ob der Bot den Anrufer auf dem Schirm hat — der schnellste Weg, einen Namensunterschied zwischen SRS und DCS zu finden.
 
 #### Woher die Kontakte kommen
 
@@ -682,9 +857,18 @@ Alles liegt neben der EXE des Bots:
 | `config.json` | Sämtliche Einstellungen. |
 | `phrases.json` | Feste Frage-/Antwortpaare. |
 | `vocabulary.json` | Erkennungshinweise. |
-| `logs\` | Logdateien mit Zeitstempel, immer mit allen Details. Eine pro Start, benannt `darkstar_<Datum>_<Zeit>.log`. |
+| `logs\` | Logdateien mit Zeitstempel, eine pro Start, benannt `darkstar_<Datum>_<Zeit>.log`. Ausführliche Paketdetails nur mit `DebugLogging`; bei einem Fehler kommen die letzten 200 ausführlichen Zeilen automatisch mit. |
+| `recordings\` | Nur mit aktivem `SaveRecordings`. Eine WAV pro Aussendung, etwa 100 KB pro Sekunde Sprache. |
 | `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung. |
 | `grpc-dumps\` | Gespeicherte JSON-Ergebnisse aus dem Missionsdaten-Explorer. |
+
+**Keiner der beiden Ordner wächst unbegrenzt.** Beim Start und einmal pro Stunde löscht der Bot seine eigenen alten Dateien: Aufnahmen nach `RecordingRetentionDays` (7) oder sobald `recordings\` über `RecordingRetentionMaxMb` (500) liegt, Logs nach `LogRetentionDays` (30) bzw. `LogRetentionMaxMb` (200). Erst das Alter, dann die Größe: Was das Alterslimit überlebt, wird von den ältesten Dateien her gekürzt, bis der Ordner passt. Die drei neuesten Logdateien werden nie gelöscht, egal was die Limits sagen — ein versehentlich gesetztes 1-MB-Budget kann also nicht das Log löschen, in das gerade geschrieben wird. Ein Limit auf `0` schaltet es ab. Jede Löschung steht mit Begründung im Log:
+
+```
+[Retention] Removed 12 recording(s), freeing 340.5 MB (9 past the age limit, 3 over the size budget).
+```
+
+Angetastet wird sonst nichts — nur `*.wav` in `recordings\` und `*.log` in `logs\`. `Backup\` und `grpc-dumps\` bleiben absichtlich unberührt: Die gibt es ja gerade für den Fall, dass man sie später noch braucht.
 
 Das Log ist die erste Anlaufstelle, wenn etwas klemmt. Ein gesunder Start sieht ungefähr so aus:
 
@@ -725,10 +909,18 @@ Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *
 | **Antwort wird erzeugt, aber nie gehört** | `ExternalAudioExePath` falsch oder TTS-Stimme nicht installiert. Auf CH1 **Detect SRS installation** drücken, dann eine Aussendung manuell testen (siehe [Kapitel 4](#4-erster-start)). Das Log nennt den gefundenen Pfad, wenn der eingetragene nicht existiert. |
 | **Bot antwortet auf seine eigenen Antworten** | Sollte unmöglich sein — das Radio ist währenddessen selbst stummgeschaltet. Falls doch, bitte mit Log melden. |
 | **Zahlen werden heruntergerattert / sind schwer verständlich** | `DcsIntelSlowSpeech` einschalten (GUI: CH8 → *Slow, clearly spoken numbers*). Ist die Stimme insgesamt zu schnell, eine andere `VoiceName` probieren oder — falls deine SRS-Version das kann — einen Tempo-Parameter über `ExternalAudioExtraArgs` setzen. |
+| **Ein Radio ist nach dem Setzen einer Stimme verstummt** | Den Stimmennamen hat dieser Rechner nicht. **List available voices** auf CH2 drücken und einen Namen aus dieser Liste verwenden — die „natürlichen“ Windows-Stimmen sind meist nicht dabei. Das Startup-Log nennt die Stimme jedes Radios, `[ExternalAudio:ERR]`-Zeilen zeigen die Beschwerde des Tools. |
+| **„Where is X" wird mit „say again, which aircraft?" beantwortet** | Der Name muss hinter der Triggerphrase stehen: *„where is Springfield 2-1"*, nicht *„Springfield 2-1, where is he"*. Siehe [7 → Wo ist jemand](#wo-ist-jemand). |
+| **„Where is X" ergibt „unable to identify your coalition"** | Der Anrufer steht in der SRS-Clientliste nicht auf Rot oder Blau — typischerweise ein Zuschauerslot. Diese Anfrage lehnt ab statt eine Seite zu raten. |
+| **„Where is X" findet nie einen KI-Wingman** | So gewollt: gemeldet werden nur menschliche Spieler. |
+| **Der Bot antwortet „standby, working other traffic" und ignoriert mich danach** | Das Rate-Limit pro Pilot. Das Log nennt die Wartezeit (`[Rate limit]`). Auf CH3 `RateLimitMaxRequests` erhöhen oder `RateLimitWindowSeconds` senken, wenn es für deinen Server zu streng ist. |
+| **Alle Radios sprechen mit derselben Stimme** | `Radios[].Voice` ist bei allen leer, sie fallen also auf die globale `VoiceName` zurück. Pro Radio auf CH2 setzen. |
 | **Antwort kommt sehr spät** | 2–5 s sind normal. Zwischenansage aktivieren, damit Piloten wissen, dass sie gehört wurden. |
 | **Threat-Circle-Warnungen kommen nie an** | Im Log nach `[ThreatCircle]`-Zeilen sehen, die jeden Durchlauf protokollieren. Meist lässt sich das Flugzeug des Piloten nicht seinem SRS-Namen zuordnen (der Kreis braucht es als Mittelpunkt), oder der Kreis ist bereits abgelaufen. |
 | **Taktische Anfragen liefern „no tactical data“** | DCS-gRPC läuft nicht, keine Mission geladen, falsche Adresse, oder `DcsGrpcEnabled` aus. Auf CH8 testen. |
-| **Taktische Antworten nutzen immer Bullseye statt BRAA** | Dein SRS-Name ließ sich keinem DCS-Spielernamen zuordnen. Namen angleichen oder die Trennzeichen-Konvention nutzen (`CALLSIGN 1-1 \| handle`). |
+| **Taktische Antworten nutzen immer Bullseye statt BRAA** | Dein SRS-Name ließ sich keinem DCS-Spielernamen zuordnen. Namen angleichen oder die Trennzeichen-Konvention nutzen (`CALLSIGN 1-1 \| handle`). Am schnellsten bestätigt: *„radio check“* rufen — *„no radar contact on you“* heißt genau das. |
+| **`recordings\` oder `logs\` haben die Platte gefüllt** | Sollte nicht mehr passieren: Beide werden beim Start und stündlich aufgeräumt. Die `[Retention]`-Zeilen im Log prüfen, und dass `RecordingRetentionDays`/`RecordingRetentionMaxMb` nicht beide `0` sind. |
+| **Die Antwort auf `radio check` ist nicht die auf CH4 eingestellte** | Eine Zeile `radio check` in der `phrases.json` hat absichtlich Vorrang vor der eingebauten Antwort. Zeile löschen, um das eingebaute Verhalten zu bekommen. |
 | **„Picture clean“, obwohl Feinde in der Luft sind** | Die konfigurierte AWACS-Einheit ist spielergeflogen oder existiert nicht, dazu eine zu enge Reichweitengrenze. Zum Test `DcsIntelAwacsUnitName` leeren oder `DcsIntelMaxRangeNm` erhöhen. |
 | **Dienst startet nicht** | Meist ein Pfadproblem: Auf CH9 die registrierte EXE prüfen und ob die `config.json` in *diesem* Ordner liegt. |
 | **Dienst lässt sich nicht entfernen** | Etwas hält noch ein Handle darauf (services.msc, Task-Manager). Beides schließen und erneut versuchen; ein Neustart räumt es immer auf. |
@@ -741,7 +933,7 @@ Kommst du nicht weiter: Die Logdatei samt den `[STT]`-Zeilen rund um den Fehler 
 
 ## 12. Hotword-Genauigkeit
 
-Ein Hotword, das nicht anspringt — oder anspringt, obwohl niemand es gesagt hat — ist die häufigste Beschwerde über so einen Aufbau. Drei Dinge entscheiden darüber, in dieser Reihenfolge.
+Ein Hotword, das nicht anspringt — oder anspringt, obwohl niemand es gesagt hat — ist die häufigste Beschwerde über so einen Aufbau. Vier Dinge entscheiden darüber, in dieser Reihenfolge.
 
 ### 12.1 Die Modellgröße (mit Abstand der größte Effekt)
 
@@ -794,19 +986,101 @@ Average: 4 of 6 as expected (67%), 2 missed, 0 fired when they shouldn't.
 LowPass: 6 of 6 as expected (100%), 0 missed, 0 fired when they shouldn't.
 ```
 
-Nützliche Optionen: `--verbose` zeigt, was Vosk tatsächlich transkribiert hat — meist der Moment, in dem klar wird, was schiefging; `--keyword` und `--model` probieren ein anderes Wort oder Modell, ohne `config.json` anzufassen; `--filter` läuft nur einen der beiden Wege. `Darkstar.exe --test-hotword` ohne Pfad nimmt den Ordner `recordings`.
+Alle Optionen — keine davon fasst `config.json` an:
+
+| Option | Wirkung |
+|---|---|
+| `--verbose` | Zeigt, was Vosk tatsächlich transkribiert hat. Meist der Moment, in dem klar wird, was schiefging. |
+| `--compare` | Lässt beide Audiowege laufen und stellt sie nebeneinander. |
+| `--filter LowPass\|Average` | Nur einen der beiden Wege. |
+| `--keyword <wort>` | Ein anderes Hotword. |
+| `--variants <a,b,c>` | Andere akzeptierte Schreibweisen — eine Variantenliste ausprobieren, bevor man sie festschreibt (siehe [12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt)). |
+| `--suggest-variants` | Schlägt Schreibweisen aus den verpassten Aufnahmen vor. Impliziert `--verbose` und endet immer mit 0. |
+| `--model <ordner>` | Ein anderes Vosk-Modell — so vergleicht man Modellgrößen an den eigenen Aufnahmen. |
+| `--autogain` | Wendet zusätzlich die optionale Verstärkung für leise Piloten an, um zu sehen, ob sie hier hilft. |
+
+`Darkstar.exe --test-hotword` ohne Pfad nimmt den Ordner `recordings`. Exit-Code 0 heißt, alle Erwartungen aus den Dateinamen wurden erfüllt, 2 heißt, mindestens eine nicht — damit lässt sich das Werkzeug in einem Skript als Prüfung verwenden.
 
 Eigene Fälle ergänzt man durch Umbenennen: eine Datei mit `_silence_` im Namen soll *nicht* auslösen. So lässt sich ein Satz Aufnahmen pflegen, der den Bot niemals wecken darf — Motorengeräusch, Funkverkehr anderer Piloten, die eigene Stimme des Bots.
 
-> Aufnahmen kosten etwa 100 KB pro Sekunde Sprache, und nichts löscht sie wieder. Die Einstellung nach der Messung wieder ausschalten.
+> Aufnahmen kosten etwa 100 KB pro Sekunde Sprache. Sie werden automatisch aufgeräumt (siehe [Kapitel 10](#10-dateien-logs-und-backups)), die Einstellung sollte nach der Messung aber trotzdem wieder aus.
 
-### 12.5 Wenn es weiterhin nicht stimmt
+### 12.5 Akzent: akzeptieren, wie das Wort wirklich ankommt
+
+Das ist der Abschnitt für einen Server, dessen Piloten überwiegend keine englischen Muttersprachler sind — also für die meisten deutschsprachigen Server.
+
+Das Hotword läuft durch ein kleines **englisches** Modell. „Overlord" aus einem deutschen Mund kommt typischerweise als eines davon zurück:
+
+```
+over lord      ← der Killer: ein Leerzeichen, also trifft \bOverlord\b nie
+oberlord
+of a lord
+```
+
+Der erste Fall ist der wichtige. Der Bot hat das Wort im Grunde richtig gehört und trotzdem nichts getan, weil der Erkenner mitten hinein ein Leerzeichen gesetzt hat. Noch deutlicher zu sprechen hilft dagegen nicht.
+
+Deshalb kann ein Radio **mehrere Schreibweisen** seines Hotwords akzeptieren — `VoskKeywordVariants` global, `Radios[].KeywordVariants` pro Radio, oder das Feld *„Also accept as the wake word"* auf CH2/CH3:
+
+```json
+"VoskKeyword": "Overlord",
+"VoskKeywordVariants": ["over lord", "oberlord"]
+```
+
+Das ist **kein** Nachtrainieren des Modells. Das Modell hört weiterhin, was es hört; der Bot besteht nur nicht mehr auf einer einzigen Schreibweise davon. (Bei den Anfragen funktioniert das längst so — `DcsIntelBogeyDopeTriggers` enthält absichtlich `"bogie dope"` und `"bogey dobe"`.)
+
+**Varianten gehören zum Wort, nicht zum Radio.** Ein Radio, das das globale Hotword nutzt, nutzt auch die globalen Varianten. Ein Radio mit eigenem `Keyword` beginnt mit einer leeren Liste — sonst würde ein Tanker auf „Texaco" stillschweigend auf „over lord" antworten.
+
+#### Die Liste nicht raten — aus den Aufnahmen ablesen
+
+Jede akzeptierte Variante erhöht auch die Fehltriggerrate. Die Liste soll deshalb aus einer Messung kommen, und der Bot ermittelt sie für dich:
+
+```powershell
+Darkstar.exe --test-hotword recordings --suggest-variants
+```
+
+Er nimmt die Aufnahmen, die auslösen sollten und es nicht taten, sammelt, was das Modell dort tatsächlich gehört hat, und schlägt die Schreibweisen vor, die deinem Hotword ähneln — sortiert nach Häufigkeit:
+
+```
+Variant suggestions from 7 missed recording(s), checked against 12 recording(s) where nobody called:
+
+  phrase                       missed files  edits  note
+  --------------------------------------------------------------------------
+  over lord                    5             0
+  oberlord                     2             1
+  of a lord                    3             3      ALSO heard when nobody called - would cause false triggers
+
+  For config.json (add to the radio's KeywordVariants, or VoskKeywordVariants globally):
+
+    "VoskKeywordVariants": ["over lord", "oberlord"]
+```
+
+Zwei Dinge an dieser Ausgabe sind wichtig:
+
+- **`edits` ist der Abstand zu deinem Hotword, ohne Leerzeichen gerechnet.** `over lord` erreicht 0 — es unterschied sich nur in der Wortgrenze. Genau deshalb ist es der häufigste Fehlschlag *und* die sicherste Variante.
+- **Die Spalte `note` ist der eigentliche Zweck.** Ein Kandidat, der auch auf Aufnahmen auftaucht, bei denen niemand den Bot gerufen hat, wird aufgeführt, aber *nicht* empfohlen — und bleibt aus der fertigen Zeile heraus. Ihn zu akzeptieren würde Treffer gegen einen Bot eintauschen, der Leuten ins Wort fällt.
+
+Danach denselben Lauf mit der neuen Liste wiederholen. Die verpassten Aufnahmen sollten jetzt Treffer sein — und deine `_silence_`-Aufnahmen sollten weiterhin still bleiben. **Diese zweite Zahl entscheidet, ob eine Variante es wert war**, also lohnt sich ein Satz `_silence_`-Dateien: Motorengeräusch, Funk anderer Piloten, normales Durcheinander.
+
+> **Hotwords und Triggerphrasen niemals in die `vocabulary.json`.** Diese Liste sagt dem Transkriber, alles, was einem Eintrag bloß *ähnlich klingt*, auf dessen exakte Schreibweise einzuschnappen — aus unverständlichem Audio wird so ein Befehl, den niemand gegeben hat, siehe [5.3](#53-vocabularyjson). Aussprachevarianten gehören in die Varianten- und Triggerlisten, nie ins Vokabular.
+
+Das Startup-Log nennt jede akzeptierte Schreibweise, damit ein Radio, das auf etwas Überraschendes reagiert, auf das zurückgeführt werden kann, worauf es reagieren durfte:
+
+```
+251.000 MHz (AM): wake word "Overlord" (also: "over lord", "oberlord"), callsign "Overlord", answers: tactical
+```
+
+#### Was das nicht behebt
+
+Wenn in den Transkripten von `--verbose` überhaupt nichts vorkommt, was dem Hotword ähnelt, helfen Varianten nicht — dann kommt das Modell gar nicht dorthin. Das ist ein Problem der Modellgröße (12.1) oder des Audios (12.2). Ein Hotword, das ein gängiges englisches Wort ist, kommt außerdem häufiger unbeschädigt an als ein erfundenes — bei der Wahl für eine nicht englischsprachige Crew ein Argument.
+
+### 12.6 Wenn es weiterhin nicht stimmt
 
 | Symptom | Wo ansetzen |
 |---|---|
 | Löst auf andere Wörter aus | Größeres Modell. Schlüsselwörter werden schon als ganze Wörter verglichen, ein längeres Wort mit deinem darin kann also nicht auslösen — `--verbose` zeigt, was wirklich gehört wurde. |
 | Löst bei einem bestimmten Piloten nie aus | Dessen Pegel, nicht deine Einstellungen: mit einer Aufnahme prüfen, dann 12.3 erwägen. |
 | Löst auf die eigenen Antworten aus | Sollte unmöglich sein — das Radio ist während der Aussendung stummgeschaltet. Falls doch, Log und Aufnahme aufbewahren. |
+| Verpasst nur bei Nicht-Muttersprachlern | [12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt) — die Schreibweisen akzeptieren, die das Modell wirklich produziert, aus den Aufnahmen ermittelt. |
 | Zwei Radios reagieren auf das Hotword des anderen | Fast immer ein Verhören des schwachen Modells; `--verbose` bestätigt es. |
 
 ---

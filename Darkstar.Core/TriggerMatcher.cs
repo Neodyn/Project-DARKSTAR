@@ -57,6 +57,53 @@ public static class TriggerMatcher
     }
 
     /// <summary>
+    /// The trigger that matched, plus what follows it in the text.
+    ///
+    /// Needed where a request names somebody: "Punch 1-1, where is Springfield 2-1" contains two
+    /// pilots, and asking "which names appear in this sentence" can only answer "too many".
+    /// Asking "who is named after <c>where is</c>" has exactly one answer. The tail is what makes
+    /// that possible, so this is about position in the sentence, not about loosening any matching
+    /// rule - see <see cref="FriendlyPosition"/>.
+    /// </summary>
+    /// <param name="Trigger">The phrase that fired.</param>
+    /// <param name="Tail">Everything after it, trimmed. Empty when the trigger ended the sentence.</param>
+    public sealed record TriggerHit(string Trigger, string Tail);
+
+    /// <summary>
+    /// As <see cref="FindMatch"/>, but also returns the text following the trigger. The
+    /// earliest-matching trigger wins, so a transcript is read the way it was spoken rather than
+    /// in the order the triggers happen to be configured.
+    /// </summary>
+    public static TriggerHit? FindMatchWithTail(string? text, IEnumerable<string>? triggers)
+    {
+        if (string.IsNullOrWhiteSpace(text) || triggers == null) return null;
+
+        string? bestTrigger = null;
+        var bestStart = int.MaxValue;
+        var bestEnd = 0;
+
+        foreach (var trigger in triggers)
+        {
+            if (string.IsNullOrWhiteSpace(trigger)) continue;
+
+            var normalized = trigger.Trim();
+            var match = PatternFor(normalized).Match(text);
+            if (!match.Success) continue;
+
+            // Earliest wins; on a tie the longer phrase does, so "say position of" beats
+            // "position of" and the tail doesn't start with a leftover word.
+            if (match.Index < bestStart || (match.Index == bestStart && match.Length > bestEnd - bestStart))
+            {
+                bestTrigger = normalized;
+                bestStart = match.Index;
+                bestEnd = match.Index + match.Length;
+            }
+        }
+
+        return bestTrigger == null ? null : new TriggerHit(bestTrigger, text[bestEnd..].Trim());
+    }
+
+    /// <summary>
     /// A whole-word pattern for one trigger. Word boundaries go on the outside of the whole
     /// phrase, and runs of whitespace inside it match any whitespace, so "bogey  dope" in a
     /// transcript still matches the trigger "bogey dope".

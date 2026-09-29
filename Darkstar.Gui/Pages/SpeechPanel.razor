@@ -31,10 +31,71 @@
     </div>
 </div>
 
+<div class="card" style="margin-bottom:8px">
+    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Rate limit per pilot</div>
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        Every transmission costs a Gemini call and occupies the frequency while the reply is spoken. One
+        pilot repeating the wake word — bored, annoyed at being misheard, or with a stuck transmit key
+        feeding cockpit noise — can use up the quota for everybody and block the channel at the same time.
+    </div>
+
+    <div class="row2">
+        <div class="field" style="margin-bottom:0">
+            <label>REQUESTS PER PILOT (0 = NO LIMIT)</label>
+            <input type="number" min="0" step="1" @bind="Store.Config.RateLimitMaxRequests" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>WITHIN (SECONDS)</label>
+            <input type="number" min="1" step="10" @bind="Store.Config.RateLimitWindowSeconds" />
+        </div>
+    </div>
+
+    <div class="field" style="margin-top:10px;margin-bottom:0">
+        <label>WHAT TO SAY WHEN A PILOT IS OVER THE LIMIT</label>
+        <input type="text" @bind="Store.Config.RateLimitReply" placeholder="(say nothing)" />
+        <div class="hint">
+            <code>{pilot}</code> and <code>{seconds}</code> are filled in. Said <strong>once</strong> —
+            further transmissions get no reply, because repeating it would occupy exactly the frequency
+            the limit protects. Leaving it empty is not recommended: a bot that silently stops answering
+            looks broken, and the pilot's next move is to transmit more.
+        </div>
+    </div>
+
+    <div class="hint" style="margin-top:8px">
+        A sliding window, not a pause after each call — asking three things in quick succession and then
+        flying for ten minutes is never held up. Rejected transmissions are not counted, so the wait can
+        never be extended by trying again.
+    </div>
+</div>
+
+@if (Store.TtsVoiceList.Count > 0)
+{
+    <datalist id="tts-voices">
+        @foreach (var voice in Store.TtsVoiceList)
+        {
+            <option value="@voice.Name">@voice.Describe()</option>
+        }
+    </datalist>
+}
+
 <div class="row2">
     <div class="field">
-        <label>TTS VOICE</label>
-        <input type="text" @bind="Store.Config.VoiceName" placeholder="server default" />
+        <label>TTS VOICE (used by any radio that doesn't set its own)</label>
+        <input type="text" @bind="Store.Config.VoiceName" list="tts-voices" placeholder="whatever ExternalAudio picks" />
+        <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="link-action" style="margin-bottom:0" disabled="@Store.TtsVoicesLoading"
+                    @onclick="() => Store.LoadTtsVoicesAsync(force: true)">
+                <span>@(Store.TtsVoicesLoading ? "Asking..." : "List available voices")</span>
+            </button>
+            @if (Store.TtsVoiceStatus != null)
+            {
+                <span style="color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">@Store.TtsVoiceStatus</span>
+            }
+        </div>
+        <div class="hint">
+            A per-radio voice on <strong>CH2</strong> overrides this, which is how the AWACS, the tanker
+            and the tower end up sounding like three different people.
+        </div>
     </div>
     <div class="field">
         <label>PRE-ROLL (SECONDS)</label>
@@ -51,6 +112,15 @@
         run <code>DCS-SR-ExternalAudio.exe --help</code> to check. A wrong flag shows up as an
         [ExternalAudio] error in the log.
     </div>
+    <div class="hint">
+        It is also how you reach the cloud voices, which sound far better than anything installed
+        locally: <code>--azureCredentials="KEY;westeurope"</code> or
+        <code>--googleCredentials="C:\path\credentials.json"</code>, and then the provider's own
+        voice name in the field above (e.g. <code>en-US-AndrewNeural</code>). Those names never show
+        up in the list button — this machine has never heard of them. <code>--gender=male</code> or
+        <code>--culture=en-GB</code> work too, if you'd rather ask for a kind of voice than a
+        specific one.
+    </div>
 </div>
 
 <div class="field">
@@ -63,6 +133,24 @@
         <label>GLOBAL WAKE WORD</label>
         <input type="text" @bind="Store.Config.VoskKeyword" />
         <div class="hint">Used by radios that don't set their own wake word.</div>
+    </div>
+    <div class="field">
+        <label>ALSO ACCEPT AS THE WAKE WORD (comma separated)</label>
+        <input type="text" value="@GlobalVariants" placeholder="(none)"
+               @onchange="e => SetGlobalVariants(e.Value?.ToString() ?? string.Empty)" />
+        <div class="hint">
+            For how the recognizer really hears the word. On a server where most pilots aren't native
+            English speakers, "Overlord" often arrives as <code>over lord</code> — and the space alone
+            makes the whole-word match fail, so the bot never reacts and nothing says why.
+        </div>
+        <div class="hint">
+            <strong>Don't guess this list.</strong> Every entry also raises the false-trigger rate.
+            Turn on <em>Save every transmission</em> below, fly a session, then run
+            <code>Darkstar.exe --test-hotword recordings --suggest-variants</code>: it reads what the
+            model heard on the transmissions it missed, proposes only the candidates that never turned
+            up when nobody called, and prints a line ready to paste here. Radios with their own wake
+            word don't inherit these — set theirs on CH2.
+        </div>
     </div>
     <div class="field">
         <label>SILENCE FRAMES TO STOP RECORDING</label>
@@ -143,12 +231,27 @@
                 Builds a set of real recordings to measure against, including the ones where the wake word
                 did <em>not</em> fire. Then run
                 <code>Darkstar.exe --test-hotword recordings --compare</code>.
-                Roughly 100 KB per second of speech, and nothing deletes them again.
+                Roughly 100 KB per second of speech - the limits below keep the folder from growing forever.
             </div>
         </div>
         <button class="toggle @(Store.Config.SaveRecordings ? "on" : "")" @onclick="() => Store.Config.SaveRecordings = !Store.Config.SaveRecordings">
             <span class="knob"></span>
         </button>
+    </div>
+
+    <div class="row2" style="margin-top:10px">
+        <div class="field" style="margin-bottom:0">
+            <label>DELETE RECORDINGS OLDER THAN (DAYS, 0 = NEVER)</label>
+            <input type="number" min="0" step="1" @bind="Store.Config.RecordingRetentionDays" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>KEEP <code>recordings\</code> UNDER (MB, 0 = NO LIMIT)</label>
+            <input type="number" min="0" step="10" @bind="Store.Config.RecordingRetentionMaxMb" />
+        </div>
+    </div>
+    <div style="font-size:11px;color:#5A6A70;margin-top:6px">
+        Checked at start and once an hour. Age first, then size: what survives the age limit is trimmed
+        oldest-first until the folder fits. Set both to 0 to keep everything.
     </div>
 </div>
 
@@ -165,3 +268,18 @@
         </div>
     </div>
 </div>
+
+@code {
+    /// <summary>
+    /// The variant list as one editable line. value + onchange rather than @bind, because the stored
+    /// value is a list and the field is comma-separated text.
+    /// </summary>
+    private string GlobalVariants => string.Join(", ", Store.Config.VoskKeywordVariants);
+
+    private void SetGlobalVariants(string value)
+    {
+        Store.Config.VoskKeywordVariants = value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+}

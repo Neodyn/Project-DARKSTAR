@@ -15,6 +15,18 @@
     to keep in sync.
   -->
 
+  <!--
+    The test project reaches the internal helpers it exercises. Those are internal rather than public
+    because they are implementation detail - the bearing arithmetic, the retention decision, the
+    variant suggestion - and making them public just to test them would turn every one of them into
+    a promise to whoever writes the next feature.
+  -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Darkstar.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Official DCS-gRPC C# bindings (generated from the DCS-gRPC .proto files) - lets us
          talk to a running DCS-gRPC server for real mission data. Used by the GUI's connection

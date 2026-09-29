@@ -41,13 +41,24 @@ public sealed class ExternalAudioSender
     /// </summary>
     private string ExtraArgs => string.IsNullOrWhiteSpace(_extraArgs) ? "" : " " + _extraArgs.Trim();
 
-    /// <summary>Sends text via local Windows TTS on the given frequency/modulation.</summary>
-    public Task SendTextAsync(string text, double frequencyHz, string modulation, CancellationToken token = default)
+    /// <summary>
+    /// Sends text via TTS on the given frequency/modulation.
+    /// </summary>
+    /// <param name="voice">
+    /// Voice for this one transmission, overriding the sender's default. This is how several
+    /// radios end up sounding like several people: the voice belongs to the radio that is
+    /// answering, not to the bot. Empty or null falls back to the global voice, and that in turn
+    /// to whatever ExternalAudio picks by itself.
+    /// </param>
+    public Task SendTextAsync(string text, double frequencyHz, string modulation,
+        string? voice = null, CancellationToken token = default)
     {
         var freqMhz = (frequencyHz / 1_000_000.0).ToString(CultureInfo.InvariantCulture);
 
         // Escape quotation marks in the text, since everything is passed as a single command-line argument.
         var escapedText = text.Replace("\"", "\\\"");
+
+        var effectiveVoice = string.IsNullOrWhiteSpace(voice) ? _voiceName : voice.Trim();
 
         var args = $"--text=\"{escapedText}\" " +
                    $"--freqs={freqMhz} " +
@@ -55,7 +66,7 @@ public sealed class ExternalAudioSender
                    $"--coalition={_coalition} " +
                    $"--port={_port} " +
                    $"--name=\"{_name}\"" +
-                   (string.IsNullOrWhiteSpace(_voiceName) ? "" : $" --voice=\"{_voiceName}\"") +
+                   (string.IsNullOrWhiteSpace(effectiveVoice) ? "" : $" --voice=\"{effectiveVoice}\"") +
                    ExtraArgs;
 
         return RunAsync(args, token);
