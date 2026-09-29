@@ -94,6 +94,8 @@ One command, a readable transcript, exit code 0 when every assertion held. No SR
 | `AirfieldTests.cs` | Runway selection, ATIS units, the radio roles and the handoff. |
 | `HousekeepingTests.cs` | Retention, alpha check, radio check, voices, wake-word variants, friendly positions, rate limiting, the installer's contents, and the documentation checks. |
 
+**Read files through `ReadSource("relative/path")`, never by absolute path.** A test that hard-codes `/home/you/...` or `C:\Users\you\...` passes on your machine and throws on everybody else's, halfway through the run. `Program.cs` checks for that before any suite runs and stops with the file and line, because the alternative is a stack trace where an explanation belongs.
+
 **There is no test framework on purpose.** Most of these assertions are about a spoken sentence, an arithmetic result, or whether a source file still says what a comment claims — none of which needs xUnit, a runner plugin or an attribute vocabulary. A dependency-free test project still builds in five years and can be read start to finish.
 
 Three kinds of assertion appear, and the third is unusual enough to explain:
