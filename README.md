@@ -1,7 +1,7 @@
 # D.A.R.K.S.T.A.R.
 
 <p align="center">
-    <img src="https://github.com/Neodyn/Project-DARKSTAR/darkstar.jpg" width="480">
+    <img src="https://github.com/Neodyn/Project-DARKSTAR/blob/main/darkstar.jpg" width="480">
 </p>
 
 
