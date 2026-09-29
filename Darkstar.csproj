@@ -31,14 +31,24 @@
   </PropertyGroup>
 
   <!--
-    IMPORTANT: SDK-style projects compile every .cs file under the project folder by default.
-    Darkstar.Core and Darkstar.Gui live in subfolders next to this .csproj, so they must be
-    explicitly excluded here - otherwise this project would try to compile their files too
-    (duplicate type definitions) on top of referencing Darkstar.Core as a proper library below.
+    IMPORTANT: SDK-style projects compile every .cs file under the project folder by default, and
+    this .csproj sits in the repository root - so Darkstar.Core, Darkstar.Gui and Darkstar.Tests all
+    live *underneath* it and would be compiled into the bot as well.
+
+    This one line excludes every .cs file in any subfolder, which is exactly right here because all
+    of the bot's own sources sit directly in the root. It deliberately replaces the older list of one
+    Remove per sibling project: that list had to be extended by hand whenever a project was added,
+    and forgetting it produces errors that point nowhere near the cause -
+
+      "Duplicate 'System.Reflection.AssemblyTitleAttribute' attribute"   (from the other project's
+                                                                         generated obj\ files)
+      "Only one compilation unit can have top-level statements"          (two Program.cs files)
+
+    If the bot ever does grow a subfolder of its own sources, add a matching
+    <Compile Include="Thatfolder\**\*.cs" /> rather than weakening this exclusion.
   -->
   <ItemGroup>
-    <Compile Remove="Darkstar.Core\**\*.cs" />
-    <Compile Remove="Darkstar.Gui\**\*.cs" />
+    <Compile Remove="*\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>

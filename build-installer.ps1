@@ -262,9 +262,13 @@ if ($Clean) {
     # these can't leak into the installer - but leaving them means "-Clean" doesn't actually
     # rebuild from scratch, and a stale obj\ is exactly what hides a restore or asset problem
     # that would otherwise show up now rather than on somebody else's machine.
-    foreach ($projectDir in @($ProjectRoot,
-                              (Join-Path $ProjectRoot "Darkstar.Core"),
-                              (Join-Path $ProjectRoot "Darkstar.Gui"))) {
+    # Every project in the solution, found rather than listed - a hard-coded list is what made the
+    # bot's own compile exclusion go stale when Darkstar.Tests was added.
+    $projectDirs = @($ProjectRoot) + (Get-ChildItem -LiteralPath $ProjectRoot -Directory |
+        Where-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File } |
+        ForEach-Object { $_.FullName })
+
+    foreach ($projectDir in $projectDirs) {
         foreach ($name in @("obj", "bin")) {
             $dir = Join-Path $projectDir $name
             if (Test-Path -LiteralPath $dir) {

@@ -1007,6 +1007,71 @@ internal static class HousekeepingTests
         Check("the build says what it is about to pack", buildScript.Contains("Show-PublishInventory"));
         Check("and -Clean really cleans", buildScript.Contains("\"obj\", \"bin\""));
 
+        // --- no project compiles another project's sources -----------------------------------------
+
+        Section("No project swallows another project's sources");
+
+        // The failure this guards against: Darkstar.csproj sits in the repository root, so every
+        // other project lives underneath it and the SDK's default glob compiles them all into the
+        // bot. The symptoms point nowhere near the cause - "Duplicate
+        // System.Reflection.AssemblyTitleAttribute" from the other project's generated obj\ files,
+        // and "Only one compilation unit can have top-level statements" from two Program.cs files.
+        //
+        // It happened once, when Darkstar.Tests was added next to a hand-maintained list of one
+        // exclusion per sibling project. Checked generally rather than for that one case: any project
+        // with another project beneath it has to exclude subfolder sources.
+        var projectFiles = System.IO.Directory
+            .GetFiles(Root, "*.csproj", System.IO.SearchOption.AllDirectories)
+            .Where(p => !p.Contains($"{System.IO.Path.DirectorySeparatorChar}obj{System.IO.Path.DirectorySeparatorChar}",
+                        StringComparison.Ordinal))
+            .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        Check("the solution's projects were found", projectFiles.Count == 4,
+            string.Join(", ", projectFiles.Select(System.IO.Path.GetFileName)));
+
+        foreach (var projectFile in projectFiles)
+        {
+            var folder = System.IO.Path.GetDirectoryName(projectFile)!;
+            var name = System.IO.Path.GetFileName(projectFile);
+
+            var nested = projectFiles
+                .Where(other => other != projectFile &&
+                                other.StartsWith(folder + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                .Select(other => System.IO.Path.GetFileName(other))
+                .ToList();
+
+            if (nested.Count == 0) continue;
+
+            var text = System.IO.File.ReadAllText(projectFile);
+
+            // Either the blanket exclusion, or an explicit one per nested project. Both are correct;
+            // the blanket one is what stops this from going stale when a project is added.
+            var excludesEverySubfolder = text.Contains(@"<Compile Remove=""*\**\*.cs"" />", StringComparison.Ordinal);
+            var excludesEachNested = nested.All(other =>
+                text.Contains($@"<Compile Remove=""{System.IO.Path.GetFileNameWithoutExtension(other)}\**\*.cs""",
+                    StringComparison.Ordinal));
+
+            Check($"{name} does not compile the {nested.Count} project(s) beneath it",
+                excludesEverySubfolder || excludesEachNested,
+                excludesEverySubfolder ? "excludes every subfolder"
+                    : excludesEachNested ? "excludes each one by name"
+                    : "nested: " + string.Join(", ", nested));
+        }
+
+        // The bot's own sources all sit in the root, which is what makes the blanket exclusion safe.
+        // If that ever stops being true, the exclusion silently drops the new folder.
+        var botSources = System.IO.Directory
+            .GetFiles(Root, "*.cs", System.IO.SearchOption.TopDirectoryOnly)
+            .Length;
+        Check("the bot still keeps all its own sources in the root", botSources >= 10,
+            $"{botSources} file(s) directly in the repository root");
+
+        var cleanScript = System.IO.File.ReadAllText(Root + "build-installer.ps1");
+        Check("-Clean discovers the project folders rather than listing them",
+            cleanScript.Contains("Filter *.csproj"),
+            "a hard-coded list is what went stale last time");
+
         // --- the documentation keeps up with the code ---------------------------------------------------
 
         // Documentation drifts silently: a field added to AppConfig works perfectly and is simply never
