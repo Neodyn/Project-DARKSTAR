@@ -1,10 +1,9 @@
-# D.A.R.K.S.T.A.R.
-
-
 <p align="center">
     <img src="https://github.com/Neodyn/Project-DARKSTAR/blob/main/darkstar2.jpg" width="480">
 </p>
 
+
+# D.A.R.K.S.T.A.R.
 
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse
 
