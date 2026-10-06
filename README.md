@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="https://github.com/Neodyn/Project-DARKSTAR/blob/main/darkstar2.jpg" width="480">
+    <img src="darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
 </p>
 
 
