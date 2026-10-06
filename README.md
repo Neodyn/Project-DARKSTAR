@@ -4,6 +4,8 @@
     <img src="https://github.com/Neodyn/Project-DARKSTAR/blob/main/darkstar2.jpg" width="480">
 </p>
 
+
+
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse
 
 *🇩🇪 [Diese Seite auf Deutsch](README.de.md)*
