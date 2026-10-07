@@ -217,6 +217,31 @@ public sealed class DcsAirfieldService
     // Airfields and their runways
     // ---------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Every airfield the running mission reports, with its position. For the tower plan and the F10
+    /// announcement, both of which need the list without asking a question about any one airfield.
+    /// </summary>
+    /// <remarks>
+    /// Returns an empty list rather than throwing: the callers are a GUI button and a startup step,
+    /// neither of which should be able to bring anything down. The reason ends up in the log.
+    /// </remarks>
+    public async Task<List<Airfield>> ListAirfieldsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var channel = DcsGrpcChannels.For(_config.DcsGrpcAddress);
+            var headers = DcsGrpcChannels.HeadersFor(_config.DcsGrpcApiKey);
+            var deadline = DateTime.UtcNow.AddSeconds(Math.Max(5, _config.DcsIntelTimeoutSeconds * 2));
+
+            return await GetAirfieldsAsync(channel, headers, deadline, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[Airfield] Could not list the airfields: {ex.Message}");
+            return new List<Airfield>();
+        }
+    }
+
     private async Task<List<Airfield>> GetAirfieldsAsync(GrpcChannel channel, Metadata headers,
         DateTime deadline, CancellationToken token)
     {

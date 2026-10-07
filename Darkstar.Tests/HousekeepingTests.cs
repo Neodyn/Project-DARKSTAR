@@ -1007,6 +1007,566 @@ internal static class HousekeepingTests
         Check("the build says what it is about to pack", buildScript.Contains("Show-PublishInventory"));
         Check("and -Clean really cleans", buildScript.Contains("\"obj\", \"bin\""));
 
+        // --- one tower per airfield -----------------------------------------------------------------
+
+        Section("Planning one tower per airfield");
+
+        static Airfield Field(string name, string display = "", double lat = 41.6, double lon = 41.6) =>
+            new() { Name = name, DisplayName = display, Lat = lat, Lon = lon, ElevationMeters = 10 };
+
+        var caucasus = new[]
+        {
+            Field("Batumi"),
+            Field("Kobuleti"),
+            Field("Senaki-Kolkhi"),
+            Field("Kutaisi"),
+        };
+
+        var planConfig = new AppConfig { TowerPlanBaseMHz = 133.000, TowerPlanStepMHz = 0.5 };
+        var plan = TowerPlan.Plan(caucasus, planConfig);
+
+        Check("one tower per airfield", plan.Towers.Count == 4, $"{plan.Towers.Count} planned");
+        Eq("the first gets the base frequency", (plan.Towers[0].FrequencyHz / 1_000_000).ToString("0.000"), "133.000");
+        Eq("and they step upwards", (plan.Towers[1].FrequencyHz / 1_000_000).ToString("0.000"), "133.500");
+
+        // Pilots write these numbers down. Running the planner again must not move them.
+        var again = TowerPlan.Plan(caucasus.Reverse().ToArray(), planConfig);
+        Check("the plan is stable regardless of the order the mission reports airfields in",
+            plan.Towers.Select(t => $"{t.AirfieldName}:{t.FrequencyHz}").SequenceEqual(
+                again.Towers.Select(t => $"{t.AirfieldName}:{t.FrequencyHz}")));
+
+        Eq("the callsign names the airfield", plan.Towers[0].Callsign, "Batumi Tower");
+        Eq("a hyphenated name is shortened to what a controller would say",
+            TowerPlan.CallsignFor(Field("Senaki-Kolkhi"), "Tower"), "Senaki Tower");
+        Eq("the prettier name wins when DCS supplies one",
+            TowerPlan.CallsignFor(Field("Nalchik", "Nalchik Airport"), "Tower"), "Nalchik Airport Tower");
+        Eq("an empty suffix leaves the bare name", TowerPlan.CallsignFor(Field("Batumi"), ""), "Batumi");
+
+        // Two radios on one frequency means the second silently replaces the first, because sessions
+        // are keyed by frequency. A hand-configured AWACS must cost one slot, not break the plan.
+        var withAwacs = TowerPlan.Plan(caucasus, planConfig, new[] { 133_500_000.0 });
+        Check("a frequency already in use is skipped, not reused",
+            withAwacs.Towers.All(t => Math.Abs(t.FrequencyHz - 133_500_000) > 1),
+            string.Join(", ", withAwacs.Towers.Select(t => (t.FrequencyHz / 1_000_000).ToString("0.000"))));
+        Check("and every airfield still gets one", withAwacs.Towers.Count == 4);
+
+        Check("duplicate airfield names collapse to one tower",
+            TowerPlan.Plan(new[] { Field("Batumi"), Field("Batumi") }, planConfig).Towers.Count == 1);
+        Check("an airfield with no name is ignored",
+            TowerPlan.Plan(new[] { Field(""), Field("Batumi") }, planConfig).Towers.Count == 1);
+
+        var noFields = TowerPlan.Plan(Array.Empty<Airfield>(), planConfig);
+        Check("no airfields is explained rather than silently empty",
+            !noFields.Any && noFields.Notes.Any(n => n.Contains("no airfields", StringComparison.OrdinalIgnoreCase)));
+
+        var many = TowerPlan.Plan(
+            Enumerable.Range(0, 40).Select(i => Field($"Field{i:00}")).ToArray(), planConfig);
+        Check("an absurd airfield count is capped rather than registering 40 radios",
+            many.Towers.Count == TowerPlan.MaxTowers, $"{many.Towers.Count} towers");
+        Check("and the cap is explained", many.Notes.Any(n => n.Contains("Stopped at", StringComparison.Ordinal)));
+
+        Section("What the generated radios answer");
+
+        var radios = TowerPlan.ToRadios(plan);
+        Check("every tower answers airfield requests", radios.All(r => r.AnswerAirfieldRequests == true));
+        Check("and none of them answers tactical ones - a dozen radios querying contacts buys nothing",
+            radios.All(r => r.AnswerTacticalRequests == false));
+        Check("nor friendly positions", radios.All(r => r.AnswerFriendlyPositionRequests == false));
+
+        // The decisive one: the wake word must NOT become the airfield name, or the pronunciation
+        // problem the position lookup exists to avoid lands back on the critical path.
+        Check("the wake word is left to the global one, never the airfield name",
+            radios.All(r => r.Keyword == ""),
+            "an unpronounceable wake word means the bot never answers at all");
+
+        Section("Taking the generated towers back out");
+
+        // Generating is additive, so changing map means removing the old towers first. What must never
+        // happen is a hand-built radio disappearing with them.
+        var mixed = new List<RadioConfig>
+        {
+            new() { FrequencyHz = 251_000_000, Callsign = "Overlord",
+                    AnswerTacticalRequests = true, AnswerAirfieldRequests = false },
+            new() { FrequencyHz = 127_500_000, Callsign = "Texaco", Keyword = "Texaco" },
+            new() { FrequencyHz = 133_000_000, Callsign = "Batumi Tower",
+                    AnswerAirfieldRequests = true, AnswerTacticalRequests = false,
+                    AnswerFriendlyPositionRequests = false },
+            new() { FrequencyHz = 133_500_000, Callsign = "Kobuleti Tower",
+                    AnswerAirfieldRequests = true, AnswerTacticalRequests = false,
+                    AnswerFriendlyPositionRequests = false },
+        };
+
+        var found = TowerPlan.GeneratedRadios(mixed, planConfig);
+        Check("the generated towers are found", found.Generated.Count == 2,
+            string.Join(", ", found.Generated.Select(r => r.Callsign)));
+        Check("the AWACS is left alone", found.Generated.All(r => r.Callsign != "Overlord"));
+        Check("and so is the tanker", found.Generated.All(r => r.Callsign != "Texaco"));
+
+        // Each part of the fingerprint on its own must not be enough.
+        Check("a tower that also answers tactical requests is not treated as generated",
+            !TowerPlan.LooksGenerated(new RadioConfig
+            {
+                Callsign = "Batumi Tower", AnswerAirfieldRequests = true,
+                AnswerTacticalRequests = true, AnswerFriendlyPositionRequests = false
+            }, planConfig),
+            "somebody configured that deliberately");
+
+        Check("nor one with its own wake word",
+            !TowerPlan.LooksGenerated(new RadioConfig
+            {
+                Callsign = "Batumi Tower", Keyword = "Batumi", AnswerAirfieldRequests = true,
+                AnswerTacticalRequests = false, AnswerFriendlyPositionRequests = false
+            }, planConfig));
+
+        Check("nor one whose callsign does not end in the suffix",
+            !TowerPlan.LooksGenerated(new RadioConfig
+            {
+                Callsign = "Batumi Approach", AnswerAirfieldRequests = true,
+                AnswerTacticalRequests = false, AnswerFriendlyPositionRequests = false
+            }, planConfig));
+
+        Check("nor one left on the global defaults, which answers everything",
+            !TowerPlan.LooksGenerated(new RadioConfig { Callsign = "Batumi Tower" }, planConfig));
+
+        // The dangerous case: with no suffix there is no fingerprint left, and guessing would mean
+        // deleting somebody's configuration on a hunch.
+        var noSuffix = TowerPlan.GeneratedRadios(mixed, new AppConfig { TowerPlanCallsignSuffix = "" });
+        Check("an empty suffix finds nothing rather than guessing", noSuffix.Generated.Count == 0);
+        Check("and says why", noSuffix.Notes.Any(n => n.Contains("cannot be told apart", StringComparison.Ordinal)),
+            string.Join(" ", noSuffix.Notes));
+
+        Check("the suffix match ignores case, since it is typed by hand",
+            TowerPlan.LooksGenerated(new RadioConfig
+            {
+                Callsign = "Batumi TOWER", AnswerAirfieldRequests = true,
+                AnswerTacticalRequests = false, AnswerFriendlyPositionRequests = false
+            }, planConfig));
+
+        // What the whole feature is for: generate, remove, generate again for another map.
+        var roundTrip = new List<RadioConfig> { mixed[0], mixed[1] };
+        roundTrip.AddRange(TowerPlan.ToRadios(TowerPlan.Plan(caucasus, planConfig)));
+        var removable = TowerPlan.GeneratedRadios(roundTrip, planConfig).Generated;
+        Check("everything the planner produced is recognised again afterwards",
+            removable.Count == 4, $"{removable.Count} of 4");
+        foreach (var r in removable) roundTrip.Remove(r);
+        Check("and removing them leaves exactly the hand-built radios",
+            roundTrip.Count == 2 && roundTrip.All(r => r.Callsign is "Overlord" or "Texaco"),
+            string.Join(", ", roundTrip.Select(r => r.Callsign)));
+
+        var panel = ReadSource("Darkstar.Gui/Pages/RadiosPanel.razor");
+        Check("the panel offers the removal next to the generation",
+            panel.Contains("RemoveGeneratedTowers", StringComparison.Ordinal));
+        Check("and says nothing is saved until the operator says so",
+            panel.Contains("Not saved yet", StringComparison.Ordinal));
+
+        Section("Announcing the frequencies in game");
+
+        var announceConfig = new AppConfig { BotCallsign = "Overlord", VoskKeyword = "Overlord" };
+        var others = new[] { (251_000_000.0, "Overlord"), (127_500_000.0, "Texaco") };
+
+        var marker = FrequencyAnnouncer.MarkerText("Batumi", 133_000_000, others, announceConfig);
+        Check("the marker names the airfield", marker.Contains("Batumi", StringComparison.Ordinal), marker.Split('\n')[0]);
+        Check("it gives the tower frequency in MHz", marker.Contains("133.000 MHz", StringComparison.Ordinal));
+        Check("and the radios that are not tied to an airfield", marker.Contains("Texaco: 127.500 MHz", StringComparison.Ordinal));
+        Check("the wake word is on the marker - a frequency alone is useless without it",
+            marker.Contains("\"Overlord\"", StringComparison.Ordinal));
+
+        var noTower = FrequencyAnnouncer.MarkerText("Batumi", null, others, announceConfig);
+        Check("an airfield with no tower gets a marker without an invented frequency",
+            !noTower.Contains("Tower / ATIS", StringComparison.Ordinal), noTower.Replace("\n", " | "));
+
+        var startup = FrequencyAnnouncer.StartupMessage(
+            new[] { (251_000_000.0, "Overlord", false), (133_000_000.0, "Batumi Tower", true),
+                    (133_500_000.0, "Kobuleti Tower", true) },
+            airfieldMarkers: 2, config: announceConfig);
+        Check("the on-screen message names the non-airfield radios in full",
+            startup.Contains("Overlord: 251.000 MHz", StringComparison.Ordinal), startup.Replace("\n", " | "));
+        Check("but summarises the towers rather than scrolling a dozen off the screen",
+            startup.Contains("2 tower frequencies", StringComparison.Ordinal));
+        Check("and points at the markers, which hold the detail",
+            startup.Contains("F10", StringComparison.Ordinal));
+
+        Section("Markers replace rather than stack");
+
+        // A server that restarts the bot three times an evening must not end up with three
+        // overlapping markers per airfield.
+        Check("marker ids are deterministic, not allocated",
+            FrequencyAnnouncer.MarkerIdFor(0) == FrequencyAnnouncer.MarkerIdBase &&
+            FrequencyAnnouncer.MarkerIdFor(5) == FrequencyAnnouncer.MarkerIdBase + 5);
+        Check("the id range is far from what a mission would number its own marks",
+            FrequencyAnnouncer.MarkerIdBase > 100_000, FrequencyAnnouncer.MarkerIdBase.ToString());
+
+        var announcer = ReadSource("Darkstar.Core/FrequencyAnnouncer.cs");
+        Check("the whole id range is cleared first, so a smaller mission leaves no orphans",
+            announcer.Contains("RemoveMarkAsync", StringComparison.Ordinal) &&
+            announcer.Contains("for (var i = 0; i < MaxMarkers; i++)", StringComparison.Ordinal));
+        Check("markers go to the bot's own coalition only",
+            announcer.Contains("MarkToCoalitionAsync", StringComparison.Ordinal) &&
+            !announcer.Contains("MarkToAllAsync", StringComparison.Ordinal));
+        Check("they are read-only, so a pilot cannot edit the frequency list",
+            announcer.Contains("ReadOnly = true", StringComparison.Ordinal));
+
+        Check("announcing is switched off by one flag and does nothing at all then",
+            announcer.Contains("if (!config.AnnounceFrequenciesEnabled)", StringComparison.Ordinal));
+
+        Section("Announcing, the wiring");
+
+        var announceAt = bot.IndexOf("FrequencyAnnouncer.AnnounceAsync", StringComparison.Ordinal);
+        var connectAt = bot.IndexOf("await srs.ConnectAsync", StringComparison.Ordinal);
+        Check("the announcement comes after the SRS connection - promising frequencies the bot does " +
+              "not monitor would be worse than silence",
+            announceAt > 0 && connectAt > 0 && connectAt < announceAt);
+        Check("it does not delay the first transmission", bot.Contains("_ = Task.Run(async () =>", StringComparison.Ordinal));
+        Check("each airfield is paired with the tower that names it",
+            bot.Contains("TowerFrequencyByAirfield", StringComparison.Ordinal));
+
+        var announceDefaults = new AppConfig();
+        Check("announcing is on by default - the generated frequencies exist nowhere else",
+            announceDefaults.AnnounceFrequenciesEnabled);
+        Check("both halves are on", announceDefaults.AnnounceFrequenciesMarkers && announceDefaults.AnnounceFrequenciesMessage);
+        Check("the tower plan starts somewhere plausible for airfield traffic",
+            announceDefaults.TowerPlanBaseMHz is >= 118 and <= 150, announceDefaults.TowerPlanBaseMHz.ToString("0.000"));
+
+        // --- greeting a pilot who tunes in ----------------------------------------------------------
+
+        Section("Telling a tuned radio apart from one that is switched off");
+
+        // SRS reports every radio slot a client has, powered up or not. A slot that is off carries a
+        // placeholder frequency of 1 Hz, and treating that as a tuning would have the bot greet
+        // everybody on the server at once.
+        Check("a radio tuned to 251.000 counts", TuneInGreeting.IsTuned(251_000_000, 0));
+        Check("a disabled slot does not, whatever frequency it claims",
+            !TuneInGreeting.IsTuned(251_000_000, TuneInGreeting.ModulationDisabled));
+        Check("nor does the 1 Hz placeholder", !TuneInGreeting.IsTuned(1, 0));
+        Check("nor an intercom-style frequency below a megahertz", !TuneInGreeting.IsTuned(100_000, 0));
+
+        Section("Who gets greeted, and who has to be left alone");
+
+        // Everything below is about NOT talking. SRS has no unicast: a greeting that fires twice is
+        // the bot transmitting over somebody else's BRAA call, which is worse than never greeting
+        // anybody. So the interesting assertions here are all the false ones.
+        var greetingState = new TuneInGreeting.State();
+        var tuneIn = new DateTime(2026, 9, 27, 18, 0, 0);
+        var gap = TimeSpan.FromSeconds(90);
+
+        Check("the first pilot on a frequency is greeted",
+            greetingState.ShouldGreet("guid-a", 251_000_000, tuneIn, gap));
+        Check("the same pilot on the same frequency never again - not an hour later either",
+            !greetingState.ShouldGreet("guid-a", 251_000_000, tuneIn.AddHours(1), gap));
+
+        // A flight of four checks in within seconds of each other. One greeting, not four.
+        Check("the second aircraft of a flight hears nothing",
+            !greetingState.ShouldGreet("guid-b", 251_000_000, tuneIn.AddSeconds(3), gap));
+        Check("nor the third",
+            !greetingState.ShouldGreet("guid-c", 251_000_000, tuneIn.AddSeconds(8), gap));
+        Check("somebody arriving after the gap is greeted again",
+            greetingState.ShouldGreet("guid-d", 251_000_000, tuneIn.AddSeconds(91), gap));
+
+        // The ordering inside ShouldGreet matters: the already-greeted check comes first on purpose.
+        // If a pilot flipping back to a preset refreshed the per-frequency gap, one bored pilot
+        // could keep everybody else silent indefinitely.
+        var ordering = new TuneInGreeting.State();
+        Check("first pilot greeted", ordering.ShouldGreet("guid-a", 251_000_000, tuneIn, gap));
+        Check("the same pilot tuning back in is refused", !ordering.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(100), gap));
+        Check("and that refusal did not push the gap out for the next arrival",
+            ordering.ShouldGreet("guid-b", 251_000_000, tuneIn.AddSeconds(100), gap));
+
+        // The gap is per frequency, because a tower and the tactical radio are different channels
+        // with different listeners.
+        var perFrequency = new TuneInGreeting.State();
+        Check("a pilot tuning the tower is greeted", perFrequency.ShouldGreet("guid-a", 133_000_000, tuneIn, gap));
+        Check("and again on the tactical radio, which nobody on it has heard yet",
+            perFrequency.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(1), gap));
+        Check("a greeting on one frequency does not silence another",
+            perFrequency.ShouldGreet("guid-b", 265_000_000, tuneIn.AddSeconds(2), gap));
+        Check("all three are counted", perFrequency.Sent == 3, perFrequency.Sent.ToString());
+
+        Check("a client with no guid is never greeted - there would be no way to remember it",
+            !perFrequency.ShouldGreet("", 243_000_000, tuneIn, gap));
+
+        Section("Forgetting pilots who left");
+
+        var forgetting = new TuneInGreeting.State();
+        forgetting.ShouldGreet("guid-a", 251_000_000, tuneIn, gap);
+        forgetting.ShouldGreet("guid-a", 133_000_000, tuneIn, gap);
+        forgetting.ShouldGreet("guid-b", 265_000_000, tuneIn, gap);
+        Check("three greetings are remembered", forgetting.Tracked == 3, forgetting.Tracked.ToString());
+
+        forgetting.Forget("guid-a");
+        Check("a disconnect drops every frequency that pilot was greeted on, and nobody else's",
+            forgetting.Tracked == 1, forgetting.Tracked.ToString());
+        Check("so somebody who rejoins is greeted again",
+            forgetting.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(500), gap));
+        Check("forgetting an unknown guid is harmless", forgetting.Tracked == 2);
+        forgetting.Forget("");
+        Check("and so is forgetting nothing at all", forgetting.Tracked == 2);
+
+        Section("What the pilot hears when they tune in");
+
+        var greetingConfig = new AppConfig();
+
+        Eq("the channel they reached, then where the tactical radio is",
+            TuneInGreeting.Build("Punch 1-1", "Batumi Tower",
+                new[] { (251_000_000.0, "Overlord") }, greetingConfig),
+            "Punch 1 1, Batumi Tower. Overlord is on two five one decimal zero. Say my callsign to be heard.");
+
+        // The one that would be pure noise: telling somebody listening on Overlord where Overlord is.
+        Eq("the channel the pilot is already on is not announced to them",
+            TuneInGreeting.Build("Punch 1-1", "Overlord",
+                new[] { (251_000_000.0, "Overlord") }, greetingConfig),
+            "Punch 1 1, Overlord. Say my callsign to be heard.");
+
+        Eq("several tactical radios come out in frequency order",
+            TuneInGreeting.Build("Punch 1-1", "Batumi Tower",
+                new[] { (265_000_000.0, "Magic"), (251_000_000.0, "Overlord") }, greetingConfig),
+            "Punch 1 1, Batumi Tower. Overlord is on two five one decimal zero, " +
+            "Magic is on two six five decimal zero. Say my callsign to be heard.");
+
+        // Both placeholders can be empty on a real server - a client with no usable name, or no
+        // DCS-gRPC and therefore no tactical radios at all. Neither may leave punctuation behind.
+        Eq("an unnamed pilot does not get a sentence starting with a comma",
+            TuneInGreeting.Build("", "Batumi Tower",
+                new[] { (251_000_000.0, "Overlord") }, greetingConfig),
+            "Batumi Tower. Overlord is on two five one decimal zero. Say my callsign to be heard.");
+        Eq("and a server with no tactical radio leaves no gap or double full stop",
+            TuneInGreeting.Build("Punch 1-1", "Batumi Tower",
+                Array.Empty<(double, string)>(), greetingConfig),
+            "Punch 1 1, Batumi Tower. Say my callsign to be heard.");
+        Eq("with neither, what is left still reads as a sentence",
+            TuneInGreeting.Build(null, "Batumi Tower", Array.Empty<(double, string)>(), greetingConfig),
+            "Batumi Tower. Say my callsign to be heard.");
+
+        Check("a placeholder frequency in the radio list is ignored rather than spoken",
+            !TuneInGreeting.Build("Punch 1-1", "Batumi Tower",
+                new[] { (1.0, "Broken"), (251_000_000.0, "Overlord") }, greetingConfig)
+                .Contains("Broken", StringComparison.Ordinal));
+
+        Eq("an operator who empties the template switches the greeting off by doing so",
+            TuneInGreeting.Build("Punch 1-1", "Batumi Tower", new[] { (251_000_000.0, "Overlord") },
+                new AppConfig { TuneInGreetingText = "" }), "");
+
+        Eq("tidying removes the space a missing placeholder leaves in front of punctuation",
+            TuneInGreeting.Tidy("Punch 1 1 , Batumi Tower ."), "Punch 1 1, Batumi Tower.");
+        Eq("and collapses what two empty placeholders leave behind",
+            TuneInGreeting.Tidy(", Batumi Tower. ."), "Batumi Tower.");
+
+        Section("The greeting, the wiring");
+
+        var greetDefaults = new AppConfig();
+        Check("off by default - SRS has no unicast, so this talks to everybody on the frequency",
+            !greetDefaults.TuneInGreetingEnabled);
+        Check("the template offers all three placeholders",
+            greetDefaults.TuneInGreetingText.Contains("{pilot}") &&
+            greetDefaults.TuneInGreetingText.Contains("{callsign}") &&
+            greetDefaults.TuneInGreetingText.Contains("{tactical}"));
+        Check("and the default gap is long enough to cover a flight checking in",
+            greetDefaults.TuneInGreetingGapSeconds >= 30,
+            greetDefaults.TuneInGreetingGapSeconds.ToString("0"));
+
+        var greetAt = bot.IndexOf("srs.OnClientRadiosChanged +=", StringComparison.Ordinal);
+        var srsConnectAt = bot.IndexOf("await srs.ConnectAsync", StringComparison.Ordinal);
+        Check("the subscription happens before connecting, so the first SYNC - everybody already " +
+              "on the server - is not missed",
+            greetAt > 0 && srsConnectAt > 0 && greetAt < srsConnectAt,
+            $"subscribe at {greetAt}, connect at {srsConnectAt}");
+
+        var greetHandler = greetAt > 0 ? bot[greetAt..] : "";
+        Check("speaking does not block the TCP receive loop, which would stall the client list for everybody",
+            greetHandler.IndexOf("_ = Task.Run", StringComparison.Ordinal) > 0 &&
+            greetHandler.IndexOf("_ = Task.Run", StringComparison.Ordinal) <
+            greetHandler.IndexOf("ShouldGreet", StringComparison.Ordinal));
+        Check("the greeting goes through the same transmit path as a reply, so it queues instead of talking over it",
+            greetHandler.Contains("await TransmitAsync(session, text, stoppingToken)", StringComparison.Ordinal));
+        Check("the opposing coalition is not greeted either",
+            greetHandler.Contains("client.Coalition != config.Coalition", StringComparison.Ordinal));
+        Check("a frequency the bot does not monitor is skipped rather than greeted into the void",
+            greetHandler.Contains("if (!sessions.TryGetValue(key, out var session)) continue;", StringComparison.Ordinal));
+        Check("a disconnect is forgotten", bot.Contains("greetings.Forget(guid)", StringComparison.Ordinal));
+        Check("the gap cannot be configured down to nothing",
+            bot.Contains("Math.Max(5, config.TuneInGreetingGapSeconds)", StringComparison.Ordinal));
+
+        var srsSource = ReadSource("SrsConnection.cs");
+        var ownGuidAt = srsSource.IndexOf("string.Equals(guid, _clientGuid", StringComparison.Ordinal);
+        var raiseAt = srsSource.IndexOf("OnClientRadiosChanged?.Invoke", StringComparison.Ordinal);
+        Check("the bot's own client is filtered out before the event, so it cannot greet itself",
+            ownGuidAt > 0 && raiseAt > 0 && ownGuidAt < raiseAt, $"own guid at {ownGuidAt}, event at {raiseAt}");
+        Check("only a changed frequency set counts as an arrival - SRS sends radio updates for " +
+              "volume and encryption too",
+            srsSource.Contains("previous.SetEquals(key)) return;", StringComparison.Ordinal));
+        Check("a radio slot with no modulation field is treated as switched off, not as tuned",
+            srsSource.Contains(": TuneInGreeting.ModulationDisabled;", StringComparison.Ordinal));
+        Check("a disconnect is reported", srsSource.Contains("OnClientDisconnected?.Invoke", StringComparison.Ordinal));
+
+        // --- the config editor's navigation ---------------------------------------------------------
+
+        Section("Every panel is reachable from the sidebar");
+
+        // The sidebar is the only way into a panel - there is no address bar and no menu. A panel
+        // that is in the project but not in the navigation is invisible, and nothing else notices:
+        // it compiles, it works, and no user can get to it.
+        var main = ReadSource("Darkstar.Gui/Pages/Main.razor");
+
+        var panels = System.IO.Directory
+            .GetFiles(Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*Panel.razor")
+            .Select(System.IO.Path.GetFileNameWithoutExtension)
+            .Cast<string>()
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        Check("the panels were found", panels.Count >= 9, string.Join(", ", panels));
+
+        var unreachable = panels.Where(p => !main.Contains($"<{p} ", StringComparison.Ordinal) &&
+                                            !main.Contains($"<{p}/>", StringComparison.Ordinal) &&
+                                            !main.Contains($"<{p} />", StringComparison.Ordinal)).ToList();
+        Check($"all {panels.Count} panels are rendered by Main.razor", unreachable.Count == 0,
+            unreachable.Count == 0 ? "" : "orphaned: " + string.Join(", ", unreachable));
+
+        // The channel numbers are the one thing in this editor that may not drift: ~90 places in the
+        // documentation say "on CH2 Radios" or "the test button on CH8", and so does everybody who
+        // has used it before. Panels may be regrouped and reordered; a number belongs to a panel.
+        var navNumbers = System.Text.RegularExpressions.Regex
+            .Matches(main, @"CH([1-9])")
+            .Select(m => int.Parse(m.Groups[1].Value))
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
+        Check("all nine channels are in the sidebar", navNumbers.SequenceEqual(Enumerable.Range(1, 9)),
+            string.Join(",", navNumbers));
+
+        var duplicated = System.Text.RegularExpressions.Regex
+            .Matches(main, @"new NavEntry\(""[^""]*"", ""(CH[1-9])""")
+            .Select(m => m.Groups[1].Value)
+            .GroupBy(n => n)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        Check("and no number is given to two panels", duplicated.Count == 0, string.Join(", ", duplicated));
+
+        Section("CH8's three entries and its three sections are the same three");
+
+        // CH8 is one component shown in three pieces. The sidebar names a section, the panel decides
+        // what to render from it - and a section named in one place and not the other fails silently:
+        // an entry that shows a blank page, or a block of settings nothing can reach any more.
+        var grpc = ReadSource("Darkstar.Gui/Pages/DcsGrpcPanel.razor");
+
+        var declared = System.Text.RegularExpressions.Regex
+            .Matches(grpc, @"public const string (Section\w+) = ""(\w+)"";")
+            .Select(m => m.Groups[1].Value)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        var guarded = System.Text.RegularExpressions.Regex
+            .Matches(grpc, @"@if \(Section == (Section\w+)\)")
+            .Select(m => m.Groups[1].Value)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        var referenced = System.Text.RegularExpressions.Regex
+            .Matches(main, @"DcsGrpcPanel\.(Section\w+)")
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        Check("three sections are declared", declared.Count == 3, string.Join(", ", declared));
+        Check("each one guards a block of the panel", guarded.SequenceEqual(declared),
+            $"declared [{string.Join(",", declared)}], guarded [{string.Join(",", guarded)}]");
+        Check("and each one has an entry in the sidebar", referenced.SequenceEqual(declared),
+            $"declared [{string.Join(",", declared)}], in the sidebar [{string.Join(",", referenced)}]");
+        Check("the sidebar names them by constant rather than by string, so a typo cannot compile",
+            !System.Text.RegularExpressions.Regex.IsMatch(main, @"Section = ""\w+"""));
+
+        // Markup left outside the three blocks would appear on all three pages - and the one place
+        // that is easy to produce is the end of a block, by closing a brace one line too early.
+        var markup = grpc[..grpc.IndexOf("@code {", StringComparison.Ordinal)].Split('\n');
+        var depth = 0;
+        var orphans = new List<string>();
+
+        for (var i = 0; i < markup.Length; i++)
+        {
+            var line = markup[i].TrimEnd('\r');
+            if (line.Length == 0 || line.StartsWith(" ", StringComparison.Ordinal)) continue; // inside something
+
+            if (line == "{") { depth++; continue; }
+            if (line == "}") { depth--; continue; }
+
+            if (depth == 0 && !line.StartsWith("@if (Section ==", StringComparison.Ordinal) &&
+                !line.StartsWith("@", StringComparison.Ordinal) && !line.StartsWith("<!--", StringComparison.Ordinal))
+                orphans.Add($"line {i + 1}: {line.Trim()}");
+        }
+
+        Check("no markup sits outside a section, which would show it on every one of the three pages",
+            orphans.Count == 0, orphans.Count == 0 ? "" : string.Join(" | ", orphans.Take(3)));
+
+        Section("The sidebar's styling exists");
+
+        // Four class names used in one file and defined in another - a rename in either one alone is
+        // invisible until somebody looks at the window, which on this project means the user.
+        var css = ReadSource("Darkstar.Gui/wwwroot/css/app.css");
+        foreach (var cssClass in new[] { "navitem", "ch", "navlabel", "navflag", "sub", "heading" })
+            Check($".{cssClass} is styled", css.Contains($".{cssClass} ", StringComparison.Ordinal) ||
+                                            css.Contains($".{cssClass}:", StringComparison.Ordinal) ||
+                                            css.Contains($".{cssClass}{{", StringComparison.Ordinal));
+
+        Section("The documented channels are the channels there are");
+
+        var guiDoc = ReadSource("docs/gui.md");
+        var documented = System.Text.RegularExpressions.Regex
+            .Matches(guiDoc, @"^###+ CH([1-9])", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => int.Parse(m.Groups[1].Value))
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
+        Check("gui.md describes exactly the nine channels the sidebar offers",
+            documented.SequenceEqual(navNumbers),
+            $"documented [{string.Join(",", documented)}], in the sidebar [{string.Join(",", navNumbers)}]");
+
+        // --- nothing private can be committed by accident -----------------------------------------
+
+        Section("The .gitignore covers everything the bot writes");
+
+        var gitignore = ReadSource(".gitignore");
+
+        // The bot creates these next to its executable while it runs. Each one holds either a secret
+        // of the operator's or personal data belonging to other players - voice recordings and names
+        // of people who flew on the server. A commit is permanent, so this is checked rather than
+        // remembered. recordings/ was in fact missing until somebody asked.
+        //
+        // Adding a new output folder? Add it here and to .gitignore in the same change.
+        var writtenAtRuntime = new (string Path, string Holds)[]
+        {
+            ("config.json",  "GeminiApiKey, DcsGrpcApiKey and DiscordWebhookUrl in plain text"),
+            ("recordings/",  "recorded voices of other players, with their names in the file name"),
+            ("logs/",        "transcripts of what pilots said, plus names and positions"),
+            ("Backup/",      "timestamped copies of all of the above"),
+            ("grpc-dumps/",  "mission data: unit names, player names, positions"),
+            ("models/",      "the speech model - hundreds of MB, and not ours to redistribute"),
+            ("phrases.json", "per-installation edits"),
+            ("vocabulary.json", "per-installation edits"),
+        };
+
+        foreach (var (path, holds) in writtenAtRuntime)
+        {
+            Check($".gitignore excludes {path}",
+                gitignore.Split('\n').Any(line => line.Trim() == path),
+                holds);
+        }
+
+        // The build writes into these, and they are large rather than private.
+        foreach (var path in new[] { "installer/publish/", "installer/output/", "installer/vosk-model/", "publish/" })
+            Check($".gitignore excludes {path}", gitignore.Contains(path, StringComparison.Ordinal));
+
+        // Machine-specific editor state, which is where an absolute path - and with it a Windows user
+        // name - leaks into a public repository.
+        foreach (var pattern in new[] { ".vs/", "*.user", "*.suo", "*.pubxml", ".history/", "_ReSharper*/" })
+            Check($".gitignore excludes {pattern}", gitignore.Contains(pattern, StringComparison.Ordinal));
+
+        Check(".gitignore says what a .gitignore cannot do - the commit author",
+            gitignore.Contains("noreply", StringComparison.OrdinalIgnoreCase),
+            "the author name and e-mail in every commit is the actual identity leak");
+
         // --- no project compiles another project's sources -----------------------------------------
 
         Section("No project swallows another project's sources");
@@ -1147,6 +1707,109 @@ internal static class HousekeepingTests
         Check($"contributing.md names all {sourceFiles.Count} source files",
             unmapped.Count == 0,
             unmapped.Count == 0 ? "" : "missing: " + string.Join(", ", unmapped));
+
+        Console.WriteLine();
+        Console.WriteLine("Every tag the log writes is explained in the manuals");
+
+        // The log is the support channel for this project: a server operator reads it, or pastes it
+        // into a bug report. A tag nobody can look up is a line that means nothing to the person who
+        // needs it most - and tags get added casually, one Logger.Log at a time.
+        var logTags = new List<string>();
+
+        foreach (var file in System.IO.Directory.GetFiles(Root, "*.cs")
+                     .Concat(System.IO.Directory.GetFiles(Root + "Darkstar.Core", "*.cs")))
+        {
+            foreach (System.Text.RegularExpressions.Match tag in System.Text.RegularExpressions.Regex
+                         .Matches(System.IO.File.ReadAllText(file), @"Logger\.Log\(\s*\$?""\[([A-Za-z0-9 ._-]+)\]"))
+            {
+                if (!logTags.Contains(tag.Groups[1].Value)) logTags.Add(tag.Groups[1].Value);
+            }
+        }
+
+        logTags.Sort(StringComparer.Ordinal);
+        Check("the tags were found in the sources", logTags.Count >= 20, $"{logTags.Count} tags");
+
+        foreach (var manual in new[] { "docs/manual-en.md", "docs/manual-de.md" })
+        {
+            var text = references[manual];
+            var unexplained = logTags.Where(t => !text.Contains($"[{t}]", StringComparison.Ordinal)).ToList();
+            Check($"{System.IO.Path.GetFileName(manual)} explains all {logTags.Count} log tags",
+                unexplained.Count == 0,
+                unexplained.Count == 0 ? "" : "missing: " + string.Join(", ", unexplained));
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("The choices the installer offers are the choices the manual describes");
+
+        // The installer asks one question before anything else - which setup type - and the answer
+        // decides whether a machine ends up with a window on it. Nobody reading only the manual
+        // should discover "Bot only (headless server)" by running the installer on a game server.
+        var setupTypes = System.Text.RegularExpressions.Regex
+            .Matches(iss, @"^Name: ""\w+""; Description: ""([^""]+)""",
+                System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value)
+            .Where(d => !d.StartsWith("Install and start", StringComparison.Ordinal) &&
+                        !d.StartsWith("Launch", StringComparison.Ordinal))
+            .Distinct()
+            .ToList();
+
+        Check("the installer's offered choices were found", setupTypes.Count >= 6, string.Join(" | ", setupTypes));
+
+        foreach (var manual in new[] { "docs/manual-en.md", "docs/manual-de.md" })
+        {
+            // The headless type is the one that matters for a server, and the one whose wording a
+            // rename would quietly break - so it is compared verbatim against Setup.iss.
+            var headless = setupTypes.FirstOrDefault(t => t.Contains("Bot only", StringComparison.Ordinal));
+            Check($"{System.IO.Path.GetFileName(manual)} names the headless setup type exactly as the installer does",
+                headless != null && references[manual].Contains(headless, StringComparison.Ordinal),
+                headless ?? "no 'Bot only' type in Setup.iss");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("Every request a pilot can make has prose in the chapter pilots read");
+
+        // A feature reaches the settings table automatically - the test above sees to that. What it
+        // does not reach automatically is the chapter somebody reads to find out what to SAY, and a
+        // request documented only as a trigger-phrase setting is a request nobody discovers.
+        static string Chapter7(string manual)
+        {
+            var start = manual.IndexOf("\n## 7.", StringComparison.Ordinal);
+            var end = manual.IndexOf("\n## 8.", StringComparison.Ordinal);
+            return start >= 0 && end > start ? manual[start..end] : "";
+        }
+
+        // Each entry: what a pilot would call it, and a phrase that must appear in that chapter.
+        var onTheRadio = new (string Feature, string English, string German)[]
+        {
+            ("bogey dope", "bogey dope", "bogey dope"),
+            ("picture", "picture", "picture"),
+            ("threat check", "threat check", "threat check"),
+            ("alpha check", "alpha check", "alpha check"),
+            ("radio check", "radio check", "radio check"),
+            ("runway in use", "runway in use", "runway in use"),
+            ("ATIS", "ATIS", "ATIS"),
+            ("threat circle", "threat circle", "threat circle"),
+            ("friendly position", "where is", "where is"),
+            ("the standby acknowledgement", "standby", "standby"),
+            ("the rate limit", "working other traffic", "working other traffic"),
+            ("the tune-in greeting", "tunes in", "aufschaltet"),
+        };
+
+        foreach (var manual in new[] { "docs/manual-en.md", "docs/manual-de.md" })
+        {
+            var chapter = Chapter7(references[manual]);
+            Check($"{System.IO.Path.GetFileName(manual)} has a chapter 7 to check", chapter.Length > 2000,
+                $"{chapter.Length} characters");
+
+            var english = manual.EndsWith("en.md", StringComparison.Ordinal);
+            var absent = onTheRadio
+                .Where(f => !chapter.Contains(english ? f.English : f.German, StringComparison.OrdinalIgnoreCase))
+                .Select(f => f.Feature)
+                .ToList();
+
+            Check($"{System.IO.Path.GetFileName(manual)} chapter 7 covers all {onTheRadio.Length} of them",
+                absent.Count == 0, absent.Count == 0 ? "" : "missing: " + string.Join(", ", absent));
+        }
 
         Console.WriteLine();
         Console.WriteLine("Every cross-reference in the documentation points somewhere");

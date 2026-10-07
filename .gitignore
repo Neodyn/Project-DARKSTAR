@@ -1,34 +1,120 @@
+# This file has two jobs, and the second one matters more than the first.
+#
+#   1. Keep build output and IDE clutter out of the repository.
+#   2. Keep out anything that identifies a person - whoever built it, and whoever
+#      flew on the server. Those entries are marked below; they are not the kind of
+#      mistake you notice after the fact, because a commit is permanent.
+#
+# NOT covered by any .gitignore, and worth knowing: the author name and e-mail in
+# every commit. Set a noreply address (git config user.email
+# "<id>+<handle>@users.noreply.github.com") and turn on "Keep my email addresses
+# private" plus "Block command line pushes that expose my email" on GitHub. A
+# .gitignore cannot help with that, and a rewrite afterwards is painful.
+
+# ---------------------------------------------------------------------------------
+# The bot's own runtime data - PRIVACY CRITICAL
+# ---------------------------------------------------------------------------------
+# Not just clutter. Each of these holds either a secret of yours or personal data
+# belonging to other people, and the bot creates them next to its executable.
+
+# Holds GeminiApiKey, DcsGrpcApiKey and DiscordWebhookUrl in plain text.
+config.json
+
+# Edited per installation; a committed copy would also overwrite somebody else's.
+phrases.json
+vocabulary.json
+
+# One WAV per transmission: the recorded VOICES of other players, with their SRS
+# names in the file name. The single worst thing in this project to commit.
+recordings/
+
+# Transcripts of what pilots said, plus their names and positions.
+logs/
+
+# Timestamped copies of all of the above.
+Backup/
+
+# Mission data saved from the GUI's explorer: unit names, player names, positions.
+grpc-dumps/
+
+# The speech model. Hundreds of MB, downloaded separately, not ours to redistribute.
+models/
+
+# ---------------------------------------------------------------------------------
 # Build output
+# ---------------------------------------------------------------------------------
 [Bb]in/
 [Oo]bj/
 publish/
+[Dd]ebug/
+[Rr]elease/
+TestResults/
+*.binlog
 
-# Visual Studio
+# ---------------------------------------------------------------------------------
+# Visual Studio and other editors - machine-specific, some of it identifying
+# ---------------------------------------------------------------------------------
+# Several of these embed absolute paths from the machine they were written on,
+# which is how a Windows user name ends up in a public repository.
+
 .vs/
 *.user
 *.suo
+*.userosscache
+*.userprefs
+*.rsuser
+*.sln.docstates
+*.sln.iml
 
-# Runtime-generated / machine-specific data - never commit real secrets or logs
-config.json
-phrases.json
-vocabulary.json
-Backup/
-logs/
-models/
+# Publish profiles: local output paths, sometimes credentials.
+*.pubxml
+*.pubxml.user
+*.publishproj
+PublishScripts/
 
-# Installer build artifacts
+# Editor history can hold earlier versions of files you later cleaned up.
+.history/
+**/.localhistory/
+.vscode/
+!.vscode/extensions.json
+
+# ReSharper / Rider / profiler caches - full of absolute paths.
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+.idea/
+.dotCover
+*.psess
+*.vsp
+*.vspx
+*.coverage
+*.coveragexml
+
+# Local secrets, if any ever get created here. User secrets normally live in
+# %APPDATA% rather than the repository, but a stray copy must not be committed.
+*.env
+**/secrets.json
+
+# ---------------------------------------------------------------------------------
+# Installer build artifacts (produced by build-installer.ps1)
+# ---------------------------------------------------------------------------------
 installer/publish/
-installer/*.exe
-!installer/MicrosoftEdgeWebview2Setup.exe
-
-# OS files
-Thumbs.db
-.DS_Store
-
-# DCS-gRPC explorer dumps (GUI "Save to file")
-grpc-dumps/
-
-# Installer build artefacts (produced by build-installer.ps1)
-installer/vosk-model/
 installer/output/
-!installer/MicrosoftEdgeWebview2Setup.exe
+installer/vosk-model/
+
+# The downloaded dependency bootstrappers - vendors' redistributables, several
+# hundred MB, and re-downloaded by the build script when missing.
+installer/*.exe
+
+# ---------------------------------------------------------------------------------
+# Operating system droppings
+# ---------------------------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes

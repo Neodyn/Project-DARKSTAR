@@ -107,13 +107,23 @@ Das Setup-Skript lädt jedes davon auf Wunsch herunter (`-VoskModelSize Standard
 
 1. Lade die aktuelle **`DARKSTAR-Setup-<Version>.exe`** von der **Releases**-Seite des Repositorys herunter.
 2. Führe sie aus (sie fragt nach Administratorrechten — sie installiert System-Runtimes).
-3. Wähle aus, was installiert werden soll:
+3. Installationsart wählen:
+
+   | Installationsart | Was installiert wird | Wann |
+   |---|---|---|
+   | **Bot + Config GUI (recommended)** | Alles. | Der Bot läuft auf einem Rechner, an dem du sitzt. |
+   | **Bot only (headless server)** | Bot und Sprachmodell, kein Editor. | **Ein DCS-Server.** Es wird nichts mit Fenster installiert, und die **WebView2-Runtime entfällt ebenfalls** — sie wird nur gebraucht, um die Oberfläche des Editors zu zeichnen. |
+   | **Custom** | Komponenten selbst auswählen. | |
+
+   Die Komponenten hinter diesen Arten:
 
    | Komponente | Was es ist |
    |---|---|
    | Bot service | Der Bot selbst. Wird immer installiert. |
    | Config GUI | Der grafische Konfigurationseditor. Empfohlen. |
    | Vosk model | Das Offline-Sprachmodell. Nur im vollen Installer, nicht in der `-slim`-Variante. |
+
+   Auf einer Bot-only-Maschine werden die Einstellungen mit einem Texteditor in `config.json` gepflegt — oder im Editor auf dem eigenen PC, auf eine Kopie gerichtet. Die **.NET-8-*Desktop*-Runtime** wird in jedem Fall installiert, auch bei Bot only: sie ist das eine Paket, das sowohl die Anforderung des Bots als auch die des Editors abdeckt, und die kleinere zu nehmen hieße, die andere Hälfte später nachzuinstallieren.
 
 4. Optional *„Install and start as a Windows Service"* ankreuzen. Das geht auch später und bequemer über die GUI — siehe [Kapitel 9](#9-betrieb-als-windows-dienst).
 
@@ -246,6 +256,17 @@ Der Bot liest drei JSON-Dateien neben seiner EXE. Alle drei werden bei Bedarf mi
 | `Radios` | `[]` | Die gleichzeitig überwachten Radios. Je Eintrag: `FrequencyHz`, `Modulation` (`"AM"`/`"FM"`), optional `Keyword`, optional `Callsign`, optional `Voice`. |
 | `Radios[].Voice` | `""` | TTS-Stimme für die Antworten dieses Radios. Leer = die globale `VoiceName`. Damit klingen mehrere Radios nach mehreren Personen. |
 | `Radios[].KeywordVariants` | `[]` | Weitere Schreibweisen für das Hotword dieses Radios. Ein Radio mit eigenem `Keyword` erbt die globalen Varianten **nicht**. |
+| `TowerPlanBaseMHz` | `133.000` | Niedrigste Frequenz des erzeugten Tower-Plans. Diese Frequenzen sind **erfunden** — DCS-gRPC liefert die echte nicht. |
+| `TowerPlanStepMHz` | `0.500` | Abstand zwischen den erzeugten Tower-Frequenzen. |
+| `TowerPlanModulation` | `"AM"` | Modulation der erzeugten Tower. |
+| `TowerPlanCallsignSuffix` | `"Tower"` | Wird an den Flugplatznamen angehängt, z. B. „Batumi Tower". Leer = nur der Name. |
+| `AnnounceFrequenciesEnabled` | `true` | Schreibt die Frequenzen beim Start in die Mission — die einzige Stelle, an der Piloten die erzeugten erfahren. |
+| `AnnounceFrequenciesMarkers` | `true` | Ein F10-Marker pro Flugplatz. Die dauerhafte Hälfte. |
+| `AnnounceFrequenciesMessage` | `true` | Eine einmalige Bildschirmmeldung beim Start. |
+| `AnnounceFrequenciesMessageSeconds` | `20` | Wie lange diese Meldung stehen bleibt. |
+| `TuneInGreetingEnabled` | `false` | Begrüßt einen Piloten, der eine der Frequenzen des Bots einstellt. Standardmäßig aus — SRS kennt kein Unicast, es hören also alle auf dieser Frequenz mit. |
+| `TuneInGreetingText` | `"{pilot}, {callsign}. {tactical} Say my callsign to be heard."` | Was gesagt wird. `{pilot}`, `{callsign}` und `{tactical}` werden eingesetzt; ein leerer Platzhalter hinterlässt keine Lücke. |
+| `TuneInGreetingGapSeconds` | `90` | Mindestabstand zwischen zwei Begrüßungen auf einer Frequenz, damit ein gemeinsam einbuchender Flight eine hört. |
 | `FrequencyHz` | `251000000` | Altes Einzelradio in Hz, nur verwendet solange `Radios` leer ist. |
 | `Modulation` | `"AM"` | Modulation des alten Einzelradios. |
 
@@ -417,7 +438,7 @@ Der Bot funkt nie dazwischen: Läuft die Zeit ab, während der Pilot noch sendet
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `DiscordEnabled` | `false` | Hauptschalter, standardmäßig aus. |
-| `DiscordWebhookUrl` | `""` | Webhook für Start/Stopp und SRS-Verbindungsverlust. In Discord unter *Kanaleinstellungen → Integrationen → Webhooks* anlegen. |
+| `DiscordWebhookUrl` | `""` | Webhook für die fünf Statusmeldungen: Start (mit den überwachten Frequenzen), Herunterfahren, fehlgeschlagener Start mit Begründung, unerwarteter Abbruch mit Fehler sowie Verbindungsverlust und -wiederkehr. In Discord unter *Kanaleinstellungen → Integrationen → Webhooks* anlegen. |
 
 ### 5.2 `phrases.json`
 
@@ -498,6 +519,8 @@ Eine schlichte Liste von Begriffen, die Gemini als Hinweis mitbekommt. Sie ände
 
 Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen aber erst nach einem Neustart des Bots.
 
+Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer Nummer — **SERVER** (CH1, CH9), **RADIO & SPEECH** (CH2–CH5), **MISSION DATA — CH8** (drei Einträge) und **MONITORING** (CH6, CH7). Die Nummer eines Panels ändert sich nie, alles was dieses Handbuch über CH2 oder CH7 sagt, zeigt also weiterhin an dieselbe Stelle. Ein Eintrag mit der Markierung *off* ist in der Konfiguration ausgeschaltet — das heißt nicht, dass etwas nicht erreichbar wäre.
+
 | Kanal | Inhalt |
 |---|---|
 | **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, der Pfad zu `DCS-SR-ExternalAudio.exe` samt Knopf **Detect SRS installation**, Koalition, Koalitionsbeschränkung. |
@@ -507,7 +530,7 @@ Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen
 | **CH5 Vocabulary** | Die Hinweiswortliste als Chips, wobei alles, was auch eine Triggerphrase ist, rot markiert wird. |
 | **CH6 Discord** | Hauptschalter und Webhook-URL. |
 | **CH7 Logging** | Log-Schalter, ermittelter Log-Ordner, Aufräumgrenzen für Logs und eine Live-Ansicht der neuesten Logzeilen. |
-| **CH8 DCS-gRPC** | Verbindungstest, taktische Antworten (inklusive Alpha Check) mit Testknopf, die Flugplatz-Karte, die Karte für Positionen von Freunden, der Threat Circle und der Missionsdaten-Explorer. |
+| **CH8 DCS-gRPC** | Drei Einträge in der Seitenleiste: **Server & test** (Verbindung und Testknopf), **Replies** (taktische Antworten inklusive Alpha Check mit eigenem Testknopf, die Karte für Positionen von Freunden, der Threat Circle und die Flugplatz-Karte) und **Mission explorer**. |
 | **CH9 Service** | Windows-Dienst installieren, starten, stoppen und sauber entfernen. |
 
 Fußzeile: **Discard (reload from disk)** und **Save changes**. Vor jedem Speichern wird eine Sicherungskopie mit Zeitstempel angelegt.
@@ -596,6 +619,36 @@ Jeder Kontakt wird **einmal pro Kreis** gemeldet: Ein Bandit, der den Kreis verl
 Ein Kreis endet per Sprachkommando, nach dem konfigurierten Zeitlimit oder wenn der Pilot die Mission verlässt (Slotwechsel, Logout, Abschuss). Warnungen warten kurz, wenn der Pilot gerade sendet — aber nur kurz, denn eine verspätete Bedrohungsmeldung ist schlimmer als eine leicht überlappende.
 
 
+### Nach der Position eines Freundes fragen
+
+*„Overlord, where is Springfield 2-1?"* → *„Springfield 2 1, bullseye two, seven, zero, for forty miles, twenty two thousand, heading zero, niner, zero."*
+
+**Standardmäßig aus** (`DcsIntelFriendlyPositionEnabled`) — und dieser Standard ist eine Aussage über deinen Server, keine Einstellung zum Durchklicken; die Begründung steht in [Kapitel 5.1](#51-configjson). Was die Funktion tut, wenn sie an ist:
+
+- Gefunden werden ausschließlich **menschliche Spieler**. Ein KI-Flight ist niemand, nach dem jemand fragt.
+- Nur die **eigene Koalition**. Ein Anrufer, dessen Koalition SRS nicht bestimmen kann, wird abgelehnt statt geraten (`DcsIntelFriendlyUnknownCoalitionReply`).
+- Der **Name muss hinter der Auslösephrase stehen**: *„where is Springfield 2-1"* funktioniert, *„Springfield 2-1, where are you"* nicht — der Bot nimmt, was nach der Phrase kommt, als Namen. Pronomen benennen niemanden, *„where is he?"* wird deshalb mit `DcsIntelFriendlyNoNameReply` beantwortet und nicht mit der Suche nach einem Piloten namens „he".
+- Die Frage nach **sich selbst** wird als Alpha Check beantwortet, nicht mit „bearing zero zero zero, zero miles".
+- Ein Pilot, der gerade nicht in der Mission ist, ergibt `DcsIntelFriendlyNotFoundReply`. Der Bot meldet nie eine Position, die er nicht messen konnte.
+
+Wie jede andere taktische Antwort lässt sich auch diese auf bestimmte Frequenzen beschränken (CH2 → *friendly positions*) — so landet sie auf einem Staffelkanal und sonst nirgends.
+
+### Wenn der Bot beschäftigt ist
+
+Zwei Dinge können eine Antwort anders klingen lassen als erwartet, beide mit Absicht.
+
+**„Message received, standby."** Dauern Transkription und Antwort länger als `AckAfterSeconds` (gemessen ab dem Hotword), sagt der Bot das, statt dich im Unklaren zu lassen, ob er dich gehört hat. Die eigentliche Antwort kommt, sobald sie fertig ist; ist sie rechtzeitig da, hörst du die Zwischenmeldung nie. Sie wird mit dem Rufzeichen des jeweiligen Radios gesendet und funkt nie jemandem dazwischen, der gerade sendet.
+
+**„Standby, working other traffic."** Das ist das Limit pro Pilot (`RateLimitMaxRequests` je `RateLimitWindowSeconds`, standardmäßig 6 in 2 Minuten). Es existiert, weil jede Aussendung einen Gemini-Aufruf kostet und die Frequenz belegt, solange die Antwort gesprochen wird: ein einzelner Pilot — gelangweilt, genervt vom Missverstandenwerden oder mit klemmender Sendetaste und Cockpitlärm — könnte sonst das Kontingent für alle aufbrauchen und gleichzeitig den Kanal blockieren.
+
+Drei Details sind dabei wichtig:
+
+- Es ist ein **gleitendes Fenster**, keine Abklingzeit: drei Fragen kurz hintereinander und danach zehn Minuten Fliegen lassen dich nie warten.
+- **Abgelehnte Aussendungen werden nicht gezählt.** Erneutes Versuchen schiebt das Fenster nicht nach vorn — ein Limit, das zur Sperre wird, war nicht das, was eingestellt wurde.
+- Die Ablehnung wird **einmal gesagt und danach geschwiegen**. Sie zu wiederholen würde genau die Frequenz belegen, die sie schützt. Beides steht im Log: ein Pilot, der sagt, er sei ignoriert worden, lässt sich damit prüfen statt glauben oder bezweifeln.
+
+Und zuletzt: war in der Aussendung nichts Verständliches, kommt die Bitte um Wiederholung statt einer geratenen Antwort.
+
 ### Mehrere Radios
 
 Jedes Radio antwortet nur auf sein eigenes Hotword und mit seinem eigenen Rufzeichen. Eine Tankerfrequenz kann als „Texaco“ laufen, während die AWACS-Frequenz gleichzeitig als „Overlord“ arbeitet — jede mit eigenem Gesprächsverlauf.
@@ -635,6 +688,58 @@ Diese Namen erscheinen **nie** unter **List available voices** — dieser Knopf 
 
 Auch über `ExternalAudioExtraArgs`: `--gender=male`, `--culture=en-GB`. ExternalAudio nimmt dann irgendeine passende Stimme. Vorzuziehen, wenn der Bot auf Rechner kommt, deren Stimmenliste du nicht kennst — ein dort nicht existierender Name schlägt fehl, eine Geschlechtsangabe nicht.
 
+
+### Ein Tower pro Flugplatz
+
+Eine Kaukasus-Mission hat ein Dutzend Flugplätze oder mehr. Statt für jeden einen Radio-Eintrag zu tippen, auf CH2 den Knopf **Generate from the running mission** drücken: er liest die Flugplatzliste aus der gerade geladenen Mission und legt pro Platz ein Radio an — Rufzeichen `<Flugplatz> Tower`, Flugplatz-Anfragen an, Taktik aus. Vorhandene Radios bleiben, ihre Frequenzen werden übersprungen statt doppelt belegt.
+
+```
+133.000 MHz (AM): wake word "Overlord", callsign "Batumi Tower",   answers: airfield
+133.500 MHz (AM): wake word "Overlord", callsign "Kobuleti Tower", answers: airfield
+134.000 MHz (AM): wake word "Overlord", callsign "Kutaisi Tower",  answers: airfield
+```
+
+Zwei Dinge daran sind bewusst so, und beide betreffen Fehlerfälle, nicht Geschmack.
+
+**Die Frequenzen sind erfunden.** DCS-gRPC liefert die echte Funkfrequenz eines Flugplatzes nicht — die `Airbase`-Daten enthalten Name, Rufzeichen, Koalition und Position, sonst nichts. Diese Frequenzen stehen in der Missionsdatei und erreichen die Skriptumgebung nie. Ein echter Verlust ist das nicht, weil der Bot über SRS sendet und nicht über das DCS-eigene ATIS, er braucht also ohnehin einen eigenen Plan — aber es heißt, dass **deine Piloten diese Zahlen nirgends nachlesen können**, und dafür ist der nächste Abschnitt da. Wähle mit `TowerPlanBaseMHz` und `TowerPlanStepMHz` einen Bereich, den deine Mission nicht anderweitig nutzt.
+
+**Das Hotword bleibt das globale.** Es liegt nahe, jeden Tower auf seinen Flugplatznamen hören zu lassen. Tu es nicht: „Kobuleti" und „Senaki-Kolkhi" durch ein kleines englisches Sprachmodell, gesprochen von einem Nicht-Muttersprachler, ist genau der Fehlerfall, für den [Kapitel 12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt) existiert — und als *Hotword* heißt ein Fehlschlag, dass der Bot überhaupt nicht reagiert, ohne jede Spur im Log. Die **Frequenz** identifiziert den Platz. Der Pilot sagt ein Wort, das er aussprechen kann, und der Bot antwortet als „Batumi Tower".
+
+**Das Erzeugen ist additiv**, vorhandene Plätze behalten also ihre Frequenzen und nichts kollidiert. Beim Kartenwechsel zuerst **Remove N generated tower(s)** drücken — sonst stehen die Tower der alten Karte neben den neuen, und der Bot registriert Radios für Plätze, die es nicht mehr gibt. Als erzeugt gilt ein Radio, wenn alle vier Merkmale zutreffen: Rufzeichen endet auf den eingestellten Suffix, es beantwortet Flugplatz-Anfragen, sonst nichts, und es hat kein eigenes Hotword. Ein handgebautes Radio, auf das alle vier passen, ist davon nicht zu unterscheiden und verschwindet mit — darum nennt der Knopf, was er entfernen wird, und darum wird nichts geschrieben, bis du **Save changes** drückst. Ohne Suffix bleibt kein verlässliches Merkmal übrig, dann lehnt der Knopf ab und sagt es, statt zu raten.
+
+Ist ein Tower pro Platz besser als einer für alle? Performance spielt kaum eine Rolle: das Sprachmodell wird einmal geladen und geteilt, und ein Detektor arbeitet nur, wenn auf *seiner* Frequenz Audio ankommt — stille Tower kosten ein paar MB Speicher und keine messbare CPU. Das eine echte Argument ist, dass Antworten pro Radio serialisiert sind: mit einem einzigen Tower warten zwei Piloten an verschiedenen Plätzen aufeinander, mit je einem nicht. Der Platz selbst wird in beiden Fällen aus der Position des Piloten ermittelt, beide Varianten sind also korrekt.
+
+### Den Piloten die Frequenzen mitteilen
+
+Weil die Tower-Frequenzen erfunden sind, stehen sie in keinem Briefing und auf keinem Kneeboard. Der Bot schreibt sie deshalb beim Start in die laufende Mission (`AnnounceFrequenciesEnabled`, standardmäßig an):
+
+- **Ein F10-Kartenmarker pro Flugplatz**, an dessen Position, mit dem zuständigen Tower, den nicht platzgebundenen Frequenzen — AWACS, Tanker — und dem Hotword. Das ist die dauerhafte Hälfte: bleibt die ganze Mission über stehen und ist jederzeit nachlesbar.
+- **Eine einmalige Bildschirmmeldung** beim Start, für den, der schon fliegt. Sie nennt die nicht platzgebundenen Radios vollständig und fasst die Tower zusammen, weil ein Dutzend davon aus dem Bild scrollen würde.
+
+Marker gehen nur an die eigene Koalition, sind schreibgeschützt und benutzen einen **festen ID-Bereich**: ein neu gestarteter Bot ersetzt seine Marker statt einen zweiten Satz anzulegen — ein Server, der den Bot an einem Abend dreimal neu startet, bekommt also nicht drei übereinanderliegende Marker pro Platz. Der gesamte Bereich wird vorher geleert, eine kleinere Mission hinterlässt damit keine Waisen.
+
+Schlägt das fehl — keine Mission geladen, DCS-gRPC nicht erreichbar — steht es als `[Announce]` im Log und sonst passiert nichts. Der Bot läuft auch ohne; die Piloten müssen die Frequenzen dann nur anders erfahren.
+
+### Einen Piloten begrüßen, der sich aufschaltet
+
+Ein Pilot, der eine dieser erfundenen Frequenzen einstellt und nichts hört, kann einen funktionierenden Bot nicht von einem kaputten unterscheiden. Der Bot kann ihn deshalb begrüßen — mit dem Kanal, den er erreicht hat, und mit der Information, wo das taktische Radio liegt. Genau das kann ihm der Marker an seinem Startplatz nicht mehr sagen, sobald er in der Luft ist:
+
+> *„Punch 1-1, Batumi Tower. Overlord is on two five one decimal zero. Say my callsign to be heard."*
+
+Dafür wird DCS nichts gefragt. Jeder SRS-Client meldet, welche Frequenzen er eingestellt hat — im Sync und bei jedem Radio-Update. Der Bot hat diese Daten längst bekommen und weggeworfen. (Die eingestellte Frequenz eines Spielers existiert sonst nirgends: sie ist clientseitig, und weder die DCS-Scripting-Umgebung noch DCS-gRPC gibt sie heraus.)
+
+Die Funktion ist **standardmäßig aus** (`TuneInGreetingEnabled`), und das ist der wichtige Teil dieses Abschnitts. SRS kennt kein Unicast: die Begrüßung hören *alle* auf der Frequenz, nicht der Pilot, der sie ausgelöst hat. Ein Bot, der aus Hilfsbereitschaft über einen BRAA-Call sendet, ist schlechter als einer, der schweigt — jede Regel hier ist deshalb eine Bremse:
+
+- Jeder Client wird **einmal pro Frequenz für die ganze Sitzung** begrüßt — danach nie wieder, auch Stunden später nicht. Ein Pilot, der zwischen zwei Presets hin- und herschaltet, löst eine Begrüßung aus, nicht eine pro Umschaltung.
+- `TuneInGreetingGapSeconds` (Standard 90) hält eine Frequenz still, auf der es gerade eine Begrüßung gab — ein **gemeinsam einbuchender Flight von vier hört eine**.
+- Ein Pilot, der schon begrüßt wurde, wird *vor* dem Blick auf diesen Abstand abgewiesen. Ein erneutes Aufschalten kann den Abstand für den Nächsten also nicht nach hinten schieben.
+- Die Begrüßung geht über denselben Weg wie jede Antwort, **wartet** also hinter dem, was das Radio gerade sagt.
+- Ein Funkgerät, das der Pilot nicht eingeschaltet hat, ist keine eingestellte Frequenz: Slots, die SRS als deaktiviert meldet, und die 1-Hz-Platzhalterfrequenz, die dazugehört, werden ignoriert. Nur ein *geänderter* Frequenzsatz gilt als Ankunft, denn SRS schickt Radio-Updates auch für Lautstärke und Verschlüsselung.
+- Die gegnerische Koalition wird nicht begrüßt, genauso wie sie nicht bedient wird (`RestrictToOwnCoalition`), und der eigene Client des Bots wird vorher aus der Liste genommen — sonst würde er sich selbst begrüßen.
+
+`{tactical}` nennt die Radios, die taktische Anfragen beantworten, und nie den Kanal, auf dem der Pilot schon zuhört. Auf einem Server ohne DCS-gRPC gibt es keine, und der Satz kommt ohne sie aus. Alles steht als `[Greeting]` im Log, mit laufender Zählung.
+
+Schalten Sie die Funktion ein, solange die erzeugten Tower-Frequenzen für Ihre Piloten neu sind. Schalten Sie sie aus, sobald sie sie kennen — ab dann ist sie nur eine Stimme mehr auf einer belegten Frequenz.
 
 ### Einer Frequenz eine Aufgabe geben
 
@@ -708,12 +813,12 @@ Nach der [offiziellen Dokumentation](https://github.com/DCS-gRPC/rust-server):
 
 ### 8.2 Bot verbinden
 
-1. GUI → **CH8 DCS-gRPC** → **Enable DCS-gRPC** einschalten, Adresse und Port prüfen.
+1. GUI → **CH8 DCS-gRPC → Server & test** → **Enable DCS-gRPC** einschalten, Adresse und Port prüfen.
 2. **Test connection.** Ein erfolgreicher Test belegt zugleich, dass tatsächlich eine Mission läuft, denn er fragt die Missionszeit ab.
 
 ### 8.3 Taktische Antworten aktivieren
 
-Ebenfalls auf CH8, unter **Tactical replies**:
+Ebenfalls auf CH8, jetzt unter **Replies**:
 
 - **Answer tactical requests from mission data** einschalten.
 - **Contact source** und **AWACS unit name:** zusammen bestimmen sie, woher die Kontakte kommen dürfen — siehe unten.
@@ -747,7 +852,7 @@ Welche Quelle tatsächlich verwendet wurde, steht in jeder `[Intel]`-Logzeile (`
 
 ### 8.4 Bahn in Benutzung und ATIS
 
-Weiter auf CH8, unter **Answer "runway in use" and ATIS calls**. Sobald es an ist, kann ein Pilot fragen:
+Weiter auf CH8 → **Replies**, unter **Answer "runway in use" and ATIS calls**. Sobald es an ist, kann ein Pilot fragen:
 
 > *„Overlord, Batumi, runway in use."*
 > *„Batumi, runway in use one three, wind one three zero at one niner knots."*
@@ -893,6 +998,45 @@ Und während einer Anfrage:
 
 Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *verstanden* hat, und beantworten die meisten „Warum hat er das gemacht?“-Fragen sofort.
 
+### Alle Kennzeichen im Log
+
+Jede Zeile trägt das Kennzeichen des Teils, aus dem sie stammt. Eine Startzeile sagt, wie eine Funktion eingestellt ist; die Zeilen während einer Anfrage sagen, was sie getan hat.
+
+| Kennzeichen | Wird geschrieben bei | Wissenswert |
+|---|---|---|
+| `[SRS]` | Verbinden, verbunden, Verbindungsversuch fehlgeschlagen, neuer Versuch | Der Bot versucht es **alle 5 Sekunden, endlos**. Ein zurückkehrender Server wird ohne Neustart wieder aufgenommen. |
+| `[SRS UDP]` | Die Sprachverbindung ist abgerissen oder die Empfangsschleife lief auf einen unerwarteten Fehler | Auch das ist nicht tödlich, es geht zurück über `[SRS]`. |
+| `[Watchdog]` | Eine Aufnahme wurde beendet, weil keine weiteren Audiopakete kamen | Normal, wenn jemand abrupt aufhört zu senden statt in Stille auszulaufen. |
+| `[Hotword]` | Beim Start, wenn die automatische Verstärkung an ist | Sagt, dass leise Piloten für die Erkennung verstärkt werden. |
+| `[Hotword Detected]` | Das Hotword hat ausgelöst: Frequenz, SRS-Name, erkanntes Rufzeichen | Der Anfang jeder Anfrage. |
+| `[Recording finished]` | Die Aussendung ist zu Ende, mit der Menge Audio | |
+| `[STT]` | Was die Transkription verstanden hat — oder dass nichts Verständliches dabei war | Die mit Abstand nützlichste Zeile der Datei. |
+| `[Phrase Match]` | Eine bekannte Auslösephrase hat die Antwort bestimmt, oder keine und es wurde die Fallback-Antwort benutzt | |
+| `[Intel]` | Taktische Antworten: der Zustand beim Start, pro Anfrage Art, Auslöser und Datenquelle | Sagt auch, wenn `DcsIntelEnabled` an ist, während DCS-gRPC aus ist — das beantwortet diese Frage, bevor sie gestellt wird. |
+| `[Airfield]` | Bahn in Benutzung und ATIS: Zustand beim Start, jede Anfrage, und gRPC-Fehler darunter | |
+| `[RadioCheck]` | Ein Radio Check wurde beantwortet, mit der Phrase, die gepasst hat | |
+| `[ThreatCircle]` | Ein Circle wurde aktiviert, abgebrochen oder lief ab; die Warnungen jedes Durchlaufs | |
+| `[Radio]` | Eine Anfrage kam auf einer Frequenz an, die sie nicht bedient | Sagt, ob an die richtige Frequenz verwiesen wurde oder ob sie zu `phrases.json` durchgefallen ist. |
+| `[Coalition Check]` | Beim Start, und immer wenn eine Aussendung der gegnerischen Koalition ignoriert wurde | |
+| `[Rate limit]` | Ein Pilot ist über dem Limit, und wenn er erneut sendet, während er noch darüber ist | Der zweite Fall wird protokolliert, aber **nicht** beantwortet — das ist die Regel „einmal gesagt, dann still". |
+| `[Ack]` | Die Standby-Zwischenmeldung wurde scharf geschaltet, gesendet oder konnte nicht gesendet werden | |
+| `[Greeting]` | Ein Pilot hat sich aufgeschaltet und wurde begrüßt, mit laufender Zählung | |
+| `[Announce]` | Wie viele F10-Marker gesetzt wurden, oder warum keine | |
+| `[Reply]` | Der genaue Satz, der rausgegangen ist | Zusammen mit `[STT]` ist das das ganze Gespräch. |
+| `[ExternalAudio]` | `DCS-SR-ExternalAudio.exe` hat sich mit einem Fehlercode beendet | Die erste Stelle, wenn der Bot im Log antwortet, aber nicht auf dem Funk. |
+| `[Gemini]` | Ein API-Fehler mit der Angabe, was als Nächstes passiert; ein neuer Versuch; eine nicht lesbare Antwort | |
+| `[Discord]` | Benachrichtigungen aktiv, oder warum sie trotz Aktivierung aus sind | |
+| `[Retention]` | Alte Aufnahmen oder Logs wurden gelöscht, mit Begründung | |
+| `[Error]` | Das Verarbeiten einer Aufnahme oder die Audiobehandlung ist fehlgeschlagen | Der Stacktrace steht dabei. |
+
+### Wenn die SRS-Verbindung abreißt
+
+Der Bot hört nicht auf. `[SRS UDP]` hält den Abriss fest, `[SRS]` versucht es alle fünf Sekunden erneut, bis der Server wieder da ist, und der erste erfolgreiche Versuch schreibt wieder `Connected.` — ohne Neustart, ohne Eingriff.
+
+Mit Discord-Benachrichtigungen (`DiscordEnabled`) wird der Ausfall **einmal** gemeldet, nicht einmal pro Versuch, und die Rückkehr bekommt eine eigene Meldung. Über denselben Webhook laufen auch Start (mit den überwachten Frequenzen), Herunterfahren, ein fehlgeschlagener Start und ein unerwarteter Abbruch — das ist das, was einen als Windows-Dienst laufenden Bot überhaupt sichtbar macht.
+
+Ein Reconnect löst **keine** Welle von Begrüßungen aus: der Bot weiß weiterhin, wen er schon begrüßt hat, und die Clientliste, die er zurückbekommt, entspricht der, die er hatte — nichts sieht nach einer Ankunft aus. Piloten, die *während* des Ausfalls gegangen sind, werden erst vergessen, wenn SRS ihren Disconnect meldet; ging diese Nachricht verloren, bleibt ihr Eintrag bis zum nächsten Neustart stehen, was ein paar Bytes kostet und sonst nichts.
+
 ---
 
 ## 11. Fehlersuche
@@ -908,7 +1052,7 @@ Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *
 | **Keine Antwort, im Log ein Gemini-Fehler** | Key fehlt/ungültig oder Kontingent erschöpft. `GeminiFallbackModel` setzen oder auf die Zurücksetzung warten. |
 | **Antwort wird erzeugt, aber nie gehört** | `ExternalAudioExePath` falsch oder TTS-Stimme nicht installiert. Auf CH1 **Detect SRS installation** drücken, dann eine Aussendung manuell testen (siehe [Kapitel 4](#4-erster-start)). Das Log nennt den gefundenen Pfad, wenn der eingetragene nicht existiert. |
 | **Bot antwortet auf seine eigenen Antworten** | Sollte unmöglich sein — das Radio ist währenddessen selbst stummgeschaltet. Falls doch, bitte mit Log melden. |
-| **Zahlen werden heruntergerattert / sind schwer verständlich** | `DcsIntelSlowSpeech` einschalten (GUI: CH8 → *Slow, clearly spoken numbers*). Ist die Stimme insgesamt zu schnell, eine andere `VoiceName` probieren oder — falls deine SRS-Version das kann — einen Tempo-Parameter über `ExternalAudioExtraArgs` setzen. |
+| **Zahlen werden heruntergerattert / sind schwer verständlich** | `DcsIntelSlowSpeech` einschalten (GUI: CH8 → **Replies** → *Slow, clearly spoken numbers*). Ist die Stimme insgesamt zu schnell, eine andere `VoiceName` probieren oder — falls deine SRS-Version das kann — einen Tempo-Parameter über `ExternalAudioExtraArgs` setzen. |
 | **Ein Radio ist nach dem Setzen einer Stimme verstummt** | Den Stimmennamen hat dieser Rechner nicht. **List available voices** auf CH2 drücken und einen Namen aus dieser Liste verwenden — die „natürlichen“ Windows-Stimmen sind meist nicht dabei. Das Startup-Log nennt die Stimme jedes Radios, `[ExternalAudio:ERR]`-Zeilen zeigen die Beschwerde des Tools. |
 | **„Where is X" wird mit „say again, which aircraft?" beantwortet** | Der Name muss hinter der Triggerphrase stehen: *„where is Springfield 2-1"*, nicht *„Springfield 2-1, where is he"*. Siehe [7 → Wo ist jemand](#wo-ist-jemand). |
 | **„Where is X" ergibt „unable to identify your coalition"** | Der Anrufer steht in der SRS-Clientliste nicht auf Rot oder Blau — typischerweise ein Zuschauerslot. Diese Anfrage lehnt ab statt eine Seite zu raten. |
@@ -917,7 +1061,7 @@ Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *
 | **Alle Radios sprechen mit derselben Stimme** | `Radios[].Voice` ist bei allen leer, sie fallen also auf die globale `VoiceName` zurück. Pro Radio auf CH2 setzen. |
 | **Antwort kommt sehr spät** | 2–5 s sind normal. Zwischenansage aktivieren, damit Piloten wissen, dass sie gehört wurden. |
 | **Threat-Circle-Warnungen kommen nie an** | Im Log nach `[ThreatCircle]`-Zeilen sehen, die jeden Durchlauf protokollieren. Meist lässt sich das Flugzeug des Piloten nicht seinem SRS-Namen zuordnen (der Kreis braucht es als Mittelpunkt), oder der Kreis ist bereits abgelaufen. |
-| **Taktische Anfragen liefern „no tactical data“** | DCS-gRPC läuft nicht, keine Mission geladen, falsche Adresse, oder `DcsGrpcEnabled` aus. Auf CH8 testen. |
+| **Taktische Anfragen liefern „no tactical data“** | DCS-gRPC läuft nicht, keine Mission geladen, falsche Adresse, oder `DcsGrpcEnabled` aus. Auf CH8 → **Server & test** testen. |
 | **Taktische Antworten nutzen immer Bullseye statt BRAA** | Dein SRS-Name ließ sich keinem DCS-Spielernamen zuordnen. Namen angleichen oder die Trennzeichen-Konvention nutzen (`CALLSIGN 1-1 \| handle`). Am schnellsten bestätigt: *„radio check“* rufen — *„no radar contact on you“* heißt genau das. |
 | **`recordings\` oder `logs\` haben die Platte gefüllt** | Sollte nicht mehr passieren: Beide werden beim Start und stündlich aufgeräumt. Die `[Retention]`-Zeilen im Log prüfen, und dass `RecordingRetentionDays`/`RecordingRetentionMaxMb` nicht beide `0` sind. |
 | **Die Antwort auf `radio check` ist nicht die auf CH4 eingestellte** | Eine Zeile `radio check` in der `phrases.json` hat absichtlich Vorrang vor der eingebauten Antwort. Zeile löschen, um das eingebaute Verhalten zu bekommen. |

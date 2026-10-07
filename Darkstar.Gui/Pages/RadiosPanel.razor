@@ -162,6 +162,117 @@
 <button class="link-action" @onclick="AddRadio"><span>+ Add radio</span></button>
 
 <div class="card" style="margin-top:10px">
+    <div class="card-head" style="margin-bottom:6px">
+        <span style="font-size:12.5px;color:#E7EDEF">One tower per airfield</span>
+        <span class="spacer"></span>
+        <button class="link-action" style="margin-bottom:0" disabled="@(_planning || GeneratedCount == 0)"
+                @onclick="RemoveGeneratedTowers">
+            <span>@(GeneratedCount == 0 ? "No generated towers" : $"Remove {GeneratedCount} generated tower(s)")</span>
+        </button>
+        <button class="link-action" style="margin-bottom:0" disabled="@(_planning || !Store.Config.DcsGrpcEnabled)"
+                @onclick="GenerateTowers">
+            <span>@(_planning ? "Asking the mission..." : "Generate from the running mission")</span>
+        </button>
+    </div>
+
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        Reads the airfields from the mission that is loaded right now and adds one radio per airfield —
+        callsign <code>&lt;airfield&gt; @Store.Config.TowerPlanCallsignSuffix</code>, airfield requests on,
+        tactical off. Existing radios are kept and their frequencies skipped, so generating is
+        <strong>additive</strong>: changing map means removing the old towers first, which is what the
+        other button is for. It recognises them by callsign suffix, airfield-only role and no own wake
+        word — so a hand-built radio matching all of that counts as generated too. Nothing is saved
+        until you press Save changes.
+    </div>
+
+    <div class="row3">
+        <div class="field" style="margin-bottom:0">
+            <label>FIRST FREQUENCY (MHZ)</label>
+            <input type="number" step="0.025" @bind="Store.Config.TowerPlanBaseMHz" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>STEP (MHZ)</label>
+            <input type="number" step="0.025" @bind="Store.Config.TowerPlanStepMHz" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>CALLSIGN SUFFIX</label>
+            <input type="text" @bind="Store.Config.TowerPlanCallsignSuffix" placeholder="(airfield name only)" />
+        </div>
+    </div>
+
+    <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:10px 0 0">
+        <div style="font-size:11.5px;color:#F2A93B">
+            <strong>These frequencies are invented.</strong> DCS-gRPC does not report an airfield's real
+            radio frequency — the <code>Airbase</code> data carries a name, a coalition and a position and
+            nothing else. So pick a range your mission doesn't use for something else, and leave the F10
+            announcement on (CH8): it is the only place your pilots can learn these numbers.
+        </div>
+    </div>
+
+    <div class="hint" style="margin-top:8px">
+        The wake word stays the global one on purpose. An airfield name as a wake word — "Kobuleti",
+        "Senaki-Kolkhi" — through a small English speech model is the failure the position-based airfield
+        lookup exists to avoid, and as a wake word a miss means the bot never answers at all. The
+        <em>frequency</em> identifies the airfield; the bot replies as "@(string.IsNullOrWhiteSpace(Store.Config.TowerPlanCallsignSuffix) ? "Batumi" : "Batumi " + Store.Config.TowerPlanCallsignSuffix)".
+    </div>
+
+    @if (_planNotes.Count > 0)
+    {
+        <div style="margin-top:10px">
+            @foreach (var note in _planNotes)
+            {
+                <div style="font-size:11.5px;color:@(_planFailed ? "#F2A93B" : "#5FBF7A")">@note</div>
+            }
+        </div>
+    }
+</div>
+
+<div class="card" style="margin-top:10px">
+    <div class="card-head" style="margin-bottom:6px">
+        <span style="font-size:12.5px;color:#E7EDEF">Greet a pilot who tunes in</span>
+        <span class="spacer"></span>
+        <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
+            <button class="toggle @(Store.Config.TuneInGreetingEnabled ? "on" : "")"
+                    @onclick="() => Store.Config.TuneInGreetingEnabled = !Store.Config.TuneInGreetingEnabled">
+                <span class="knob"></span>
+            </button>
+        </div>
+    </div>
+
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        SRS reports which frequencies every client has tuned. When somebody dials one of these radios in,
+        the bot says which channel they reached and where the tactical radio is — the one thing an F10
+        marker at their departure field cannot tell them once they are airborne.
+    </div>
+
+    <div class="field">
+        <label>WHAT TO SAY</label>
+        <input type="text" @bind="Store.Config.TuneInGreetingText" />
+        <div class="hint">
+            <code>{pilot}</code> the caller, <code>{callsign}</code> the channel they reached,
+            <code>{tactical}</code> the radios that answer tactical requests. An empty placeholder leaves
+            no gap or dangling comma behind, and an empty line switches the greeting off as surely as the
+            toggle does.
+        </div>
+    </div>
+
+    <div class="field" style="margin-bottom:0">
+        <label>MINIMUM SECONDS BETWEEN GREETINGS ON ONE FREQUENCY</label>
+        <input type="number" min="5" step="5" @bind="Store.Config.TuneInGreetingGapSeconds" />
+    </div>
+
+    <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:10px 0 0">
+        <div style="font-size:11.5px;color:#F2A93B">
+            <strong>SRS has no unicast.</strong> This greeting goes to <em>everybody</em> on the frequency,
+            not just to the pilot who tuned in — which is why it is off by default. Each client is greeted
+            once per frequency for the whole session and never again, and the gap above means a flight of
+            four checking in together hears one greeting instead of four. Switch it on while the generated
+            tower frequencies are new to your pilots, and off again once they know them.
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top:10px">
     <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:10px">Legacy single-radio fields</div>
     <div class="hint" style="margin-bottom:10px">Only used when the list above is empty.</div>
     <div class="row2">
@@ -273,6 +384,81 @@
 
         builder.CloseElement();
     };
+
+    /// <summary>
+    /// How many radios look generated. Read on every render rather than cached, because the list
+    /// changes underneath it when rows are added or removed by hand.
+    /// </summary>
+    private int GeneratedCount =>
+        TowerPlan.GeneratedRadios(Store.Config.Radios, Store.Config).Generated.Count;
+
+    /// <summary>
+    /// Takes the generated towers back out, so regenerating for a different map replaces them instead
+    /// of adding a second set. Hand-built radios are left alone - see TowerPlan.LooksGenerated for
+    /// what counts, and for why an empty callsign suffix makes this refuse rather than guess.
+    /// </summary>
+    private void RemoveGeneratedTowers()
+    {
+        var found = TowerPlan.GeneratedRadios(Store.Config.Radios, Store.Config);
+
+        _planFailed = found.Generated.Count == 0;
+        _planNotes = new List<string>(found.Notes);
+
+        if (found.Generated.Count == 0) return;
+
+        foreach (var radio in found.Generated)
+            Store.Config.Radios.Remove(radio);
+
+        _planNotes.Insert(0, $"Removed {found.Generated.Count} generated tower(s). " +
+            $"{Store.Config.Radios.Count} radio(s) left.");
+        _planNotes.Add("Not saved yet - press Discard to get them back, or Save changes to keep this.");
+    }
+
+    private bool _planning;
+    private bool _planFailed;
+    private List<string> _planNotes = new();
+
+    /// <summary>
+    /// Asks the running mission for its airfields and adds a tower radio for each. Additive: whatever
+    /// is already configured stays, and its frequencies are treated as taken rather than reused.
+    /// </summary>
+    private async Task GenerateTowers()
+    {
+        _planning = true;
+        _planNotes = new List<string> { "Asking DCS-gRPC for the airfield list..." };
+        _planFailed = false;
+
+        try
+        {
+            // DcsAirfieldService needs the intel service for the pilot lookup, which this call does
+            // not use - the airfield list needs no requester.
+            var service = new DcsAirfieldService(Store.Config, new DcsIntelService(Store.Config));
+            var airfields = await service.ListAirfieldsAsync();
+
+            var reserved = Store.Config.Radios.Select(r => r.FrequencyHz).ToList();
+            var plan = TowerPlan.Plan(airfields, Store.Config, reserved);
+
+            _planNotes = new List<string>(plan.Notes);
+            _planFailed = !plan.Any;
+
+            if (plan.Any)
+            {
+                Store.Config.Radios.AddRange(TowerPlan.ToRadios(plan));
+                _planNotes.Insert(0, $"Added {plan.Towers.Count} tower(s): " +
+                    string.Join(", ", plan.Towers.Select(t => $"{t.Callsign} {t.FrequencyHz / 1_000_000:0.000}")));
+                _planNotes.Add("Not saved yet - review the list above, then press Save changes.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _planFailed = true;
+            _planNotes = new List<string> { $"Could not generate the towers: {ex.Message}" };
+        }
+        finally
+        {
+            _planning = false;
+        }
+    }
 
     private void AddRadio()
     {

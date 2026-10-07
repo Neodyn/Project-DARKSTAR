@@ -4,11 +4,15 @@
 @inject IJSRuntime JS
 @implements IDisposable
 
-<h1>DCS-gRPC</h1>
+@if (Section == SectionServer)
+{
+<h1>DCS-gRPC — SERVER &amp; TEST</h1>
 <p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
-    Not used by replies yet - test the connection, then use the mission data explorer below to see
-    exactly which data a running mission exposes, as groundwork for real bullseye/bogey dope/picture
-    calls later.
+    The connection to the running mission. Everything the bot knows about the world comes through
+    here: bogey dope, picture, threat check, alpha check, friendly positions, the threat circle,
+    runway in use and ATIS, the generated tower frequencies and their F10 markers. Switch it off and
+    all of that falls back to phrases.json and Gemini. Test it here, then set up the replies and the
+    mission explorer from the two entries beside this one.
 </p>
 
 <div class="toggle-row">
@@ -42,13 +46,18 @@
         <div style="font-size:12px;color:#8CA0A8;margin-top:8px">@_result.Message</div>
     </div>
 }
+}
 
+@if (Section == SectionReplies)
+{
 <!-- ================= Tactical replies (bogey dope / picture / threat) ================= -->
 
-<h1 style="margin-top:28px">TACTICAL REPLIES</h1>
+<h1>REPLIES FROM MISSION DATA</h1>
 <p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
-    Lets the bot answer "bogey dope", "picture" and "threat check" from live mission data instead
-    of from phrases.json or Gemini.
+    Everything the bot answers from the running mission instead of from phrases.json or Gemini, in
+    the order the cards appear: bogey dope, picture, threat check and alpha check, then friendly
+    positions, the threat circle, a test button that shows a reply without transmitting, and the
+    airfield calls — runway in use and ATIS.
 </p>
 
 <div class="toggle-row">
@@ -61,7 +70,7 @@
 @if (Store.Config.DcsIntelEnabled && !Store.Config.DcsGrpcEnabled)
 {
     <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
-        DCS-gRPC is switched off above - tactical requests will keep being handled by phrases/Gemini.
+        DCS-gRPC is switched off under SERVER &amp; TEST - tactical requests will keep being handled by phrases/Gemini.
     </div>
 }
 
@@ -501,10 +510,13 @@
         }
     </div>
 </div>
+}
 
+@if (Section == SectionExplorer)
+{
 <!-- ================= Mission data explorer ================= -->
 
-<h1 style="margin-top:28px">MISSION DATA EXPLORER</h1>
+<h1>MISSION DATA EXPLORER</h1>
 <p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
     Read-only: only Get/Stream calls are made - nothing in the running mission is changed.
     Results are shown as the raw JSON DCS-gRPC returns (all fields, including empty/default values).
@@ -512,7 +524,7 @@
 
 @if (!Store.Config.DcsGrpcEnabled)
 {
-    <div class="card" style="color:#8CA0A8;font-size:12px">Enable DCS-gRPC above to use the explorer.</div>
+    <div class="card" style="color:#8CA0A8;font-size:12px">Enable DCS-gRPC under SERVER &amp; TEST to use the explorer.</div>
 }
 else
 {
@@ -703,8 +715,25 @@ else
         </div>
     }
 }
+}
 
 @code {
+    /// <summary>
+    /// The three parts of this panel, each its own entry in the sidebar.
+    ///
+    /// This page holds the gRPC connection, every tactical and airfield reply setting, two test
+    /// buttons and a 38-query mission explorer - which as one scrolling page was the one place in
+    /// this editor where nobody could find anything. The sections are named by constant rather than
+    /// by string literal so the sidebar and this panel cannot drift apart: a mistyped section would
+    /// show an empty page and fail nowhere.
+    /// </summary>
+    public const string SectionServer = "server";
+    public const string SectionReplies = "replies";
+    public const string SectionExplorer = "explorer";
+
+    /// <summary>Which section to show. Defaults to the connection, which is where setup starts.</summary>
+    [Parameter] public string Section { get; set; } = SectionServer;
+
     private const int MaxDisplayChars = 300_000;
 
     private bool _testing;

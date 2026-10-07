@@ -389,6 +389,78 @@ public sealed class AppConfig
     /// </summary>
     public bool DcsIntelFriendlySayHeading { get; set; } = true;
 
+    // ----- One tower per airfield, and telling the pilots about it --------------------------
+
+    /// <summary>
+    /// Lowest frequency of the generated tower plan, in MHz. The towers are numbered upwards from
+    /// here in steps of <see cref="TowerPlanStepMHz"/>.
+    ///
+    /// These frequencies are INVENTED, because DCS-gRPC does not report an airfield's real radio
+    /// frequency - see <see cref="TowerPlan"/>. Pick a range your mission does not already use for
+    /// something else, and leave <see cref="AnnounceFrequenciesEnabled"/> on, because this is the
+    /// only place the pilots can learn them.
+    /// </summary>
+    public double TowerPlanBaseMHz { get; set; } = 133.000;
+
+    /// <summary>Spacing between generated tower frequencies, in MHz.</summary>
+    public double TowerPlanStepMHz { get; set; } = 0.500;
+
+    /// <summary>Modulation for generated towers. Airfield traffic is AM in practice.</summary>
+    public string TowerPlanModulation { get; set; } = "AM";
+
+    /// <summary>
+    /// Appended to the airfield name to form the callsign, e.g. "Batumi" + " Tower". Empty uses the
+    /// bare airfield name.
+    /// </summary>
+    public string TowerPlanCallsignSuffix { get; set; } = "Tower";
+
+    /// <summary>
+    /// Whether the bot writes its frequencies into the running mission at startup - F10 map markers
+    /// and one on-screen message.
+    ///
+    /// On by default, unlike the other things that reach into a mission: the generated tower
+    /// frequencies exist nowhere else, so without this the bot is a radio service nobody can find.
+    /// It writes marks and one text message and nothing else; both are switchable below.
+    /// </summary>
+    public bool AnnounceFrequenciesEnabled { get; set; } = true;
+
+    /// <summary>One F10 marker per airfield, naming the tower that serves it. The durable half.</summary>
+    public bool AnnounceFrequenciesMarkers { get; set; } = true;
+
+    /// <summary>One on-screen message at startup, for whoever is already flying. The transient half.</summary>
+    public bool AnnounceFrequenciesMessage { get; set; } = true;
+
+    /// <summary>How long that message stays on screen, in seconds.</summary>
+    public int AnnounceFrequenciesMessageSeconds { get; set; } = 20;
+
+    // ----- Greeting a pilot who tunes in ----------------------------------------------------
+
+    /// <summary>
+    /// Whether the bot says hello when a pilot tunes onto one of its frequencies, naming the channel
+    /// and where the tactical radio is.
+    ///
+    /// Off by default, and the reason is worth knowing: SRS has no unicast, so this goes to EVERYONE
+    /// on the frequency. It is throttled hard (once per client per frequency for the whole session,
+    /// plus a minimum gap per frequency), but on a busy server it is still the bot talking without
+    /// being asked. Turn it on when the generated tower frequencies are new to your pilots, and off
+    /// again once they know them.
+    /// </summary>
+    public bool TuneInGreetingEnabled { get; set; } = false;
+
+    /// <summary>
+    /// What to say. <c>{pilot}</c> is the caller's name, <c>{callsign}</c> the channel they reached,
+    /// and <c>{tactical}</c> the radios that answer tactical requests - the Overlord frequencies.
+    /// An empty placeholder leaves no gap or dangling punctuation behind.
+    /// </summary>
+    public string TuneInGreetingText { get; set; } =
+        "{pilot}, {callsign}. {tactical} Say my callsign to be heard.";
+
+    /// <summary>
+    /// Minimum seconds between greetings on the same frequency, so a flight of four checking in
+    /// together hears one and not four.
+    /// </summary>
+    public double TuneInGreetingGapSeconds { get; set; } = 90;
+
     // ----- Rate limiting --------------------------------------------------------------------
 
     /// <summary>

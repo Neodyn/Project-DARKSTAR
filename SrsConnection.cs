@@ -16,6 +16,21 @@ public sealed class SrsConnection : IAsyncDisposable
 {
     public event Action<byte[], double, string, int>? OnAudioReceived; // (PCM16 mono 16-bit @ 48kHz, frequency, sender name, sender coalition)
 
+    /// <summary>
+    /// Raised when a client's tuned frequencies change - on first sight, and on every radio update.
+    /// Carries only the ENABLED radios, so a pilot who has not powered a radio up yet is not
+    /// reported as being on frequency 1.
+    ///
+    /// This is where the bot learns who is listening. DCS itself cannot tell it: a player's tuned
+    /// frequency is client-side state and never reaches the mission scripting environment, so there
+    /// is nothing in DCS-gRPC to ask. SRS knows because every client reports its own radios to the
+    /// server, and the server passes the list on.
+    /// </summary>
+    public event Action<TuneInGreeting.ClientRadios>? OnClientRadiosChanged;
+
+    /// <summary>Raised when a client disconnects, so anything remembered about it can be dropped.</summary>
+    public event Action<string>? OnClientDisconnected;
+
     private readonly string _host;
     private readonly int _port;
     private readonly string _clientGuid;
@@ -27,6 +42,13 @@ public sealed class SrsConnection : IAsyncDisposable
     // RADIO_UPDATE/UPDATE from other clients). Lets us resolve the display name and coalition
     // (0 = Spectator, 1 = Red, 2 = Blue) of the sender for a received audio packet.
     private readonly Dictionary<string, (string Name, int Coalition)> _clients = new();
+
+    /// <summary>
+    /// ClientGuid -> the frequencies it had tuned the last time we looked. Kept so a RADIO_UPDATE
+    /// that changes nothing relevant does not look like somebody tuning in again - SRS sends those
+    /// freely, and treating each one as an arrival would greet the same pilot repeatedly.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<long>> _clientFrequencies = new();
 
     private TcpClient? _tcp;
     private NetworkStream? _tcpStream;
@@ -313,7 +335,12 @@ public sealed class SrsConnection : IAsyncDisposable
                 if (isDisconnect)
                 {
                     if (clientElement.TryGetProperty("ClientGuid", out var guidEl) && guidEl.ValueKind == JsonValueKind.String)
-                        _clients.Remove(guidEl.GetString() ?? "");
+                    {
+                        var goneGuid = guidEl.GetString() ?? "";
+                        _clients.Remove(goneGuid);
+                        _clientFrequencies.Remove(goneGuid);
+                        if (goneGuid.Length > 0) OnClientDisconnected?.Invoke(goneGuid);
+                    }
                 }
                 else
                 {
@@ -342,6 +369,57 @@ public sealed class SrsConnection : IAsyncDisposable
             : 0;
 
         _clients[guid] = (name, coalition);
+
+        // The bot's own client is in this list too. Reporting it would have the bot greet itself.
+        if (string.Equals(guid, _clientGuid, StringComparison.Ordinal)) return;
+
+        var tuned = ReadTunedFrequencies(clientElement);
+
+        // Only when the set actually changed. SRS sends radio updates for things this bot does not
+        // care about (volume, encryption, the guard channel), and each one would otherwise look like
+        // a pilot arriving.
+        var key = new HashSet<long>(tuned.Select(f => (long)Math.Round(f)));
+        if (_clientFrequencies.TryGetValue(guid, out var previous) && previous.SetEquals(key)) return;
+
+        _clientFrequencies[guid] = key;
+        OnClientRadiosChanged?.Invoke(new TuneInGreeting.ClientRadios(guid, name, coalition, tuned));
+    }
+
+    /// <summary>
+    /// The frequencies a client has tuned on radios that are actually switched on.
+    /// </summary>
+    /// <remarks>
+    /// Reads RadioInfo.radios, skipping any slot whose modulation says DISABLED - that is how SRS
+    /// represents a radio the pilot has not powered up, and it comes with a placeholder frequency of
+    /// 1 Hz that would otherwise look like a real tuning.
+    /// </remarks>
+    private static List<double> ReadTunedFrequencies(JsonElement clientElement)
+    {
+        var result = new List<double>();
+
+        if (!clientElement.TryGetProperty("RadioInfo", out var radioInfo) ||
+            radioInfo.ValueKind != JsonValueKind.Object) return result;
+
+        if (!radioInfo.TryGetProperty("radios", out var radios) ||
+            radios.ValueKind != JsonValueKind.Array) return result;
+
+        foreach (var radio in radios.EnumerateArray())
+        {
+            if (radio.ValueKind != JsonValueKind.Object) continue;
+
+            var frequency = radio.TryGetProperty("freq", out var freqEl) && freqEl.ValueKind == JsonValueKind.Number
+                ? freqEl.GetDouble()
+                : 0;
+
+            var modulation = radio.TryGetProperty("modulation", out var modEl) && modEl.ValueKind == JsonValueKind.Number
+                ? modEl.GetInt32()
+                : TuneInGreeting.ModulationDisabled;
+
+            if (TuneInGreeting.IsTuned(frequency, modulation) && !result.Contains(frequency))
+                result.Add(frequency);
+        }
+
+        return result;
     }
 
     /// <summary>Resolves a ClientGuid to the last known display name, or returns the GUID itself if unknown.</summary>

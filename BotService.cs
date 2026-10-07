@@ -96,6 +96,50 @@ public sealed class BotService : BackgroundService
         public CancellationTokenSource? PendingAckCts;
     }
 
+    /// <summary>
+    /// Pairs each airfield with the tower frequency that serves it: the nearest radio that answers
+    /// airfield requests. With one tower per airfield this is the obvious one-to-one mapping; with a
+    /// single tower for the whole map every airfield maps to that one, which is also correct, because
+    /// the airfield is resolved from the pilot's own position rather than from the frequency.
+    /// </summary>
+    /// <remarks>
+    /// Distance is measured against the frequency's own callsign rather than a configured position,
+    /// because a radio has no position: a generated tower carries its airfield's name in its
+    /// callsign, so matching on that is exact where it exists and simply falls back to "all airfields
+    /// share the one tower" where it does not.
+    /// </remarks>
+    private static Dictionary<string, double> TowerFrequencyByAirfield(
+        IReadOnlyList<Airfield> airfields, IEnumerable<RadioSession> radios)
+    {
+        var towers = radios.Where(r => r.AnswersAirfield).ToList();
+        var map = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+        if (towers.Count == 0) return map;
+
+        foreach (var airfield in airfields)
+        {
+            if (string.IsNullOrWhiteSpace(airfield.Name)) continue;
+
+            // A generated tower is called "<airfield> Tower", so its callsign names the airfield it
+            // belongs to. PilotNames.CanonicalKey folds away spaces, case and punctuation, which is
+            // what makes "Senaki-Kolkhi" match a callsign shortened to "Senaki Tower".
+            var key = PilotNames.CanonicalKey(airfield.Name);
+
+            var own = towers.FirstOrDefault(t =>
+            {
+                var callsign = PilotNames.CanonicalKey(t.Callsign);
+                return callsign.Length >= 4 && (key.StartsWith(callsign, StringComparison.Ordinal) ||
+                                                callsign.StartsWith(key, StringComparison.Ordinal));
+            });
+
+            // No tower names this airfield, so whatever single tower exists serves it. With several
+            // unnamed towers there is no right answer, and naming one would be a guess.
+            map[airfield.Name] = own?.FrequencyHz ?? (towers.Count == 1 ? towers[0].FrequencyHz : 0);
+        }
+
+        return map;
+    }
+
     private static string CoalitionLabel(int coalition) => coalition switch
     {
         1 => "Red",
@@ -1014,8 +1058,113 @@ public sealed class BotService : BackgroundService
 
         var radioSummary = string.Join(", ", radioConfigs.Select(r => $"{r.FrequencyHz / 1_000_000:0.000} MHz ({r.Modulation})"));
         Logger.Log($"Connecting to SRS server {config.SrsHost}:{config.SrsPort}, monitoring: {radioSummary} ...");
+        // Greeting a pilot who tunes in. Subscribed before connecting, so the first SYNC - which
+        // carries everybody already on the server - is not missed.
+        var greetings = new TuneInGreeting.State();
+        if (config.TuneInGreetingEnabled)
+        {
+            var greetingGap = TimeSpan.FromSeconds(Math.Max(5, config.TuneInGreetingGapSeconds));
+
+            srs.OnClientDisconnected += guid => greetings.Forget(guid);
+
+            srs.OnClientRadiosChanged += client =>
+            {
+                // Fire and forget: this runs on the TCP receive loop, and blocking it to speak would
+                // stall the client list for everybody.
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        foreach (var frequency in client.Frequencies)
+                        {
+                            var key = (long)Math.Round(frequency);
+                            if (!sessions.TryGetValue(key, out var session)) continue;
+
+                            // Same rule as everywhere else: the opposing coalition is not served.
+                            if (config.RestrictToOwnCoalition && client.Coalition != 0 &&
+                                client.Coalition != config.Coalition) continue;
+
+                            if (!greetings.ShouldGreet(client.ClientGuid, frequency, DateTime.UtcNow, greetingGap))
+                                continue;
+
+                            var text = TuneInGreeting.Build(
+                                PilotNames.DisplayCallsign(client.Name, config.PlayerNameCallsignSeparator),
+                                session.Callsign,
+                                radioRoles.Where(r => r.Tactical).Select(r => (r.FrequencyHz, r.Callsign)),
+                                config);
+
+                            if (string.IsNullOrWhiteSpace(text)) continue;
+
+                            Logger.Log($"[Greeting] {frequency / 1_000_000:0.000} MHz: \"{client.Name}\" tuned in - " +
+                                       $"greeting sent ({greetings.Sent} so far this session).");
+
+                            // Goes through the same transmit path as a reply, so it queues behind
+                            // whatever that radio is already saying rather than talking over it.
+                            await TransmitAsync(session, text, stoppingToken);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Shutting down mid-greeting is not worth a line.
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Log($"[Greeting] Failed: {ex.Message}");
+                    }
+                }, stoppingToken);
+            };
+
+            Logger.Log($"Tune-in greeting active: once per pilot per frequency, " +
+                       $"at most one every {config.TuneInGreetingGapSeconds:0} seconds per frequency.");
+        }
+
         await srs.ConnectAsync(stoppingToken);
         Logger.Log("Connected. Waiting for hotword...");
+
+        // Tell the pilots which frequencies exist. Deliberately after the SRS connection rather than
+        // before: announcing frequencies the bot then fails to monitor would be worse than silence.
+        //
+        // Not awaited into the startup path either - an F10 marker is not worth delaying the first
+        // transmission for, and a mission that is still loading would make this the slowest step in
+        // the whole start. It logs its own outcome.
+        if (config.AnnounceFrequenciesEnabled && airfields != null)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var found = await airfields.ListAirfieldsAsync(stoppingToken);
+
+                    // Which tower serves which airfield: the radio closest to it, among those that
+                    // answer airfield requests. With one tower per airfield that is the obvious
+                    // pairing; with a single tower for everything, every airfield maps to it.
+                    var towerByAirfield = TowerFrequencyByAirfield(found, sessions.Values);
+
+                    var announced = sessions.Values
+                        .Select(r => (r.FrequencyHz, r.Callsign, Airfield: r.AnswersAirfield))
+                        .OrderBy(r => r.FrequencyHz)
+                        .ToList();
+
+                    var result = await FrequencyAnnouncer.AnnounceAsync(
+                        config, found, towerByAirfield, announced, stoppingToken);
+
+                    if (result.Ok)
+                        Logger.Log($"[Announce] {result.MarkersPlaced} F10 marker(s) placed" +
+                                   $"{(result.MessageSent ? ", on-screen message sent" : "")}" +
+                                   $" ({found.Count} airfield(s) in the mission).");
+                    else
+                        Logger.Log($"[Announce] {result.Error}");
+                }
+                catch (OperationCanceledException)
+                {
+                    // Shutting down during the announcement is not worth a line.
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"[Announce] Failed: {ex.Message}");
+                }
+            }, stoppingToken);
+        }
 
         DiscordNotifier.Notify(
             $"✅ **{config.BotCallsign}** bot started and connected to SRS `{config.SrsHost}:{config.SrsPort}`, monitoring: {radioSummary}.");

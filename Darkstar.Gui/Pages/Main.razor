@@ -12,16 +12,26 @@
 
 <div class="body-row">
     <div class="sidebar">
-        <div class="heading">CHANNELS</div>
-        <div class="navitem @(_active == "connection" ? "active" : "")" @onclick='() => SetActive("connection")'>CH1 CONNECTION</div>
-        <div class="navitem @(_active == "radios" ? "active" : "")" @onclick='() => SetActive("radios")'>CH2 RADIOS</div>
-        <div class="navitem @(_active == "speech" ? "active" : "")" @onclick='() => SetActive("speech")'>CH3 SPEECH</div>
-        <div class="navitem @(_active == "phrases" ? "active" : "")" @onclick='() => SetActive("phrases")'>CH4 PHRASES</div>
-        <div class="navitem @(_active == "vocabulary" ? "active" : "")" @onclick='() => SetActive("vocabulary")'>CH5 VOCABULARY</div>
-        <div class="navitem @(_active == "discord" ? "active" : "")" @onclick='() => SetActive("discord")'>CH6 DISCORD</div>
-        <div class="navitem @(_active == "logging" ? "active" : "")" @onclick='() => SetActive("logging")'>CH7 LOGGING</div>
-        <div class="navitem @(_active == "dcsgrpc" ? "active" : "")" @onclick='() => SetActive("dcsgrpc")'>CH8 DCS-GRPC</div>
-        <div class="navitem @(_active == "service" ? "active" : "")" @onclick='() => SetActive("service")'>CH9 SERVICE</div>
+        @foreach (var group in _groups)
+        {
+            <div class="heading">@group.Title</div>
+
+            @foreach (var item in group.Items)
+            {
+                <div class="navitem @(item.Number.Length == 0 ? "sub" : "") @(IsActive(item) ? "active" : "")"
+                     @onclick="() => Activate(item)">
+                    @if (item.Number.Length > 0)
+                    {
+                        <span class="ch">@item.Number</span>
+                    }
+                    <span class="navlabel">@item.Label</span>
+                    @if (item.IsOff())
+                    {
+                        <span class="navflag">off</span>
+                    }
+                </div>
+            }
+        }
     </div>
 
     <div class="content">
@@ -62,7 +72,7 @@
                     <LoggingPanel />
                     break;
                 case "dcsgrpc":
-                    <DcsGrpcPanel />
+                    <DcsGrpcPanel Section="@_grpcSection" />
                     break;
                 case "service":
                     <ServicePanel />
@@ -83,15 +93,95 @@
 </div>
 
 @code {
+    /// <summary>
+    /// One entry in the sidebar.
+    /// </summary>
+    /// <param name="Key">Which panel to show - the value <c>_active</c> takes.</param>
+    /// <param name="Number">
+    /// The channel number, kept stable on purpose. The whole documentation says "on CH2 Radios" and
+    /// "the test button on CH8", and so does everybody who has used this editor before - so the
+    /// panels may be regrouped and reordered, but a panel never changes its number.
+    /// </param>
+    /// <param name="Section">
+    /// For a panel split into several sidebar entries (CH8), which part to show. Must be one of the
+    /// section names <c>DcsGrpcPanel</c> knows; the test suite checks that it is, since
+    /// a typo here would show an empty page rather than fail anywhere.
+    /// </param>
+    /// <param name="OffWhen">
+    /// Evaluated on every render: when it returns true, the entry is marked "off". Only for things
+    /// that are switched off in the configuration - never for something that merely isn't reachable
+    /// right now, which is a different problem and belongs on the panel itself.
+    /// </param>
+    private sealed record NavEntry(string Key, string Number, string Label,
+        string? Section = null, Func<bool>? OffWhen = null)
+    {
+        public bool IsOff() => OffWhen != null && OffWhen();
+    }
+
+    private sealed record NavGroup(string Title, NavEntry[] Items);
+
+    /// <summary>
+    /// The sidebar, grouped by the question the operator is answering rather than by the order the
+    /// features were built in - which is what the numbering reflects and the only reason CH6
+    /// Discord used to sit between logging and the mission data.
+    ///
+    /// CH8 is three entries instead of one. It had grown into a thousand-line page holding the
+    /// connection, every tactical and airfield reply setting, two test buttons and a 38-query
+    /// explorer, and no amount of grouping in the sidebar helps a page nobody can find anything on.
+    /// The number stays CH8 for all three, because that is what the documentation calls it.
+    /// </summary>
+    private NavGroup[] _groups = Array.Empty<NavGroup>();
+
     private string _active = "connection";
+
+    /// <summary>Which part of CH8 is on screen. Only read while <c>_active</c> is "dcsgrpc".</summary>
+    private string _grpcSection = DcsGrpcPanel.SectionServer;
 
     protected override void OnInitialized()
     {
         Store.OnChange += StateHasChanged;
         Store.Load();
+
+        // Built here rather than in a field initializer so the lambdas read the config that is
+        // loaded at the time they run - Store.Config is replaced wholesale by a reload.
+        _groups = new[]
+        {
+            new NavGroup("SERVER", new[]
+            {
+                new NavEntry("connection", "CH1", "CONNECTION"),
+                new NavEntry("service", "CH9", "SERVICE"),
+            }),
+            new NavGroup("RADIO & SPEECH", new[]
+            {
+                new NavEntry("radios", "CH2", "RADIOS"),
+                new NavEntry("speech", "CH3", "SPEECH"),
+                new NavEntry("phrases", "CH4", "PHRASES"),
+                new NavEntry("vocabulary", "CH5", "VOCABULARY"),
+            }),
+            new NavGroup("MISSION DATA — CH8", new[]
+            {
+                new NavEntry("dcsgrpc", "", "SERVER & TEST", DcsGrpcPanel.SectionServer,
+                    () => !Store.Config.DcsGrpcEnabled),
+                new NavEntry("dcsgrpc", "", "REPLIES", DcsGrpcPanel.SectionReplies,
+                    () => !Store.Config.DcsIntelEnabled),
+                new NavEntry("dcsgrpc", "", "MISSION EXPLORER", DcsGrpcPanel.SectionExplorer),
+            }),
+            new NavGroup("MONITORING", new[]
+            {
+                new NavEntry("discord", "CH6", "DISCORD", null, () => !Store.Config.DiscordEnabled),
+                new NavEntry("logging", "CH7", "LOGGING", null, () => !Store.Config.LoggingEnabled),
+            }),
+        };
     }
 
-    private void SetActive(string channel) => _active = channel;
+    private bool IsActive(NavEntry item) =>
+        _active == item.Key && (item.Section == null || _grpcSection == item.Section);
+
+    private void Activate(NavEntry item)
+    {
+        _active = item.Key;
+        if (item.Section != null) _grpcSection = item.Section;
+    }
 
     private void Reload() => Store.Load();
 

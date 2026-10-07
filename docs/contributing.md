@@ -8,6 +8,7 @@ Thanks for your interest in contributing! This is a small hobby project, so the 
 - **Keep `Darkstar.Core` UI-agnostic.** Anything used by both the bot service and the GUI (config, phrases, vocabulary, logging, backups, the DCS-gRPC tester) belongs in `Darkstar.Core` and must not depend on WPF, Blazor, or console-specific APIs.
 - **Never break `config.json`/`phrases.json`/`vocabulary.json` backward compatibility silently.** Adding a new field to `AppConfig` is fine and self-heals existing installs (see `MergeMissingFields` in `AppConfig.cs`); renaming or repurposing an existing field without a migration path is not.
 - **Validate, don't crash.** Bad or out-of-range config values should produce a `WARNING` in the log (see `ValidateValues` in `AppConfig.cs`) rather than throwing. The bot should degrade gracefully wherever practical (e.g. missing Vosk model → falls back to an energy-threshold placeholder detector with a clear warning).
+- **Never commit anything the bot wrote while running.** `recordings\` holds the recorded voices of other players with their names in the file names, `logs\` holds transcripts and positions, and `config.json` holds the API keys in plain text. All of it is in `.gitignore`, and the test suite checks that it stays there — add a new output folder to both in the same change. Note that a `.gitignore` cannot help with the author name and e-mail in your commits: set a noreply address and turn on *Keep my email addresses private* on GitHub if you would rather not publish them.
 - **Back up before overwriting.** Any code path that writes `config.json`, `phrases.json`, or `vocabulary.json` must call `BackupUtils.BackupBeforeWrite` first.
 
 ## Project layout
@@ -16,7 +17,7 @@ See the [README](../README.md#project-structure) for the folder layout. The thre
 
 - **`Darkstar`** (root) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
 - **`Darkstar.Core`** — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
-- **`Darkstar.Gui`** — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`.
+- **`Darkstar.Gui`** — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry. Two rules the test suite enforces: a panel's **channel number never changes** (the documentation is full of "on CH2 Radios"), and CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel` — a mismatch there shows a blank page and fails nowhere.
 - **`Darkstar.Tests`** — the test suite. References `Darkstar.Core` only; see below.
 
 ### Where things live
@@ -52,6 +53,9 @@ The bot (repository root):
 | `AudioFrontEnd.cs` | The anti-alias filter, decimation and optional auto-gain feeding the detector. |
 | `HotwordVariants.cs` | Accepting several spellings of a wake word, and proposing them from recordings. |
 | `RateLimiter.cs` | Keeping one pilot from using the whole Gemini quota and the frequency. |
+| `TowerPlan.cs` | Turning a mission's airfields into one tower radio each. Pure; the GUI applies the result. |
+| `FrequencyAnnouncer.cs` | F10 markers and the startup message that tell pilots the generated frequencies. |
+| `TuneInGreeting.cs` | Greeting a pilot who tunes onto a frequency — and, mostly, deciding when not to. |
 | `WindowsServiceManager.cs` | Install/start/stop/remove the service, via PowerShell rather than parsing localized `sc.exe` output. |
 
 `Darkstar.Core` — understanding and answering requests:

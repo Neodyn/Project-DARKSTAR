@@ -45,11 +45,25 @@ html, body {
 
 .body-row { display: flex; flex: 1; min-height: 0; }
 
-.sidebar { width: 200px; border-right: 1px solid #2A363C; padding: 12px 0; flex-shrink: 0; overflow-y: auto; }
-.sidebar .heading { padding: 6px 16px 10px; font-size: 10px; letter-spacing: 1.5px; color: #5A6A70; }
-.navitem { display: flex; align-items: center; gap: 10px; padding: 9px 16px; color: #8CA0A8; font-size: 12.5px; cursor: pointer; border-left: 2px solid transparent; user-select: none; }
+.sidebar { width: 210px; border-right: 1px solid #2A363C; padding: 12px 0; flex-shrink: 0; overflow-y: auto; }
+/* The vertical rhythm is set by the window's MinHeight of 600px: all four groups and eleven entries
+   have to fit above the fold there, or grouping them has bought nothing. */
+.sidebar .heading { padding: 4px 16px 4px; font-size: 10px; letter-spacing: 1.5px; color: #5A6A70; margin-top: 12px; }
+.sidebar .heading:first-child { margin-top: 0; }
+.navitem { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 16px; color: #8CA0A8; font-size: 12.5px; cursor: pointer; border-left: 2px solid transparent; user-select: none; }
 .navitem:hover { color: #C7D4D8; }
 .navitem.active { background: #1B2429; border-left: 2px solid #F2A93B; color: #F2A93B; font-weight: 600; }
+
+/* The channel number is kept because the whole documentation uses it, but it is not what you read
+   when looking for a panel - so it stays legible and gets out of the way. */
+.navitem .ch { flex-shrink: 0; min-width: 24px; font-size: 10px; letter-spacing: 0.5px; color: #5A6A70; }
+.navitem.active .ch { color: #C98A24; }
+.navitem .navlabel { flex: 1; }
+/* An entry of a panel that is split across several of them (CH8), indented to line up with the
+   labels above rather than with their numbers. */
+.navitem.sub { padding-left: 50px; }
+/* Switched off in the configuration - not "unavailable", which belongs on the panel itself. */
+.navitem .navflag { flex-shrink: 0; font-size: 9px; letter-spacing: 1px; color: #5A6A70; border: 1px solid #2A363C; border-radius: 3px; padding: 0 4px; }
 
 .content { flex: 1; padding: 20px 24px; overflow-y: auto; }
 .content h1 { font-size: 14px; letter-spacing: 1px; color: #E7EDEF; font-weight: 600; margin: 0 0 16px 0; }

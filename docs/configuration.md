@@ -30,7 +30,7 @@ Both folders are pruned at startup and once an hour, by age first and then by si
 | Field | Default | Description |
 |---|---|---|
 | `DiscordEnabled` | `false` | Master switch. Notifications are entirely opt-in — nothing is sent unless this is `true`. |
-| `DiscordWebhookUrl` | `""` | Webhook URL for bot start/stop and SRS connection loss/recovery notifications. Only used when `DiscordEnabled` is `true`. Create one in Discord under a channel's *Settings → Integrations → Webhooks → New Webhook*. |
+| `DiscordWebhookUrl` | `""` | Webhook URL. Five events are posted: start (with the monitored frequencies), shutdown, a failed start with its reason, an unexpected stop with its error, and SRS connection loss/recovery — the outage once per outage, not once per five-second retry. Only used when `DiscordEnabled` is `true`. Create one in Discord under a channel's *Settings → Integrations → Webhooks → New Webhook*. |
 
 ### SRS connection
 
@@ -60,6 +60,53 @@ Each radio gets its own independent hotword detector, recording buffer, and repl
 ```
 
 The voice is resolved once at startup and travels with the radio that answers, so it applies to tactical replies, ATIS, the standby acknowledgement and fixed phrases alike. The startup log names each radio's voice, which is the only warning you get: a name this machine doesn't have fails silently, with no audio and no error on the radio.
+
+### One tower per airfield, and announcing the frequencies
+
+| Field | Default | Description |
+|---|---|---|
+| `TowerPlanBaseMHz` | `133.000` | Lowest frequency of the generated plan. |
+| `TowerPlanStepMHz` | `0.500` | Spacing between generated frequencies. |
+| `TowerPlanModulation` | `"AM"` | Modulation for generated towers. |
+| `TowerPlanCallsignSuffix` | `"Tower"` | Appended to the airfield name. Empty uses the bare name. |
+| `AnnounceFrequenciesEnabled` | `true` | Write the frequencies into the running mission at startup. |
+| `AnnounceFrequenciesMarkers` | `true` | One F10 map marker per airfield. |
+| `AnnounceFrequenciesMessage` | `true` | One on-screen message at startup. |
+| `AnnounceFrequenciesMessageSeconds` | `20` | Display time for that message. |
+
+`TowerPlan` in `Darkstar.Core` turns the running mission's airfield list into one `RadioConfig` per airfield; the GUI's CH2 button applies it. Two constraints shape the whole design, and both are limits rather than preferences:
+
+- **DCS-gRPC does not expose an airfield's radio frequency.** The `Airbase` message carries a name, a callsign, a coalition and a position — nothing else, and those frequencies never reach the scripting environment. So the plan *assigns* frequencies from a base and a step. The bot transmits over SRS rather than DCS's own ATIS, so it needs its own plan anyway — but the numbers then exist nowhere a pilot can look, which is why `AnnounceFrequenciesEnabled` defaults to on rather than off like the other features that reach into a mission.
+- **The generated towers share the global wake word.** An airfield name as a wake word puts the pronunciation problem that position-based resolution was built to avoid back on the critical path, where a miss means no reaction at all. The frequency identifies the airfield; `ToRadios` therefore leaves `Keyword` empty, and the tests assert that it stays empty.
+
+The plan is deterministic: airfields are sorted by the name DCS uses, so regenerating assigns the same frequency to the same airfield — pilots write these down. Frequencies already configured by hand are treated as taken and skipped, because two radios on one frequency means the second silently replaces the first (sessions are keyed by frequency). The count is capped at `TowerPlan.MaxTowers` (20); SRS has its own view on how many radios a client may register, which this bot cannot ask about in advance.
+
+Generating is additive, so a map change needs the old towers removed first. `TowerPlan.GeneratedRadios` recognises them by the whole fingerprint — callsign suffix, airfield-only role, no own wake word — rather than by any single trait, and returns nothing at all when the suffix is empty, because at that point a generated tower cannot be told from a hand-built one and deleting configuration on a hunch is worse than making somebody do it by hand.
+
+`FrequencyAnnouncer` writes the markers through `TriggerService.MarkToCoalition` and the message through `OutText`. Marker ids are **deterministic** (`MarkerIdBase + index`) rather than allocated, and the whole range is removed before writing: a restarted bot replaces its markers instead of stacking a second set, and a smaller mission leaves no orphans. Markers are read-only and go to the bot's own coalition. Any failure is logged as `[Announce]` and changes nothing else — the announcement runs off the startup path on purpose, since an F10 marker is not worth delaying the first transmission for.
+
+### Greeting a pilot who tunes in
+
+| Field | Default | Description |
+|---|---|---|
+| `TuneInGreetingEnabled` | `false` | Say hello when a pilot tunes onto one of the bot's frequencies. |
+| `TuneInGreetingText` | `"{pilot}, {callsign}. {tactical} Say my callsign to be heard."` | What to say. `{pilot}` the caller, `{callsign}` the channel they reached, `{tactical}` the radios that answer tactical requests. |
+| `TuneInGreetingGapSeconds` | `90` | Minimum seconds between greetings on the same frequency. Clamped to 5 at startup. |
+
+The data this runs on was already arriving and being thrown away: every SRS client reports its radios in the sync and in each radio update, so the bot knows which frequencies somebody has tuned without asking DCS anything. A player's tuned frequency is client-side and is exposed nowhere in the DCS scripting environment or in DCS-gRPC — SRS is the only place it exists.
+
+Everything about this feature is a brake, and the reason is one protocol fact: **SRS has no unicast.** A greeting goes to everybody on the frequency, not to the pilot who caused it. So:
+
+- each client is greeted **once per frequency for the whole session** — a pilot flipping back and forth between two presets causes one greeting, not one per flip;
+- `TuneInGreetingGapSeconds` suppresses greetings on a frequency that has just had one, so a flight of four checking in together hears one;
+- a client that was already greeted is refused **before** the gap is consulted, so a repeat tune-in cannot push the gap out for the next pilot to arrive;
+- the greeting is transmitted through the same path as a reply, so it queues behind whatever that radio is already saying instead of talking over it;
+- the bot's own client is filtered out of the list before any of this, and only a *changed* set of frequencies counts as an arrival — SRS sends radio updates for volume and encryption too;
+- a radio slot whose modulation says DISABLED is ignored, along with the 1 Hz placeholder frequency that comes with it, so a radio the pilot has not powered up is not a tuning.
+
+`{tactical}` never names the channel the pilot is already listening on, and the greeting is skipped for the opposing coalition exactly like a request would be (`RestrictToOwnCoalition`). Clients are forgotten when they disconnect, so a session that runs for weeks does not grow forever. Everything is logged as `[Greeting]`, including a running count.
+
+It defaults to **off** because an unprompted transmission to everybody on a frequency is the kind of help that costs somebody else their BRAA call. Switch it on while the generated tower frequencies are new to your pilots; switch it off once they know them.
 
 ### Bot identity & callsign parsing
 
