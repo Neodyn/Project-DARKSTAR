@@ -50,6 +50,18 @@
 }
 
 <div class="field" style="max-width:420px">
+    <label>CALLSIGN SEPARATOR IN PLAYER NAMES</label>
+    <input type="text" @bind="Store.Config.PlayerNameCallsignSeparator" />
+    <div class="hint">
+        How the pilot's callsign is cut out of their SRS name: with the default <code>|</code>, a player
+        called <code>Enfield 1-1 | neodym</code> is addressed as "Enfield 1-1" and the rest is ignored.
+        If the separator isn't in the name, <code>/ \ : ; ~</code> are tried too, and failing that the
+        whole name is used. <code>-</code> is never a separator — it belongs to flight numbers like 1-1.
+        Squadron tags in brackets are stripped either way, so the bot doesn't read them out.
+    </div>
+</div>
+
+<div class="field" style="max-width:420px">
     <label>OWN COALITION</label>
     <div class="row3">
         <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"#2E4E6C":"#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"#4FA8E0":"#5A6A70");background:@(Store.Config.Coalition==2?"#1E3A55":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>

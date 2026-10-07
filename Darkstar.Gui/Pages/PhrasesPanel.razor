@@ -29,10 +29,20 @@
 
 <button class="link-action" @onclick="AddPhrase"><span>+ Add phrase</span></button>
 
-<div class="field" style="max-width:520px">
-    <label>FALLBACK RESPONSE</label>
-    <input type="text" @bind="Store.Config.FallbackResponse" />
-    <div class="hint">Used when RestrictToKnownPhrases is on and nothing matches.</div>
+<div class="row2" style="max-width:860px">
+    <div class="field">
+        <label>FALLBACK RESPONSE</label>
+        <input type="text" @bind="Store.Config.FallbackResponse" />
+        <div class="hint">Used when RestrictToKnownPhrases is on and nothing matches.</div>
+    </div>
+    <div class="field">
+        <label>REPLY WHEN NOTHING WAS UNDERSTOOD</label>
+        <input type="text" @bind="Store.Config.UnintelligibleReply" />
+        <div class="hint">
+            A different case: the transmission arrived but held nothing intelligible. Asking for a
+            repeat is honest; answering the fallback would pretend the question was understood.
+        </div>
+    </div>
 </div>
 
 <div class="card" style="margin-top:16px">

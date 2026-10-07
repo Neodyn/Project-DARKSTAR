@@ -174,9 +174,19 @@
         </button>
     </div>
 
-    <div class="field">
-        <label>BOGEY DOPE TRIGGERS (comma separated)</label>
-        <input type="text" @bind="BogeyDopeTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+    <div class="row2">
+        <div class="field">
+            <label>BOGEY DOPE TRIGGERS (comma separated)</label>
+            <input type="text" @bind="BogeyDopeTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field">
+            <label>BULLSEYE TRIGGERS</label>
+            <input type="text" @bind="BullseyeTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                Not a request of its own: a word a pilot adds to one — "bogey dope bullseye" — to get
+                the answer from the bullseye instead of from their own aircraft.
+            </div>
+        </div>
     </div>
     <div class="row2">
         <div class="field">
@@ -342,6 +352,34 @@
                 <div class="field">
                     <label>CANCEL TRIGGERS</label>
                     <input type="text" @bind="ThreatCircleCancelTriggers" disabled="@ThreatCircleDisabled" />
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>REPLY WHEN THE CIRCLE WAS CANCELLED</label>
+                    <input type="text" @bind="Store.Config.DcsIntelThreatCircleCancelledReply" disabled="@ThreatCircleDisabled" />
+                </div>
+                <div class="field">
+                    <label>REPLY WHEN NOTHING WAS RUNNING</label>
+                    <input type="text" @bind="Store.Config.DcsIntelThreatCircleNoneActiveReply" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">A cancel call from a pilot who has no circle armed.</div>
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>REPLY WHEN THE CALLER'S AIRCRAFT WASN'T FOUND</label>
+                    <input type="text" @bind="Store.Config.DcsIntelThreatCircleNoPilotReply" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">
+                        A circle is centred on the caller's aircraft, so without it there is nothing to
+                        centre on — same name-matching problem as a BRAA call.
+                    </div>
+                </div>
+                <div class="field">
+                    <label>REPLY WHEN TOO MANY CIRCLES ARE ACTIVE</label>
+                    <input type="text" @bind="Store.Config.DcsIntelThreatCircleBusyReply" disabled="@ThreatCircleDisabled" />
+                    <div class="hint">Said rather than silently ignoring the request.</div>
                 </div>
             </div>
         </div>
@@ -767,6 +805,12 @@ else
     {
         get => string.Join(", ", Store.Config.DcsIntelAlphaCheckTriggers);
         set => Store.Config.DcsIntelAlphaCheckTriggers = SplitTriggers(value);
+    }
+
+    private string BullseyeTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelBullseyeTriggers);
+        set => Store.Config.DcsIntelBullseyeTriggers = SplitTriggers(value);
     }
 
     private string ThreatTriggers

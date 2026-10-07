@@ -2,7 +2,6 @@
     <img src="darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
 </p>
 
-
 # D.A.R.K.S.T.A.R.
 
 **D**igital **A**ssistant for **R**adio **K**eyword-activated **S**peech **T**ranscription **A**nd **R**esponse

@@ -1443,6 +1443,64 @@ internal static class HousekeepingTests
             .ToList();
         Check("and no number is given to two panels", duplicated.Count == 0, string.Join(", ", duplicated));
 
+        Section("Every setting can actually be reached in the editor");
+
+        // The documentation test below proves a setting is WRITTEN DOWN. That is not the same as
+        // being reachable: the whole frequency announcer - four settings and a feature pilots depend
+        // on to learn the generated frequencies at all - was documented in three places and editable
+        // in none, so the only way to switch it off was a text editor. Worse, CH2 pointed at CH8 for
+        // it, where it had never been. Documentation cannot catch that; this can.
+        var panelMarkup = string.Join("\n", System.IO.Directory
+            .GetFiles(Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*.razor")
+            .Select(System.IO.File.ReadAllText));
+
+        var unreachableSettings = typeof(AppConfig).GetProperties()
+            .Where(p => p.CanRead && p.CanWrite)
+            .Select(p => p.Name)
+            .Where(name => !panelMarkup.Contains($"Config.{name}", StringComparison.Ordinal))
+            .ToList();
+
+        Check($"all {typeof(AppConfig).GetProperties().Count(p => p.CanRead && p.CanWrite)} settings are bound somewhere in the GUI",
+            unreachableSettings.Count == 0,
+            unreachableSettings.Count == 0 ? "" : "only in config.json: " + string.Join(", ", unreachableSettings));
+
+        // A radio's own settings are bound through the loop variable rather than through Store.Config.
+        var unreachablePerRadio = typeof(RadioConfig).GetProperties()
+            .Where(p => p.CanRead && p.CanWrite)
+            .Select(p => p.Name)
+            .Where(name => !panelMarkup.Contains($".{name}", StringComparison.Ordinal))
+            .ToList();
+
+        Check("and so are all the per-radio ones", unreachablePerRadio.Count == 0,
+            unreachablePerRadio.Count == 0 ? "" : "only in config.json: " + string.Join(", ", unreachablePerRadio));
+
+        // The other half of that failure: a card telling somebody to go to a channel the setting is
+        // not on. Panels name channels in their own prose, and nothing links the two.
+        var panelFiles = System.IO.Directory.GetFiles(
+            Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*.razor");
+
+        var channelOf = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ConnectionPanel"] = "CH1", ["RadiosPanel"] = "CH2", ["SpeechPanel"] = "CH3",
+            ["PhrasesPanel"] = "CH4", ["VocabularyPanel"] = "CH5", ["DiscordPanel"] = "CH6",
+            ["LoggingPanel"] = "CH7", ["DcsGrpcPanel"] = "CH8", ["ServicePanel"] = "CH9",
+        };
+
+        var selfReferences = new List<string>();
+
+        foreach (var file in panelFiles)
+        {
+            var name = System.IO.Path.GetFileNameWithoutExtension(file)!;
+            if (!channelOf.TryGetValue(name, out var own)) continue;
+
+            // A panel pointing at its own channel is a leftover from before the setting moved.
+            if (System.IO.File.ReadAllText(file).Contains($"({own})", StringComparison.Ordinal))
+                selfReferences.Add($"{name} points at {own}, which is itself");
+        }
+
+        Check("no panel sends the operator to the channel they are already on",
+            selfReferences.Count == 0, string.Join("; ", selfReferences));
+
         Section("CH8's three entries and its three sections are the same three");
 
         // CH8 is one component shown in three pieces. The sidebar names a section, the panel decides

@@ -156,8 +156,19 @@
     Splitting the roles is how you get a tower: give one frequency the airfield requests and turn
     its tactical requests off, and the other way round on the AWACS frequency. Each gets its own
     wake word and callsign above. A pilot who calls the wrong one is told where to go instead of
-    being refused — see <code>WrongChannelReply</code>.
+    being refused.
 </p>
+
+<div class="field" style="max-width:620px">
+    <label>REPLY THAT POINTS AT THE RIGHT FREQUENCY</label>
+    <input type="text" @bind="Store.Config.WrongChannelReply" />
+    <div class="hint">
+        <code>{callsign}</code> the radio that does serve the request, <code>{frequency}</code> its
+        frequency. Used only when <strong>exactly one</strong> other radio serves it — with two towers
+        configured there is no single right answer, so the transmission falls through to
+        <code>phrases.json</code> instead of a guess. Emptying this field switches the handoff off.
+    </div>
+</div>
 
 <button class="link-action" @onclick="AddRadio"><span>+ Add radio</span></button>
 
@@ -185,7 +196,7 @@
         until you press Save changes.
     </div>
 
-    <div class="row3">
+    <div class="row4">
         <div class="field" style="margin-bottom:0">
             <label>FIRST FREQUENCY (MHZ)</label>
             <input type="number" step="0.025" @bind="Store.Config.TowerPlanBaseMHz" />
@@ -198,14 +209,22 @@
             <label>CALLSIGN SUFFIX</label>
             <input type="text" @bind="Store.Config.TowerPlanCallsignSuffix" placeholder="(airfield name only)" />
         </div>
+        <div class="field" style="margin-bottom:0">
+            <label>MODULATION</label>
+            <select @bind="Store.Config.TowerPlanModulation" style="background:#161F24;border:1px solid #2A363C;border-radius:4px;color:#E7EDEF;padding:7px 10px;width:100%">
+                <option value="AM">AM</option>
+                <option value="FM">FM</option>
+            </select>
+        </div>
     </div>
 
     <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:10px 0 0">
         <div style="font-size:11.5px;color:#F2A93B">
             <strong>These frequencies are invented.</strong> DCS-gRPC does not report an airfield's real
             radio frequency — the <code>Airbase</code> data carries a name, a coalition and a position and
-            nothing else. So pick a range your mission doesn't use for something else, and leave the F10
-            announcement on (CH8): it is the only place your pilots can learn these numbers.
+            nothing else. So pick a range your mission doesn't use for something else, and leave the
+            announcement in the card below switched on: an F10 marker is the only place your pilots can
+            learn these numbers.
         </div>
     </div>
 
@@ -225,6 +244,81 @@
             }
         </div>
     }
+</div>
+
+<div class="card" style="margin-top:10px">
+    <div class="card-head" style="margin-bottom:6px">
+        <span style="font-size:12.5px;color:#E7EDEF">Announce the frequencies in game</span>
+        <span class="spacer"></span>
+        <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
+            <button class="toggle @(Store.Config.AnnounceFrequenciesEnabled ? "on" : "")"
+                    @onclick="() => Store.Config.AnnounceFrequenciesEnabled = !Store.Config.AnnounceFrequenciesEnabled">
+                <span class="knob"></span>
+            </button>
+        </div>
+    </div>
+
+    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+        The counterpart to the generated towers: at startup the bot writes its frequencies into the
+        running mission, because invented frequencies appear in no briefing and on no kneeboard.
+        On by default — this is the only place your pilots can learn them.
+    </div>
+
+    @if (!Store.Config.DcsGrpcEnabled)
+    {
+        <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B;margin:0 0 10px">
+            DCS-gRPC is switched off (CH8 → Server &amp; test). Writing into a mission needs it, so
+            nothing will be announced — the frequencies then have to reach your pilots some other way.
+        </div>
+    }
+
+    <div style="opacity:@(Store.Config.AnnounceFrequenciesEnabled ? "1" : "0.5")">
+        <div class="toggle-row" style="margin:0 0 4px 0">
+            <div>
+                <div>One F10 map marker per airfield</div>
+                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                    The durable half: stays for the whole mission, names the tower that serves that field
+                    plus the radios that are not tied to one, and can be read whenever somebody needs it.
+                    Read-only, own coalition only, and a fixed id range — a restarted bot replaces its
+                    markers instead of stacking a second set.
+                </div>
+            </div>
+            <button class="toggle @(Store.Config.AnnounceFrequenciesMarkers ? "on" : "")"
+                    disabled="@(!Store.Config.AnnounceFrequenciesEnabled)"
+                    @onclick="() => Store.Config.AnnounceFrequenciesMarkers = !Store.Config.AnnounceFrequenciesMarkers">
+                <span class="knob"></span>
+            </button>
+        </div>
+
+        <div class="toggle-row" style="margin:0 0 4px 0">
+            <div>
+                <div>One on-screen message at startup</div>
+                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                    The transient half, for whoever is already flying when the bot comes up. Lists the
+                    radios that are not tied to an airfield in full and summarises the towers, because a
+                    dozen of them would scroll off the screen.
+                </div>
+            </div>
+            <button class="toggle @(Store.Config.AnnounceFrequenciesMessage ? "on" : "")"
+                    disabled="@(!Store.Config.AnnounceFrequenciesEnabled)"
+                    @onclick="() => Store.Config.AnnounceFrequenciesMessage = !Store.Config.AnnounceFrequenciesMessage">
+                <span class="knob"></span>
+            </button>
+        </div>
+
+        <div class="field" style="max-width:320px;margin:10px 0 0">
+            <label>MESSAGE STAYS ON SCREEN (SECONDS)</label>
+            <input type="number" min="1" step="5" @bind="Store.Config.AnnounceFrequenciesMessageSeconds"
+                   disabled="@(!Store.Config.AnnounceFrequenciesEnabled || !Store.Config.AnnounceFrequenciesMessage)" />
+        </div>
+    </div>
+
+    <div class="hint" style="margin-top:10px">
+        Runs once, after the SRS connection is up — announcing frequencies the bot then fails to monitor
+        would be worse than silence — and off the startup path, so a mission that is still loading never
+        delays the first transmission. Whatever happens is logged as <code>[Announce]</code>; a failure
+        changes nothing else.
+    </div>
 </div>
 
 <div class="card" style="margin-top:10px">

@@ -84,6 +84,7 @@ html, body {
 .field .hint { font-size: 11px; color: #5A6A70; margin-top: 4px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
 
 .toggle-row { display: flex; align-items: center; justify-content: space-between; border: 1px solid #2A363C; border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
 .toggle { position: relative; width: 34px; height: 18px; border-radius: 9px; background: #384349; cursor: pointer; flex-shrink: 0; border: none; padding: 0; }

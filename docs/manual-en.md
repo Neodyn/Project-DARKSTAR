@@ -524,7 +524,7 @@ The channels are grouped by what you are setting up rather than by their number 
 | Channel | Contents |
 |---|---|
 | **CH1 Connection** | Config folder, SRS host/port, client name, EAM password, the `DCS-SR-ExternalAudio.exe` path with a **Detect SRS installation** button, coalition, coalition restriction. |
-| **CH2 Radios** | The radio list: frequency, modulation, per-radio wake word, accepted wake-word spellings, callsign and voice, the three role switches (tactical / airfield / friendly positions), a **List available voices** button, add/remove. |
+| **CH2 Radios** | The radio list: frequency, modulation, per-radio wake word, accepted wake-word spellings, callsign and voice, the three role switches (tactical / airfield / friendly positions), a **List available voices** button, add/remove. Below it the handoff reply, the tower generator and the **Announce the frequencies in game** card, and the tune-in greeting. |
 | **CH3 Speech** | Gemini key/model/retries, the global TTS voice with **List available voices**, pre-roll, Vosk model folder, global wake word and its accepted spellings, silence frames, the standby acknowledgement, the per-pilot rate limit, the wake-word accuracy card with recording retention, and the placeholder detector's settings. |
 | **CH4 Phrases** | The trigger/answer table plus `RestrictToKnownPhrases`, the fallback reply, and the radio-check card. |
 | **CH5 Vocabulary** | The hint word list as chips, with anything that is also a trigger phrase marked in red. |
@@ -711,7 +711,7 @@ Is one tower per airfield better than a single tower for all of them? Performanc
 
 ### Telling the pilots the frequencies
 
-Because the tower frequencies are invented, they appear in no briefing and on no kneeboard. So the bot writes them into the mission itself at startup (`AnnounceFrequenciesEnabled`, on by default):
+Because the tower frequencies are invented, they appear in no briefing and on no kneeboard. So the bot writes them into the mission itself at startup (`AnnounceFrequenciesEnabled`, on by default — **CH2 Radios → Announce the frequencies in game**, under the tower generator):
 
 - **One F10 map marker per airfield**, at the airfield, naming its tower plus the frequencies that are not tied to an airfield — the AWACS, a tanker — and the wake word. This is the durable half: it stays for the whole mission and can be read whenever somebody needs it.
 - **One on-screen message at startup**, for whoever is already flying. It lists the non-airfield radios in full and summarises the towers, because a dozen of them would scroll off the screen.

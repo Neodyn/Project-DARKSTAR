@@ -524,7 +524,7 @@ Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer N
 | Kanal | Inhalt |
 |---|---|
 | **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, der Pfad zu `DCS-SR-ExternalAudio.exe` samt Knopf **Detect SRS installation**, Koalition, Koalitionsbeschränkung. |
-| **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword, akzeptierte Hotword-Schreibweisen, Rufzeichen und Stimme je Radio, die drei Rollenschalter (Taktik / Flugplatz / Positionen von Freunden), ein Knopf **List available voices**, hinzufügen/entfernen. |
+| **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword, akzeptierte Hotword-Schreibweisen, Rufzeichen und Stimme je Radio, die drei Rollenschalter (Taktik / Flugplatz / Positionen von Freunden), ein Knopf **List available voices**, hinzufügen/entfernen. Darunter der Verweistext auf die richtige Frequenz, der Tower-Generator mit der Karte **Announce the frequencies in game** und die Begrüßung beim Aufschalten. |
 | **CH3 Speech** | Gemini-Key/-Modell/-Wiederholungen, die globale TTS-Stimme samt **List available voices**, Pre-Roll, Vosk-Modellordner, globales Hotword und seine akzeptierten Schreibweisen, Stille-Frames, die Zwischenansage, das Rate-Limit pro Pilot, die Karte zur Hotword-Genauigkeit samt Aufnahmen-Aufräumgrenzen und die Werte des Platzhalter-Detektors. |
 | **CH4 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases`, die Fallback-Antwort und die Radio-Check-Karte. |
 | **CH5 Vocabulary** | Die Hinweiswortliste als Chips, wobei alles, was auch eine Triggerphrase ist, rot markiert wird. |
@@ -711,7 +711,7 @@ Ist ein Tower pro Platz besser als einer für alle? Performance spielt kaum eine
 
 ### Den Piloten die Frequenzen mitteilen
 
-Weil die Tower-Frequenzen erfunden sind, stehen sie in keinem Briefing und auf keinem Kneeboard. Der Bot schreibt sie deshalb beim Start in die laufende Mission (`AnnounceFrequenciesEnabled`, standardmäßig an):
+Weil die Tower-Frequenzen erfunden sind, stehen sie in keinem Briefing und auf keinem Kneeboard. Der Bot schreibt sie deshalb beim Start in die laufende Mission (`AnnounceFrequenciesEnabled`, standardmäßig an — **CH2 Radios → Announce the frequencies in game**, unter dem Tower-Generator):
 
 - **Ein F10-Kartenmarker pro Flugplatz**, an dessen Position, mit dem zuständigen Tower, den nicht platzgebundenen Frequenzen — AWACS, Tanker — und dem Hotword. Das ist die dauerhafte Hälfte: bleibt die ganze Mission über stehen und ist jederzeit nachlesbar.
 - **Eine einmalige Bildschirmmeldung** beim Start, für den, der schon fliegt. Sie nennt die nicht platzgebundenen Radios vollständig und fasst die Tower zusammen, weil ein Dutzend davon aus dem Bild scrollen würde.
