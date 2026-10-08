@@ -87,7 +87,14 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\DARKSTAR
+; Prefilled with wherever this is already installed, and only falling back to Program Files when
+; it is not - see DefaultInstallDir in [Code]. UsePreviousAppDir below covers an installation made
+; by this installer; the code constant also catches one whose uninstall entry is gone but whose
+; Windows Service still points at the folder.
+DefaultDirName={code:DefaultInstallDir}
+; The page is always shown. Inno Setup's default ("auto") hides it as soon as a previous install
+; is found, which is exactly the moment somebody wants to SEE where the new version is going.
+DisableDirPage=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=output
@@ -140,13 +147,24 @@ Name: "gui"; Description: "Config GUI (Darkstar.ConfigEditor.exe)"; Types: full 
 Name: "voskmodel"; Description: "Vosk wake-word model (offline speech recognition)"; Types: full botonly custom
 #endif
 
+; What is deliberately NOT installed, unless the build script was given -WithSymbols
+; (ISCC /DWithSymbols): the .pdb debug symbols and the XML documentation files. Neither is needed
+; to RUN anything - they are several MB of developer material, and a .pdb additionally carries
+; the absolute path of the machine it was built on. Keeping them is one switch away for the case
+; where a stack trace with line numbers is worth more.
+#ifdef WithSymbols
+  #define PayloadExcludes ""
+#else
+  #define PayloadExcludes "*.pdb,*.xml"
+#endif
+
 [Files]
 ; --- Bot service (published framework-dependent - needs the .NET 8 Desktop Runtime installed,
 ;     handled below) ---
-Source: "publish\bot\*"; DestDir: "{app}"; Components: bot; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "publish\bot\*"; DestDir: "{app}"; Excludes: "{#PayloadExcludes}"; Components: bot; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; --- Config GUI (published framework-dependent) ---
-Source: "publish\gui\*"; DestDir: "{app}\Gui"; Components: gui; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "publish\gui\*"; DestDir: "{app}\Gui"; Excludes: "{#PayloadExcludes}"; Components: gui; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; --- Vosk model, unpacked (left out entirely in the slim build) ---
 #ifndef NoVoskModel
@@ -233,6 +251,9 @@ var
   PreviousVersion: String;
   // Whether this run stopped a running service and therefore owes it a restart.
   ServiceWasStopped: Boolean;
+  // Where an existing installation was found, '' if this is a first install. Filled in by
+  // DefaultInstallDir and only used to tell the user about it on the destination page.
+  DetectedInstallDir: String;
 
 // Must stay identical to AppId in [Setup] - this is the key Inno Setup registers itself under.
 function UninstallRegKey(): String;
@@ -268,6 +289,85 @@ end;
 function DarkstarServiceInstalled(): Boolean;
 begin
   Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\{#MyServiceName}');
+end;
+
+// --- Where is it already installed? -------------------------------------------------------
+//
+// Two independent sources, because they fail in different situations:
+//
+//   1. The uninstall entry's InstallLocation - written by this installer, and what
+//      UsePreviousAppDir uses as well. Gone if somebody deleted the entry, and absent for an
+//      installation made by a different installer.
+//   2. The Windows Service's ImagePath - survives all of that, and on a server the service is
+//      usually the only thing that was ever set up.
+//
+// Whatever is found becomes the default on the destination page, which the user then sees and
+// can still change: installing a new version NEXT TO an old one, with the service still pointing
+// at the old folder, is the mistake this prevents.
+
+// The folder of the executable the Windows Service is registered to run, '' if there is none.
+function ServiceInstallDir(): String;
+var
+  ImagePath: String;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, 'SYSTEM\CurrentControlSet\Services\{#MyServiceName}', 'ImagePath', ImagePath) then
+    exit;
+
+  // The registered path is quoted (it has to be - "C:\Program Files\..." contains spaces), and
+  // the quotes are part of the value rather than of the path.
+  ImagePath := RemoveQuotes(Trim(ImagePath));
+  if ImagePath = '' then
+    exit;
+
+  Result := ExtractFileDir(ImagePath);
+  if not DirExists(Result) then
+    Result := '';
+end;
+
+// The folder recorded by a previous run of this installer, '' if there is none.
+function PreviousInstallDir(): String;
+var
+  Location: String;
+begin
+  Result := '';
+  if RegQueryStringValue(HKLM64, UninstallRegKey(), 'InstallLocation', Location) then
+    Result := Location
+  else if RegQueryStringValue(HKLM32, UninstallRegKey(), 'InstallLocation', Location) then
+    Result := Location;
+
+  Result := RemoveBackslashUnlessRoot(Trim(Result));
+  if (Result <> '') and (not DirExists(Result)) then
+    Result := '';
+end;
+
+// The destination the wizard starts with. A scripted constant rather than a fixed path, so an
+// existing installation is upgraded in place by default instead of ending up twice on the disk.
+function DefaultInstallDir(Param: String): String;
+begin
+  DetectedInstallDir := PreviousInstallDir();
+  if DetectedInstallDir = '' then
+    DetectedInstallDir := ServiceInstallDir();
+
+  if DetectedInstallDir <> '' then
+    Result := DetectedInstallDir
+  else
+    Result := ExpandConstant('{autopf}\DARKSTAR');
+end;
+
+// Says on the destination page that this is going on top of an existing installation. Inno Setup
+// hides the page entirely in that case by default; it is shown here, and this is the sentence
+// that makes it worth showing.
+//
+// The text is kept to about the length of the message it replaces: the label was laid out and
+// sized for that one when the wizard was built, and a much longer caption would be clipped.
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpSelectDir) and (DetectedInstallDir <> '') then
+    WizardForm.SelectDirLabel.Caption :=
+      '{#MyAppName} is already installed in the folder below. Keep it to update that installation -' + #13#10 +
+      'your config.json, phrases.json and vocabulary.json are kept. A different folder means a' + #13#10 +
+      'second copy, which the Windows Service would not be running.';
 end;
 
 // Runs a PowerShell one-liner hidden and waits for it. PowerShell rather than sc.exe because

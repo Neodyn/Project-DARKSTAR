@@ -125,7 +125,8 @@ The dev-setup script can download any of them for you (`-VoskModelSize Standard`
 
    On a bot-only machine the settings are edited in `config.json` with a text editor — or in the editor on your own PC, pointed at a copy. The **.NET 8 *Desktop* Runtime** is installed in every case, including bot-only: it is the one package that covers both the bot's plain .NET requirement and the editor's, and installing the smaller one would mean installing the other half later anyway.
 
-4. Optionally tick *"Install and start as a Windows Service"*. You can also do that later, and more comfortably, from the GUI — see [chapter 9](#9-running-as-a-windows-service).
+4. Choose the folder. The installer looks for an existing installation first — in its own uninstall entry and, failing that, in the path the Windows Service is registered to run — and offers that folder, with a line on the page saying it found one. Keeping it updates that installation in place and leaves `config.json`, `phrases.json` and `vocabulary.json` untouched; choosing a different folder installs a **second copy**, which the service would not be running.
+5. Optionally tick *"Install and start as a Windows Service"*. You can also do that later, and more comfortably, from the GUI — see [chapter 9](#9-running-as-a-windows-service).
 
 The installer brings every runtime dependency with it and installs only what is actually missing: the **.NET 8 Desktop Runtime**, the **Visual C++ Redistributable** (needed by Vosk) and the **WebView2 Runtime** (needed by the GUI).
 

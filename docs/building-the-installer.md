@@ -26,18 +26,38 @@ The result is `installer\output\DARKSTAR-Setup-<version>.exe`.
 
 | Parameter | Default | Purpose |
 |---|---|---|
+| `-ProjectRoot` | the script's own folder | Which source tree to build. Only needed when the script is run from somewhere else. |
 | `-VoskModelSize` | `Small` | Which model gets bundled. `Standard` is the recommended one for real use but makes a ~1.8 GB installer. |
 | `-Version` | `1.0` | Stamped into the installer and its file name. |
 | `-Slim` / `-SkipVoskModel` | off | Slim installer without a bundled model: a few MB instead of up to ~2 GB. Produces `DARKSTAR-Setup-<version>-slim.exe`; `VoskModelPath` then has to be set by hand on the target machine. |
 | `-SkipDependencyDownload` | off | Don't fetch the dependency installers; anything missing simply isn't bundled. |
 | `-Clean` | off | Delete previous publish output and installers first, plus the `obj\` and `bin\` folders of all three projects — so it really is a build from scratch, not just a fresh copy of a stale one. |
+| `-WithSymbols` | off | Keep the `.pdb` debug symbols and the XML documentation in the installed files. Left out by default — see below. |
 | `-DryRun` | off | Only check prerequisites and print the plan. |
 
 It is safe to re-run: every step skips itself when its result is already in place. To swap the
 bundled model for a different size, delete `installer\vosk-model\` first.
 
-Needed on the build machine: the **.NET 8 SDK** and **Inno Setup 6** (the script offers to install
-Inno Setup via winget when it's missing).
+Needed on the build machine: the **.NET 8 SDK** and **Inno Setup 6**. Inno Setup is looked for in
+its own uninstall registry entry first — that finds a per-user installation, which is what winget
+makes when it cannot elevate — then in both `Program Files` folders, in `%LOCALAPPDATA%\Programs`
+and on the `PATH`, each folder matched as `Inno Setup*` so a future version is found too. If it is
+genuinely missing, the script offers to install it via winget.
+
+### When something is missing, the build still finishes
+
+Inno Setup does not warn about a `Source:` line that matches no files — it stops with an error. A
+Vosk download that failed earlier (a warning that scrolls past on a slow connection or behind a
+proxy) therefore used to end the build with `No files found matching "vosk-model\*"` and **no
+installer at all**, which reads like a broken script rather than a missing download.
+
+So everything the `.iss` packs with a wildcard is now checked right before the compiler runs:
+
+- **No usable model** — missing, empty, or half-extracted without its `am\` and `conf\` folders —
+  builds the **slim installer instead**, says so in the warnings and in the summary, and names the
+  file `-slim.exe` accordingly. A slim installer that exists beats a full one that doesn't.
+- **An empty publish folder** stops the build with that sentence, instead of letting the compiler
+  report a missing wildcard three steps away from the cause.
 
 ## Doing it by hand
 
@@ -116,7 +136,7 @@ Inno Setup via winget when it's missing).
 
 ## What goes into the installer, and what doesn't
 
-`Setup.iss` packs exactly four things: `publish\bot\*`, `publish\gui\*`, `vosk-model\*` and the three dependency installers. No `bin\`, no `obj\`, no sources, no docs.
+`Setup.iss` packs exactly four things: `publish\bot\*`, `publish\gui\*`, `vosk-model\*` and the three dependency installers — the first two minus the debug symbols and XML documentation. No `bin\`, no `obj\`, no sources, no docs.
 
 The important word is **publish**. `installer\publish\` is not the compiler's output folder — it is produced by
 
@@ -137,7 +157,9 @@ Two more things publishing would include that the bot never reads, both excluded
 | `SatelliteResourceLanguages` = `en` | The localized resource DLLs the gRPC, protobuf and Blazor WebView packages ship in a subfolder per language (`cs\`, `de\`, `es\`, `fr\`, `ja\`, `ru\`, `zh-Hans\` …). Everything this bot says is English — radio phraseology isn't translatable — so those folders are pure freight. |
 | `AllowedReferenceRelatedFileExtensions` = `.pdb` | The XML API documentation that gets copied next to each referenced assembly by default. That file is for someone writing code against a library, not for running one. |
 
-**The `.pdb` symbol files are kept on purpose.** A Windows Service leaves no trace anywhere except its log file, and without the symbols the stack traces in that log lose their line numbers — which is exactly when they stop being useful. A few hundred KB against diagnosable failures is a trade worth making. If you disagree, `<DebugType>none</DebugType>` in both app projects removes them.
+**The `.pdb` symbol files are not installed.** They are produced by the build and stay in `installer\publish\`, but `Setup.iss` excludes them from the payload (`Excludes: "*.pdb,*.xml"`), because nothing needs them to *run* the bot — and a `.pdb` additionally carries the absolute path of the machine it was built on, which is a detail a public release has no reason to ship.
+
+The cost is real and worth knowing: a Windows Service leaves no trace except its log file, and without the symbols the stack traces in that log lose their line numbers. When that matters more — a bug you are chasing on the target machine — build with `-WithSymbols` and they are installed again.
 
 ### The build script checks this for you
 

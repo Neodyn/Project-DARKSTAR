@@ -125,7 +125,8 @@ Das Setup-Skript lädt jedes davon auf Wunsch herunter (`-VoskModelSize Standard
 
    Auf einer Bot-only-Maschine werden die Einstellungen mit einem Texteditor in `config.json` gepflegt — oder im Editor auf dem eigenen PC, auf eine Kopie gerichtet. Die **.NET-8-*Desktop*-Runtime** wird in jedem Fall installiert, auch bei Bot only: sie ist das eine Paket, das sowohl die Anforderung des Bots als auch die des Editors abdeckt, und die kleinere zu nehmen hieße, die andere Hälfte später nachzuinstallieren.
 
-4. Optional *„Install and start as a Windows Service"* ankreuzen. Das geht auch später und bequemer über die GUI — siehe [Kapitel 9](#9-betrieb-als-windows-dienst).
+4. Zielordner wählen. Der Installer sucht vorher nach einer vorhandenen Installation — im eigenen Deinstallationseintrag und, falls der fehlt, in dem Pfad, mit dem der Windows-Dienst registriert ist — und schlägt diesen Ordner vor, mit einem Hinweis auf der Seite, dass er etwas gefunden hat. Behältst du ihn, wird diese Installation an Ort und Stelle aktualisiert und `config.json`, `phrases.json` und `vocabulary.json` bleiben unangetastet; ein anderer Ordner ergibt eine **zweite Kopie**, die der Dienst nicht ausführen würde.
+5. Optional *„Install and start as a Windows Service"* ankreuzen. Das geht auch später und bequemer über die GUI — siehe [Kapitel 9](#9-betrieb-als-windows-dienst).
 
 Der Installer bringt alle Laufzeitabhängigkeiten mit und installiert nur, was tatsächlich fehlt: die **.NET 8 Desktop Runtime**, das **Visual C++ Redistributable** (für Vosk) und die **WebView2 Runtime** (für die GUI).
 

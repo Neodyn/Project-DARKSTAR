@@ -1007,6 +1007,102 @@ internal static class HousekeepingTests
         Check("the build says what it is about to pack", buildScript.Contains("Show-PublishInventory"));
         Check("and -Clean really cleans", buildScript.Contains("\"obj\", \"bin\""));
 
+        Console.WriteLine();
+        Console.WriteLine("A missing payload cannot end the build in the compiler");
+
+        // What this is about: Inno Setup does not warn about a Source: line matching nothing, it
+        // stops with an error. A Vosk download that failed four steps earlier - a warning that
+        // scrolls past - therefore ended the whole build with "No files found matching
+        // ...\vosk-model\*" and no installer at all. Every wildcard Setup.iss packs has to be
+        // checked before the compiler is called, and the model's absence has to turn into the slim
+        // build rather than into a failure.
+        var measureAt = buildScript.IndexOf("Measure-PayloadFolder $voskModelDir", StringComparison.Ordinal);
+        var compileAt = buildScript.IndexOf("& $iscc @isccArgs", StringComparison.Ordinal);
+
+        Check("the payload is checked before the compiler is called",
+            measureAt > 0 && compileAt > 0 && measureAt < compileAt,
+            $"check at {measureAt}, compile at {compileAt}");
+        Check("both publish folders are checked, not just the model",
+            buildScript.Contains("Measure-PayloadFolder $payload.Path", StringComparison.Ordinal) &&
+            buildScript.Contains("$publishBot; What", StringComparison.Ordinal) &&
+            buildScript.Contains("$publishGui; What", StringComparison.Ordinal));
+        Check("a half-extracted model counts as no model",
+            buildScript.Contains("Test-VoskModelFolder $voskModelDir", StringComparison.Ordinal));
+        Check("the slim fallback is what decides the compiler flag, not what the caller asked for",
+            buildScript.Contains("if ($buildSlim)   { $isccArgs += \"/DNoVoskModel\" }", StringComparison.Ordinal) &&
+            !buildScript.Contains("if ($SkipVoskModel) { $isccArgs +=", StringComparison.Ordinal));
+        Check("and the file name follows the variant that was actually built",
+            buildScript.Contains("if ($buildSlim -ne [bool]$SkipVoskModel)", StringComparison.Ordinal));
+        Check("an empty publish folder is its own message rather than a compiler error",
+            buildScript.Contains("the publish step produced no files", StringComparison.Ordinal));
+
+        // The other half of the same rule, on the Setup.iss side: every Source: glob must either be
+        // removed by a #define or be allowed to be missing. A new unguarded one would reintroduce
+        // exactly the failure above.
+        var unguarded = new List<string>();
+        var insideModelGuard = false;
+
+        foreach (var line in iss.Split('\n').Select(l => l.TrimEnd('\r')))
+        {
+            if (line.StartsWith("#ifndef NoVoskModel", StringComparison.Ordinal)) insideModelGuard = true;
+            else if (line.StartsWith("#endif", StringComparison.Ordinal)) insideModelGuard = false;
+            else if (line.StartsWith("Source:", StringComparison.Ordinal) &&
+                     !line.Contains("skipifsourcedoesntexist", StringComparison.Ordinal) &&
+                     !insideModelGuard &&
+                     !line.Contains("publish\\", StringComparison.Ordinal))
+                unguarded.Add(line.Split(';')[0]);
+        }
+
+        Check("every packed file either always exists, can be left out, or may be missing",
+            unguarded.Count == 0, string.Join(" | ", unguarded));
+
+        Console.WriteLine();
+        Console.WriteLine("Only what is needed to run is installed");
+
+        Check("debug symbols and XML docs are excluded by default",
+            iss.Contains("#define PayloadExcludes \"*.pdb,*.xml\"", StringComparison.Ordinal));
+        Check("both published folders use that exclusion",
+            iss.Split('\n').Count(l => l.StartsWith("Source: \"publish\\", StringComparison.Ordinal) &&
+                                       l.Contains("Excludes: \"{#PayloadExcludes}\"", StringComparison.Ordinal)) == 2);
+        Check("keeping them is one switch away, for a stack trace worth more than the megabytes",
+            iss.Contains("#ifdef WithSymbols", StringComparison.Ordinal) &&
+            buildScript.Contains("if ($WithSymbols) { $isccArgs += \"/DWithSymbols\" }", StringComparison.Ordinal) &&
+            buildScript.Contains("[switch]$WithSymbols", StringComparison.Ordinal));
+
+        Console.WriteLine();
+        Console.WriteLine("Installing over an existing installation finds it first");
+
+        Check("the destination page is always shown", iss.Contains("DisableDirPage=no", StringComparison.Ordinal));
+        Check("prefilled by code rather than by a fixed path",
+            iss.Contains("DefaultDirName={code:DefaultInstallDir}", StringComparison.Ordinal));
+        Check("Inno Setup's own previous-directory memory stays on as well",
+            iss.Contains("UsePreviousAppDir=yes", StringComparison.Ordinal));
+
+        // Two sources, because they fail in different situations: the uninstall entry is gone if
+        // somebody deleted it, and the service's ImagePath is all that is left on a server where
+        // only the service was ever set up.
+        Check("an existing installation is looked for in the uninstall entry",
+            iss.Contains("RegQueryStringValue(HKLM64, UninstallRegKey(), 'InstallLocation'", StringComparison.Ordinal));
+        Check("and in the Windows Service's registered path",
+            iss.Contains("'ImagePath', ImagePath", StringComparison.Ordinal) &&
+            iss.Contains("RemoveQuotes(Trim(ImagePath))", StringComparison.Ordinal));
+        Check("a path that no longer exists is not offered as the default",
+            iss.Contains("if not DirExists(Result) then", StringComparison.Ordinal));
+        Check("and the page says that this is an update rather than letting it look like a fresh install",
+            iss.Contains("CurPageID = wpSelectDir", StringComparison.Ordinal) &&
+            iss.Contains("already installed in the folder below", StringComparison.Ordinal));
+
+        Console.WriteLine();
+        Console.WriteLine("Inno Setup is found where it is really installed");
+
+        Check("the registry is consulted first - winget can install it per user",
+            buildScript.Contains(@"Uninstall\Inno Setup 6_is1", StringComparison.Ordinal) &&
+            buildScript.Contains("HKCU:", StringComparison.Ordinal));
+        Check("the per-user program folder is searched too",
+            buildScript.Contains(@"$env:LOCALAPPDATA\Programs", StringComparison.Ordinal));
+        Check("and the folder match is wildcarded, so a future version is still found",
+            buildScript.Contains("-Filter \"Inno Setup*\"", StringComparison.Ordinal));
+
         // --- one tower per airfield -----------------------------------------------------------------
 
         Section("Planning one tower per airfield");
@@ -1726,6 +1822,30 @@ internal static class HousekeepingTests
                 undocumented.Count == 0,
                 undocumented.Count == 0 ? "" : "missing: " + string.Join(", ", undocumented));
         }
+
+        Console.WriteLine();
+        Console.WriteLine("Every switch of the build script is documented");
+
+        // Taken from the top-level param() block only - the helper functions further down have
+        // parameters of their own, and those are nobody's business but the script's.
+        var scriptSource = ReadSource("build-installer.ps1");
+        var paramStart = scriptSource.IndexOf("\nparam(", StringComparison.Ordinal);
+        var paramEnd = scriptSource.IndexOf("\n)", paramStart, StringComparison.Ordinal);
+        Check("the parameter block was found", paramStart > 0 && paramEnd > paramStart);
+
+        var switches = System.Text.RegularExpressions.Regex
+            .Matches(scriptSource[paramStart..paramEnd], @"\[(?:switch|string|int)\]\s*\$(\w+)")
+            .Select(m => "-" + m.Groups[1].Value)
+            .Distinct()
+            .ToList();
+
+        Check("the switches were found", switches.Count >= 7, string.Join(" ", switches));
+
+        var buildDoc = ReadSource("docs/building-the-installer.md");
+        var undocumentedSwitches = switches.Where(s => !buildDoc.Contains(s, StringComparison.Ordinal)).ToList();
+        Check($"building-the-installer.md covers all {switches.Count} of them",
+            undocumentedSwitches.Count == 0,
+            undocumentedSwitches.Count == 0 ? "" : "missing: " + string.Join(", ", undocumentedSwitches));
 
         Console.WriteLine();
         Console.WriteLine("Every command-line option is documented");

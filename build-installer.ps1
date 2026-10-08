@@ -59,6 +59,12 @@ param(
     # Delete previous publish output and installers before building.
     [switch]$Clean,
 
+    # Keep the debug symbols (.pdb) and XML documentation in the installed files. Left out by
+    # default: they are several MB that nothing needs to RUN the bot, and a .pdb also carries the
+    # absolute path of the machine it was built on. Pass this when a stack trace with line numbers
+    # is worth more than those two things - a bug you are chasing on the target machine.
+    [switch]$WithSymbols,
+
     # Run the checks and print the plan without publishing, downloading or compiling anything.
     [switch]$DryRun
 )
@@ -199,17 +205,36 @@ else {
 Write-Step "Inno Setup compiler (ISCC.exe)"
 
 function Find-InnoSetupCompiler {
-    $candidates = @(
-        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-        "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
+    # The registry first: this is where Inno Setup records where it put itself, so it finds an
+    # installation wherever it lives - including a per-user one (winget installs that way when it
+    # cannot elevate), which the fixed paths below miss entirely. Both registry views are checked
+    # because the compiler is a 32-bit application on a 64-bit Windows.
+    $registryKeys = @(
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Inno Setup 6_is1"
     )
 
-    foreach ($candidate in $candidates) {
-        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
-            return $candidate
+    foreach ($key in $registryKeys) {
+        $location = (Get-ItemProperty -Path $key -Name InstallLocation -ErrorAction SilentlyContinue).InstallLocation
+        if (-not [string]::IsNullOrWhiteSpace($location)) {
+            $exe = Join-Path $location "ISCC.exe"
+            if (Test-Path -LiteralPath $exe) { return $exe }
         }
+    }
+
+    # Then the usual folders. Wildcarded by version so a future Inno Setup 7 is found too, and
+    # sorted descending so the newest installed version wins.
+    $roots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles, "$env:LOCALAPPDATA\Programs") |
+             Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($root in $roots) {
+        $found = Get-ChildItem -LiteralPath $root -Directory -Filter "Inno Setup*" -ErrorAction SilentlyContinue |
+                 Sort-Object Name -Descending |
+                 ForEach-Object { Join-Path $_.FullName "ISCC.exe" } |
+                 Where-Object { Test-Path -LiteralPath $_ } |
+                 Select-Object -First 1
+        if ($found) { return $found }
     }
 
     $onPath = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
@@ -536,9 +561,65 @@ if ($modelBundled) {
 
 Write-Step "Compiling the installer"
 
+<#
+.SYNOPSIS
+    Checks that everything Setup.iss packs with a wildcard actually exists.
+.DESCRIPTION
+    Inno Setup does not warn about a Source: line that matches nothing - it stops with an error.
+    So a Vosk download that failed four steps earlier (a warning that scrolls past) used to end
+    the build with "No files found matching ...\vosk-model\*" and no installer, which reads like
+    a broken script rather than a missing download.
+
+    Returns the number of files found, 0 for "would make the compiler stop".
+#>
+function Measure-PayloadFolder($path) {
+    if (-not (Test-Path -LiteralPath $path)) { return 0 }
+    return @(Get-ChildItem -LiteralPath $path -File -Recurse -ErrorAction SilentlyContinue).Count
+}
+
+# Starts as what was asked for and may be forced on below - building a slim installer is always
+# better than building none, as long as it says so clearly.
+$buildSlim = [bool]$SkipVoskModel
+
+if (-not $DryRun) {
+    foreach ($payload in @(
+        @{ Path = $publishBot; What = "the bot (installer\publish\bot)" },
+        @{ Path = $publishGui; What = "the GUI (installer\publish\gui)" })) {
+
+        if ((Measure-PayloadFolder $payload.Path) -eq 0) {
+            Write-Host ""
+            Write-Fail "Nothing to pack for $($payload.What) - the publish step produced no files."
+            Write-Info "Re-run with -Clean, and check the dotnet output above for a restore or build error."
+            exit 1
+        }
+    }
+
+    if (-not $buildSlim -and (Measure-PayloadFolder $voskModelDir) -eq 0) {
+        Write-Warn2 "installer\vosk-model holds no files, so there is no model to bundle."
+        Write-Warn2 "Building the SLIM installer instead - it works, but VoskModelPath has to be set by hand"
+        Write-Warn2 "on the target machine. Re-run once the model download works to get the full one."
+        $summary.Add("[!] built slim: no speech model was available")
+        $buildSlim = $true
+    }
+    elseif (-not $buildSlim -and -not (Test-VoskModelFolder $voskModelDir)) {
+        Write-Warn2 "installer\vosk-model has files but no am\ and conf\ folders - that is a half-extracted"
+        Write-Warn2 "download, not a usable model. Building the SLIM installer; delete the folder and re-run"
+        Write-Warn2 "to try the download again."
+        $summary.Add("[!] built slim: the model folder is incomplete")
+        $buildSlim = $true
+    }
+}
+
+# The file name carries the variant, so recompute it when the variant was just forced to change.
+if ($buildSlim -ne [bool]$SkipVoskModel) {
+    $setupSuffix   = if ($buildSlim) { "-slim" } else { "" }
+    $expectedSetup = Join-Path $outputDir "DARKSTAR-Setup-$Version$setupSuffix.exe"
+}
+
 if ($DryRun) {
     Write-Info "ISCC would compile $issFile into $expectedSetup"
-    if ($SkipVoskModel) { Write-Info "  (slim build: /DNoVoskModel - no model component in the installer)" }
+    if ($buildSlim) { Write-Info "  (slim build: /DNoVoskModel - no model component in the installer)" }
+    if (-not $WithSymbols) { Write-Info "  (debug symbols and XML docs are left out - pass -WithSymbols to keep them)" }
     Write-Host ""
     Write-Host "Dry run finished - prerequisites checked, nothing built." -ForegroundColor White
     foreach ($line in $summary) { Write-Info $line }
@@ -550,7 +631,8 @@ if ($DryRun) {
 $versionInfo = Expand-ToFourPartVersion $Version
 
 $isccArgs = @("/DMyAppVersion=$Version", "/DMyVersionInfo=$versionInfo")
-if ($SkipVoskModel) { $isccArgs += "/DNoVoskModel" }   # leaves the model component out entirely
+if ($buildSlim)   { $isccArgs += "/DNoVoskModel" }   # leaves the model component out entirely
+if ($WithSymbols) { $isccArgs += "/DWithSymbols" }   # keeps the .pdb files in the payload
 
 & $iscc @isccArgs $issFile
 if ($LASTEXITCODE -ne 0) {
