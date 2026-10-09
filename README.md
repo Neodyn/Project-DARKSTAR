@@ -21,6 +21,8 @@ A pilot keys up on a monitored frequency, says the wake word and asks something 
 
 ### → **[Full manual (English)](docs/manual-en.md)** · **[Vollständiges Handbuch (Deutsch)](docs/manual-de.md)**
 
+**For your pilots:** a three-page handout of every call they can make — [kneeboard & handout](docs/kneeboard/README.md), ready to drop into DCS or print.
+
 Reference material: [configuration fields](docs/configuration.md) · [config editor](docs/gui.md) · [building the installer](docs/building-the-installer.md) · [contributing](docs/contributing.md) · [changelog](docs/changelog.md)
 
 ## Features
@@ -40,6 +42,7 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 | 🎯 **Realistic sensor gating** | Report only what a configured AI AWACS actually detects, or everything in the mission. |
 | 🛡️ **Coalition aware** | Can ignore the opposing side entirely, the way a real radio net would. |
 | 🖥️ **Config editor** | Desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer and one-click Windows Service management. |
+| 🪶 **A handout for your pilots** | Three kneeboard pages, English and German, with every call in the words to say it, what it does and what the answer sounds like — [PNGs for `Saved Games\DCS\Kneeboard\` and a PDF to print](docs/kneeboard/README.md). |
 | 📦 **One-file installer** | A `Setup.exe` that installs every runtime dependency on a bare Windows machine. |
 
 ## Installation

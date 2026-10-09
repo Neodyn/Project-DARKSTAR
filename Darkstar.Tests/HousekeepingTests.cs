@@ -2085,7 +2085,9 @@ internal static class HousekeepingTests
         // a call is added. It cannot list every spelling - a kneeboard is read at a glance, so it
         // shows one wording per call - but a whole call that exists and is not on it is a call
         // nobody will make.
-        var kneeboard = ReadSource("docs/kneeboard/darkstar-kneeboard.html");
+        foreach (var language in new[] { "en", "de" })
+        {
+        var kneeboard = ReadSource($"docs/kneeboard/darkstar-kneeboard-{language}.html");
 
         var everyCall = new (string Call, string MustAppear)[]
         {
@@ -2110,15 +2112,16 @@ internal static class HousekeepingTests
                 System.Text.RegularExpressions.RegexOptions.Singleline)
             .Select(m => m.Groups[1].Value));
 
-        Check("the kneeboard tells pilots what to say", spokenLines.Length > 200,
-            $"{spokenLines.Length} characters of spoken wording");
+        Check($"the {language.ToUpperInvariant()} kneeboard tells pilots what to say",
+            spokenLines.Length > 200, $"{spokenLines.Length} characters of spoken wording");
 
         var notOnTheKneeboard = everyCall
             .Where(c => !spokenLines.Contains(c.MustAppear, StringComparison.OrdinalIgnoreCase))
             .Select(c => c.Call)
             .ToList();
 
-        Check($"all {everyCall.Length} calls are on it", notOnTheKneeboard.Count == 0,
+        Check($"the {language.ToUpperInvariant()} kneeboard has all {everyCall.Length} calls",
+            notOnTheKneeboard.Count == 0,
             notOnTheKneeboard.Count == 0 ? "" : "missing: " + string.Join(", ", notOnTheKneeboard));
 
         // The sample phrases too - but grouped by the answer they produce. "request rtb" and
@@ -2130,20 +2133,33 @@ internal static class HousekeepingTests
             .Select(group => string.Join(" / ", group.Select(e => e.Trigger)))
             .ToList();
 
-        Check("and every sample phrase a first start writes can be asked for from it",
+        Check($"and every sample phrase a first start writes can be asked for from the {language.ToUpperInvariant()} one",
             missingAnswers.Count == 0,
             missingAnswers.Count == 0 ? "" : "no wording for: " + string.Join("; ", missingAnswers));
+        }
+
+        // The German pages exist so a German speaker can read them, not so they can say something
+        // else: the bot hears English. Every spoken line has to be identical in both.
+        static string SpokenWording(string html) =>
+            string.Join("\n", System.Text.RegularExpressions.Regex
+                .Matches(html, @"<div class=""say"">(.*?)</div>",
+                    System.Text.RegularExpressions.RegexOptions.Singleline)
+                .Select(m => m.Groups[1].Value));
+
+        Eq("both languages tell the pilot to say exactly the same words",
+            SpokenWording(ReadSource("docs/kneeboard/darkstar-kneeboard-de.html")),
+            SpokenWording(ReadSource("docs/kneeboard/darkstar-kneeboard-en.html")));
 
         // The rendered pages ship in the repository, because a server admin should not need a
         // browser and Python to hand something to their pilots. A page of the wrong size is not a
         // kneeboard page: DCS scales it, and the text stops being readable in the cockpit.
-        foreach (var page in new[] { 1, 2, 3 })
+        foreach (var file in new[] { "EN-1", "EN-2", "EN-3", "DE-1", "DE-2", "DE-3" })
         {
-            var path = Root + System.IO.Path.Combine("docs", "kneeboard", $"DARKSTAR-Kneeboard-{page}.png");
+            var path = Root + System.IO.Path.Combine("docs", "kneeboard", $"DARKSTAR-Kneeboard-{file}.png");
 
             if (!System.IO.File.Exists(path))
             {
-                Check($"page {page} has been rendered", false, "run docs/kneeboard/build-kneeboard.py");
+                Check($"page {file} has been rendered", false, "run docs/kneeboard/build-kneeboard.py");
                 continue;
             }
 
@@ -2154,7 +2170,7 @@ internal static class HousekeepingTests
             var width = (header[16] << 24) | (header[17] << 16) | (header[18] << 8) | header[19];
             var height = (header[20] << 24) | (header[21] << 16) | (header[22] << 8) | header[23];
 
-            Check($"page {page} is a 1536x2048 kneeboard page", width == 1536 && height == 2048,
+            Check($"page {file} is a 1536x2048 kneeboard page", width == 1536 && height == 2048,
                 $"{width}x{height}");
         }
 
@@ -2260,6 +2276,104 @@ internal static class HousekeepingTests
             Check($"{System.IO.Path.GetFileName(manual)} chapter 7 covers all {onTheRadio.Length} of them",
                 absent.Count == 0, absent.Count == 0 ? "" : "missing: " + string.Join(", ", absent));
         }
+
+        Console.WriteLine();
+        Console.WriteLine("The two languages stay in step");
+
+        // Half of this documentation exists twice. Two ways for that to rot, both invisible to a
+        // reader who only ever opens one language: a German page sending somebody to an English
+        // one when a German twin exists, and a chapter that was added on one side only.
+        var translated = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["README.md"] = "README.de.md",
+            ["docs/manual-en.md"] = "docs/manual-de.md",
+            ["docs/kneeboard/README.md"] = "docs/kneeboard/README.de.md",
+        };
+
+        var wrongLanguage = new List<string>();
+
+        foreach (var (english, german) in translated.Select(p => (p.Key, p.Value)))
+        {
+            foreach (var (document, isGerman) in new[] { (english, false), (german, true) })
+            {
+                var text = ReadSource(document);
+                var folder = System.IO.Path.GetDirectoryName(document)!.Replace('\\', '/');
+
+                foreach (System.Text.RegularExpressions.Match link in
+                         System.Text.RegularExpressions.Regex.Matches(text, @"\]\(([^)#]+\.md)[^)]*\)"))
+                {
+                    var target = link.Groups[1].Value;
+                    if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase)) continue;
+
+                    // Resolve to a repository-relative path so it can be compared with the pairs.
+                    var resolved = System.IO.Path
+                        .GetFullPath(System.IO.Path.Combine(Root, folder, target))
+                        .Replace(Root, "")
+                        .Replace('\\', '/');
+
+                    // A link to the other language is fine when it is the explicit language switch
+                    // at the top of the page - that is the point of it. Those are the only two, so
+                    // they are recognised by the text of the link rather than by a rule.
+                    // The link text ends exactly at the match, so the window has to include it.
+                    var label = text[Math.Max(0, link.Index - 80)..(link.Index + 1)];
+                    var isLanguageSwitch =
+                        label.Contains("in English", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("auf Deutsch", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("[English]", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("[Deutsch]", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("English version", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("Deutsche Fassung", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("manual (English)", StringComparison.OrdinalIgnoreCase) ||
+                        label.Contains("Handbuch (Deutsch)", StringComparison.OrdinalIgnoreCase);
+                    if (isLanguageSwitch) continue;
+
+                    var pointsGerman = translated.ContainsValue(resolved);
+                    var pointsEnglish = translated.ContainsKey(resolved);
+
+                    if (isGerman && pointsEnglish)
+                        wrongLanguage.Add($"{document} -> {resolved} (a German twin exists)");
+                    else if (!isGerman && pointsGerman)
+                        wrongLanguage.Add($"{document} -> {resolved} (an English twin exists)");
+                }
+            }
+        }
+
+        Check($"no document sends the reader into the other language ({translated.Count} pairs checked)",
+            wrongLanguage.Count == 0, string.Join("; ", wrongLanguage));
+
+        // The manuals are the pair that matters most, and the one that drifts: a chapter added to
+        // one and not the other is how a translation quietly becomes a different document.
+        static List<string> ChapterNumbers(string manual) =>
+            System.Text.RegularExpressions.Regex
+                .Matches(manual, @"^## (\d+)\.", System.Text.RegularExpressions.RegexOptions.Multiline)
+                .Select(m => m.Groups[1].Value)
+                .ToList();
+
+        var englishChapters = ChapterNumbers(references["docs/manual-en.md"]);
+        var germanChapters = ChapterNumbers(references["docs/manual-de.md"]);
+
+        Check("both manuals have chapters to compare", englishChapters.Count >= 13,
+            $"{englishChapters.Count} chapters");
+        Check("and the same ones, in the same order",
+            englishChapters.SequenceEqual(germanChapters),
+            $"EN [{string.Join(",", englishChapters)}] vs DE [{string.Join(",", germanChapters)}]");
+
+        // Section level too: a subsection added on one side only is the more common half of it.
+        static int Subsections(string manual) =>
+            System.Text.RegularExpressions.Regex
+                .Matches(manual, @"^### ", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
+
+        var englishSections = Subsections(references["docs/manual-en.md"]);
+        var germanSections = Subsections(references["docs/manual-de.md"]);
+        Check("and the same number of sections within them", englishSections == germanSections,
+            $"EN {englishSections}, DE {germanSections}");
+
+        // Both front pages have to offer the handout, in their own language - it is the one
+        // document written for the people who never read any of the rest.
+        Check("the English README points at the kneeboard",
+            ReadSource("README.md").Contains("docs/kneeboard/README.md", StringComparison.Ordinal));
+        Check("and the German one at the German kneeboard",
+            ReadSource("README.de.md").Contains("docs/kneeboard/README.de.md", StringComparison.Ordinal));
 
         Console.WriteLine();
         Console.WriteLine("Every cross-reference in the documentation points somewhere");

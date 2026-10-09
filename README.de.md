@@ -21,6 +21,8 @@ Ein Pilot drückt auf einer überwachten Frequenz die Sendetaste, sagt das Hotwo
 
 ### → **[Vollständiges Handbuch (Deutsch)](docs/manual-de.md)** · **[Full manual (English)](docs/manual-en.md)**
 
+**Für deine Piloten:** ein dreiseitiges Handout mit allen Calls — [Kneeboard & Handout](docs/kneeboard/README.de.md), fertig für DCS oder zum Ausdrucken.
+
 Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfigurationseditor](docs/gui.md) · [Installer bauen](docs/building-the-installer.md) · [Mitarbeiten](docs/contributing.md) · [Änderungen](docs/changelog.md) *(englisch)*
 
 ## Funktionen
@@ -40,6 +42,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | 🎯 **Realistische Sensorlogik** | Nur melden, was eine konfigurierte KI-AWACS tatsächlich erfasst — oder alles, was in der Mission fliegt. |
 | 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
 | 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer und Dienstverwaltung per Knopfdruck. |
+| 🪶 **Handout für deine Piloten** | Drei Kneeboard-Seiten, deutsch und englisch, mit jedem Call im Wortlaut, was er tut und wie die Antwort klingt — [PNGs für `Saved Games\DCS\Kneeboard\` und ein PDF zum Drucken](docs/kneeboard/README.de.md). |
 | 📦 **Installer in einer Datei** | Eine `Setup.exe`, die auf einem nackten Windows alle Laufzeitabhängigkeiten mitinstalliert. |
 
 ## Installation

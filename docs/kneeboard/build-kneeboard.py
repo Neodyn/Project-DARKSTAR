@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Renders darkstar-kneeboard.html into the PNG files DCS uses as kneeboard pages, and refuses to
-produce one that is missing part of its content.
+Renders both language versions of the kneeboard into the PNG files DCS uses as kneeboard pages,
+and refuses to produce one that is missing part of its content.
 
     python3 build-kneeboard.py [path-to-chromium-or-chrome]
 
@@ -12,9 +12,13 @@ page is rendered twice: once at its real size for the file, and once with the he
 measure how tall the content actually wanted to be. Anything over the limit fails the build with
 the number of pixels it overflowed by.
 
-Output next to this file:
-    DARKSTAR-Kneeboard-1.png  2.png  3.png    -> Saved Games\\DCS\\Kneeboard\\
-    DARKSTAR-Kneeboard.pdf                    -> the same three pages to print as a handout
+Output next to this file, per language:
+    DARKSTAR-Kneeboard-EN-1.png  -2.png  -3.png   -> Saved Games\\DCS\\Kneeboard\\
+    DARKSTAR-Kneeboard-DE-1.png  -2.png  -3.png      (pick one language - DCS shows every file
+    DARKSTAR-Kneeboard-EN.pdf / -DE.pdf               in that folder, in name order)
+
+The calls themselves are English in both: that is what the bot listens for. Only the explanations
+around them are translated.
 
 Needs: Chromium or Chrome, and Pillow (pip install pillow).
 """
@@ -26,7 +30,13 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SOURCE = os.path.join(HERE, "darkstar-kneeboard.html")
+
+# language code -> source page. Both are rendered on every run, so the two can never drift into
+# "the English one is current and the German one is from last month".
+LANGUAGES = {
+    "EN": os.path.join(HERE, "darkstar-kneeboard-en.html"),
+    "DE": os.path.join(HERE, "darkstar-kneeboard-de.html"),
+}
 
 PAGES = (1, 2, 3)
 CSS_WIDTH, CSS_HEIGHT = 768, 1024      # the page as it is designed
@@ -74,7 +84,7 @@ def viewport_offset(browser, scratch):
     return max(0, round(CSS_HEIGHT - visible))
 
 
-def shoot(browser, fragment, out_path, width, height):
+def shoot(browser, source, fragment, out_path, width, height):
     subprocess.run(
         [browser, "--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
          # Nothing here needs the network, and a browser that reaches for it on a build machine
@@ -83,7 +93,7 @@ def shoot(browser, fragment, out_path, width, height):
          f"--force-device-scale-factor={SCALE}",
          f"--window-size={width},{height}",
          f"--screenshot={out_path}",
-         f"file://{SOURCE}{fragment}"],
+         f"file://{source}{fragment}"],
         check=True, capture_output=True)
 
 
@@ -136,60 +146,75 @@ def crop_to_page(image_path):
     page.save(image_path)
 
 
+def render_language(browser, language, source, offset, scratch):
+    """Renders one language's three pages. Returns the files made and any page that overflowed."""
+    print(f"\n{language}  ({os.path.basename(source)})")
+    produced, overflowing = [], []
+
+    for page in PAGES:
+        # 1. Measure: the page may grow, so an overflow shows up as extra height.
+        probe = os.path.join(scratch, f"measure-{language}-{page}.png")
+        shoot(browser, source, f"#p{page}-measure", probe, CSS_WIDTH, MEASURE_HEIGHT)
+        tall = content_height(probe)
+
+        # 2. The real file, at the size DCS wants: rendered in a window tall enough that the page
+        #    gets its full height, then cropped to exactly 1536x2048.
+        out = os.path.join(HERE, f"DARKSTAR-Kneeboard-{language}-{page}.png")
+        shoot(browser, source, f"#p{page}", out, CSS_WIDTH, CSS_HEIGHT + offset)
+        crop_to_page(out)
+        produced.append(out)
+
+        over = tall - CSS_HEIGHT
+        status = "ok" if over <= 0.5 else f"OVERFLOWS by {over:.0f} px"
+        print(f"  page {page}: content {tall:.0f} of {CSS_HEIGHT} px  [{status}]")
+        if over > 0.5:
+            overflowing.append((page, over))
+
+    if not overflowing:
+        pdf = os.path.join(HERE, f"DARKSTAR-Kneeboard-{language}.pdf")
+        try:
+            from PIL import Image
+            Image.init()   # registers the JPEG writer the PDF encoder reaches for; some builds don't
+            sheets = [Image.open(p).convert("RGB") for p in produced]
+            sheets[0].save(pdf, save_all=True, append_images=sheets[1:], resolution=150.0)
+            print(f"  handout:  {os.path.basename(pdf)}")
+        except Exception as error:                  # a missing PDF is not worth failing the build
+            print(f"  handout:  skipped ({error})")
+
+    return overflowing
+
+
 def main():
     browser = find_browser(sys.argv)
-    if not os.path.exists(SOURCE):
-        sys.exit(f"Source page not found: {SOURCE}")
 
-    print(f"Rendering {os.path.basename(SOURCE)} with {browser}")
-    overflowing = []
-    produced = []
+    for language, source in LANGUAGES.items():
+        if not os.path.exists(source):
+            sys.exit(f"Source page not found: {source}")
+
+    print(f"Rendering {len(LANGUAGES)} language(s) with {browser}")
+    failed = {}
 
     with tempfile.TemporaryDirectory() as scratch:
         offset = viewport_offset(browser, scratch)
         print(f"  viewport is {offset} px shorter than the window on this browser"
               if offset else "  viewport matches the window")
 
-        for page in PAGES:
-            # 1. Measure: the page may grow, so an overflow shows up as extra height.
-            probe = os.path.join(scratch, f"measure-{page}.png")
-            shoot(browser, f"#p{page}-measure", probe, CSS_WIDTH, MEASURE_HEIGHT)
-            tall = content_height(probe)
+        for language, source in LANGUAGES.items():
+            overflowing = render_language(browser, language, source, offset, scratch)
+            if overflowing:
+                failed[language] = overflowing
 
-            # 2. The real file, at the size DCS wants: rendered in a window tall enough that the
-            #    page gets its full height, then cropped to exactly 1536x2048.
-            out = os.path.join(HERE, f"DARKSTAR-Kneeboard-{page}.png")
-            shoot(browser, f"#p{page}", out, CSS_WIDTH, CSS_HEIGHT + offset)
-            crop_to_page(out)
-            produced.append(out)
-
-            over = tall - CSS_HEIGHT
-            status = "ok" if over <= 0.5 else f"OVERFLOWS by {over:.0f} px"
-            print(f"  page {page}: content {tall:.0f} of {CSS_HEIGHT} px  [{status}]")
-            if over > 0.5:
-                overflowing.append((page, over))
-
-    if overflowing:
+    if failed:
         print()
-        for page, over in overflowing:
-            print(f"ERROR: page {page} is {over:.0f} CSS px too tall - that much is cut off the "
-                  f"bottom of the kneeboard and nothing in DCS will say so.")
+        for language, pages in failed.items():
+            for page, over in pages:
+                print(f"ERROR: {language} page {page} is {over:.0f} CSS px too tall - that much is "
+                      f"cut off the bottom of the kneeboard and nothing in DCS will say so.")
         print("Shorten the page or move the surplus onto the next one, then run this again.")
         return 1
 
-    # The handout: the same three pages, in one printable file.
-    pdf = os.path.join(HERE, "DARKSTAR-Kneeboard.pdf")
-    try:
-        from PIL import Image
-        Image.init()   # registers the JPEG writer the PDF encoder reaches for; some builds don't
-        sheets = [Image.open(p).convert("RGB") for p in produced]
-        sheets[0].save(pdf, save_all=True, append_images=sheets[1:], resolution=150.0)
-        print(f"  handout:  {os.path.basename(pdf)}")
-    except Exception as error:                      # a missing PDF is not worth failing the build
-        print(f"  handout:  skipped ({error})")
-
-    print("\nDone. Copy the PNGs into  Saved Games\\DCS\\Kneeboard\\  (all aircraft) or")
-    print("Saved Games\\DCS\\Kneeboard\\<Aircraft>\\  for one type only.")
+    print("\nDone. Copy ONE language's PNGs into  Saved Games\\DCS\\Kneeboard\\  (all aircraft)")
+    print("or  Saved Games\\DCS\\Kneeboard\\<Aircraft>\\  for one type only.")
     return 0
 
 

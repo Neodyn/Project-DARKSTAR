@@ -566,10 +566,11 @@ Everything the bot answers without a single line of configuration. Say the **wak
 call itself can sit anywhere in the same transmission. Each section below explains the calls in
 detail; this is the reference list.
 
-**For your pilots** there is a three-page handout of the same thing in
-[docs/kneeboard/](kneeboard/README.md) — ready-made PNGs to drop into
-`Saved Games\DCS\Kneeboard\`, plus a PDF to print or post. Written for somebody flying, not for
-somebody configuring: what to say, what comes back, and what to do when nothing does.
+**For your pilots** there is a three-page handout of the same thing:
+[kneeboard & handout](kneeboard/README.md) — ready-made PNGs to drop into
+`Saved Games\DCS\Kneeboard\`, plus a PDF to print or post, in English and German. Written for
+somebody flying, not for somebody configuring: what to say, what comes back, and what to do when
+nothing does.
 
 Matching is by **contained text**, so *"Overlord, Punch 1-1, requesting a picture"* matches
 `picture`. All trigger lists are editable: the mission-data ones on **CH8 → Replies**, the radio

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>D.A.R.K.S.T.A.R. Kneeboard (Deutsch)</title>
+<!--
+  Die Pilotenseite: was man dem Bot sagt und was zurueckkommt. Die deutsche Fassung.
+
+  WICHTIG: Die Calls selbst bleiben Englisch. Der Bot hoert Englisch und antwortet Englisch -
+  eine uebersetzte Ausloesephrase wuerde schlicht nicht erkannt. Uebersetzt ist alles, was
+  erklaert; woertlich bleibt alles, was gesagt oder gehoert wird.
+
+  This is the SOURCE. The two PNGs next to it are what goes into DCS, and build-kneeboard.sh
+  regenerates them from this file - edit here, re-render, never edit the PNGs.
+
+  Two pages at 768x1024 CSS pixels, rendered at twice that (1536x2048), which is the size DCS
+  uses for a kneeboard page. Everything is sized for a cockpit rather than for a monitor: a
+  kneeboard is read at a glance, at an angle, while somebody is shooting at you.
+
+  Light background on purpose. It prints as a handout without emptying a cartridge, and it is the
+  more legible of the two in a daylit cockpit; the project's dark interface colours would do the
+  opposite of both.
+
+  The frequency box is deliberately empty: frequencies are per server, and a number printed here
+  that does not match your SRS is worse than a blank line. Fill it in before you hand this out -
+  the values are on the F10 map markers the bot writes at mission start.
+-->
+<style>
+  @page { size: 768px 1024px; margin: 0; }
+
+  html, body { margin: 0; padding: 0; background: #8a8a8a; }
+
+  body {
+    font-family: "Segoe UI", Tahoma, "DejaVu Sans", Arial, sans-serif;
+    color: #14181a;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    position: relative;
+    box-sizing: border-box;
+    width: 768px;
+    height: 1024px;
+    padding: 30px 34px 26px;
+    background: #ffffff;
+    margin: 0 auto 24px;
+    overflow: hidden;
+  }
+
+  /* Rendering one page at a time: the script below sets this from the URL fragment. With no
+     fragment both pages are shown, which is what a browser or a print preview should do. */
+  html.only-1 .page:not(#p1), html.only-2 .page:not(#p2),
+  html.only-3 .page:not(#p3) { display: none; }
+  html.only-1 .page, html.only-2 .page, html.only-3 .page { margin: 0 auto; }
+
+  /* Measuring mode: the page grows with its content instead of clipping it, so the renderer can
+     see whether anything would have been cut off. A kneeboard that silently loses its last two
+     calls is worse than no kneeboard. */
+  html.measure .page { height: auto; min-height: 0; }
+
+  /* ---- masthead ---- */
+  .top { display: flex; align-items: baseline; justify-content: space-between;
+         border-bottom: 3px solid #14181a; padding-bottom: 8px; }
+  .wordmark { font-size: 27px; font-weight: 700; letter-spacing: 1.5px; }
+  .wordmark span { color: #a85f00; }
+  .pagetag { white-space: nowrap; font-size: 13px; font-weight: 700; letter-spacing: 2px; color: #6a7276; }
+
+  .lede { font-size: 15.5px; line-height: 1.45; margin: 12px 0 0; }
+  .lede b { background: #ffe7bd; padding: 0 4px; }
+
+  /* ---- the fill-in frequency box ---- */
+  .freqbox { border: 2px solid #14181a; margin-top: 12px; }
+  .freqbox h2 { margin: 0; font-size: 12px; letter-spacing: 2px; background: #14181a;
+                color: #fff; padding: 5px 10px; font-weight: 700; }
+  .freqrows { display: grid; grid-template-columns: 1fr 1fr; }
+  .freqrow { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px;
+             border-top: 1px solid #d7dadb; font-size: 15px; }
+  .freqrow:nth-child(1), .freqrow:nth-child(2) { border-top: 0; }
+  .freqrow:nth-child(odd) { border-right: 1px solid #d7dadb; }
+  .freqrow .who { font-weight: 700; min-width: 112px; }
+  .freqrow .dots { flex: 1; border-bottom: 1px dotted #9aa1a4; height: 15px; }
+
+  /* ---- call list ---- */
+  h2.section { font-size: 12.5px; letter-spacing: 2.4px; color: #a85f00;
+               margin: 16px 0 6px; font-weight: 700; }
+  h2.section .need { color: #6a7276; letter-spacing: 1px; font-weight: 600; }
+
+  .call { border-top: 1px solid #d7dadb; padding: 8px 0 7px; }
+  .call:first-of-type { border-top: 2px solid #14181a; }
+  .call .name { font-size: 16px; font-weight: 700; letter-spacing: 0.4px; }
+  .call .what { font-size: 14.5px; color: #3c4448; margin-top: 1px; line-height: 1.35; }
+  .say { font-family: Consolas, "DejaVu Sans Mono", monospace; font-size: 16.5px;
+         font-weight: 700; margin-top: 5px; }
+  .say::before { content: "SAY  "; color: #a85f00; font-size: 11px; letter-spacing: 1.5px; }
+  .reply { font-size: 14px; color: #4a5155; font-style: italic; margin-top: 3px; line-height: 1.35; }
+  .reply::before { content: "◂ "; font-style: normal; color: #a85f00; font-weight: 700; }
+  .opt { font-style: normal; color: #6a7276; font-weight: 400; }
+
+  /* ---- page 2 blocks ---- */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  .block { margin-top: 14px; }
+  .block h3 { font-size: 13px; letter-spacing: 1.6px; margin: 0 0 5px;
+              border-bottom: 2px solid #14181a; padding-bottom: 3px; }
+  .block p, .block li { font-size: 14.5px; line-height: 1.42; margin: 5px 0; }
+  .block ul { margin: 4px 0; padding-left: 17px; }
+  .block code { font-family: Consolas, "DejaVu Sans Mono", monospace; font-weight: 700;
+                background: #f0f2f3; padding: 0 3px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 14.5px;
+        margin-top: 4px; }
+  .kv b { white-space: nowrap; }
+
+  .warn { border-left: 4px solid #a85f00; background: #fff6e6; padding: 8px 10px; margin-top: 12px; }
+  .warn p { margin: 0; font-size: 14.5px; line-height: 1.42; }
+
+  .foot { position: absolute; left: 34px; right: 34px; bottom: 18px;
+          border-top: 1px solid #d7dadb; padding-top: 6px;
+          font-size: 11px; color: #6a7276; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- ======================= PAGE 1 — WHAT TO SAY ======================= -->
+<section class="page" id="p1">
+  <div class="top">
+    <div class="wordmark">D.A.R.K.S.T.A.R. <span>// FUNKSPRÜCHE</span></div>
+    <div class="pagetag">1 / 3</div>
+  </div>
+
+  <p class="lede">
+    Sendetaste drücken, Hotword sagen, dann den Call — <b>eine Aussendung, ein Call</b>.
+    Das Hotword darf irgendwo im Satz stehen. Taste loslassen und warten: die Antwort kommt auf
+    derselben Frequenz, an dein Rufzeichen gerichtet. <b>Gesprochen wird Englisch</b> — der Bot
+    hört und antwortet Englisch, die Calls stehen deshalb im Wortlaut.
+  </p>
+
+  <div class="freqbox">
+    <h2>FREQUENZEN AUF DIESEM SERVER &nbsp;—&nbsp; VON DEN F10-KARTENMARKERN</h2>
+    <div class="freqrows">
+      <div class="freqrow"><span class="who">Hotword</span><span class="dots"></span></div>
+      <div class="freqrow"><span class="who">AWACS</span><span class="dots"></span></div>
+      <div class="freqrow"><span class="who">Tanker</span><span class="dots"></span></div>
+      <div class="freqrow"><span class="who">Dein Tower</span><span class="dots"></span></div>
+    </div>
+  </div>
+
+  <h2 class="section">LUFTLAGE <span class="need">— braucht die Missionsdaten-Anbindung</span></h2>
+
+  <div class="call">
+    <div class="name">BOGEY DOPE</div>
+    <div class="what">Die nächste feindliche Gruppe, gemessen von deinem Flugzeug aus.</div>
+    <div class="say">"Overlord, bogey dope."</div>
+    <div class="reply">Punch 1-1, this is Overlord. Bogey, bearing zero, niner, zero, thirty five
+      miles, twenty two thousand, hot, group of two, type MiG-29.</div>
+  </div>
+
+  <div class="call">
+    <div class="name">PICTURE</div>
+    <div class="what">Das gesamte Feindbild, gruppiert, vom Bullseye aus.</div>
+    <div class="say">"Overlord, picture."</div>
+    <div class="reply">Picture: two groups. Lead group, bullseye two, seven, zero, for forty miles,
+      twenty five thousand, two contacts, Su-27…</div>
+  </div>
+
+  <div class="call">
+    <div class="name">THREAT CHECK</div>
+    <div class="what">Nur die nächste Bedrohung. Kurz, wenn keine Zeit ist.</div>
+    <div class="say">"Overlord, threat check."</div>
+    <div class="reply">Nearest contact zero, niner, zero at thirty five miles, twenty two thousand.</div>
+  </div>
+
+  <div class="call">
+    <div class="name">ALPHA CHECK</div>
+    <div class="what">Die <b>eigene</b> Position vom Bullseye aus. Navigationsabgleich.</div>
+    <div class="say">"Overlord, Punch 1-1, alpha check bullseye."</div>
+    <div class="reply">Alpha check, bullseye zero, one, zero, one hundred twenty two miles,
+      twenty two thousand.</div>
+  </div>
+
+
+  <div class="call">
+    <div class="name">WHERE IS …<span class="opt"> (nur wenn dein Server es freigeschaltet hat)</span></div>
+    <div class="what">Wo ein anderer <b>menschlicher</b> Pilot deiner Seite ist. Der Name steht
+      <b>hinter</b> der Phrase.</div>
+    <div class="say">"Overlord, where is Springfield 2-1?"</div>
+    <div class="reply">Springfield 2 1, bullseye two, seven, zero, for forty miles, twenty two
+      thousand, heading zero, niner, zero.</div>
+  </div>
+
+
+  <div class="foot">
+    <span>D.A.R.K.S.T.A.R. — Kneeboard für Piloten</span>
+    <span>Seite 2: Threat Circle, Flugplatz, Radio Check &nbsp;·&nbsp; Seite 3: die Antworten lesen</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 2 — POSITION, WATCH, AIRFIELD ======================= -->
+<section class="page" id="p2">
+  <div class="top">
+    <div class="wordmark">D.A.R.K.S.T.A.R. <span>// WEITERE CALLS</span></div>
+    <div class="pagetag">2 / 3</div>
+  </div>
+
+  <h2 class="section">EINE STEHENDE ÜBERWACHUNG</h2>
+
+  <div class="call">
+    <div class="name">THREAT CIRCLE</div>
+    <div class="what">Eine Überwachung, die mit dir mitfliegt. Sie meldet jeden Feind, der in den
+      Kreis eintritt, einmal pro Feind, bis du sie abbrichst.</div>
+    <div class="say">"Overlord, threat circle forty miles."<br>"Overlord, cancel threat circle."</div>
+    <div class="reply">Threat circle active, forty miles. … Punch 1-1, this is Overlord. Threat,
+      bearing zero, niner, five, twenty two miles, hot, type MiG-29.</div>
+  </div>
+
+  <h2 class="section">FLUGPLATZ <span class="need">— Platz nennen oder weglassen für den nächstgelegenen</span></h2>
+
+  <div class="call">
+    <div class="name">RUNWAY IN USE</div>
+    <div class="what">Die Bahn, die der Wind begünstigt, samt diesem Wind.</div>
+    <div class="say">"Overlord, Batumi, runway in use."</div>
+    <div class="reply">Batumi, runway in use one three, wind one three zero at one niner knots.</div>
+  </div>
+
+  <div class="call">
+    <div class="name">ATIS</div>
+    <div class="what">Wind, Temperatur, Druck und Bahn, als Durchsage.</div>
+    <div class="say">"Overlord, Kobuleti ATIS."</div>
+    <div class="reply">Kobuleti information, wind two one zero at eight knots, temperature one five,
+      QNH one zero one three, altimeter two niner niner two, runway in use two five.</div>
+  </div>
+
+  <h2 class="section">GEHT IMMER <span class="need">— ohne Missionsdaten, antwortet auf jeder Frequenz</span></h2>
+
+  <div class="call">
+    <div class="name">RADIO CHECK</div>
+    <div class="what">Ist der Bot da, und hat er dich auf dem Schirm? Damit anfangen, wenn etwas
+      nicht stimmt.</div>
+    <div class="say">"Overlord, radio check."</div>
+    <div class="reply">Loud and clear, contact. &nbsp;/&nbsp; Loud and clear, but no radar contact on you.</div>
+  </div>
+
+  <h2 class="section">SMALLTALK, DEN ER BEANTWORTET <span class="need">— Beispiele, die dein Admin ändern kann</span></h2>
+  <div class="kv" style="font-size:14px;margin-top:6px">
+    <b>"say again"</b><span>Copy, say again your last transmission.</span>
+    <b>"status"</b><span>All systems nominal.</span>
+    <b>"check in"</b><span>Copy your check-in.</span>
+    <b>"request weather"</b><span>Weather is clear, visibility unrestricted. <i>(liefert das echte ATIS, wenn die Flugplatz-Antworten an sind)</i></span>
+    <b>"request RTB"</b><span>Copy, cleared to RTB.</span>
+  </div>
+
+  <div class="foot">
+    <span>D.A.R.K.S.T.A.R. — Kneeboard für Piloten</span>
+    <span>Seite 3: was die Antworten bedeuten und was zu tun ist, wenn keine kommt</span>
+  </div>
+</section>
+
+<!-- ======================= PAGE 3 — READING THE ANSWER ======================= -->
+<section class="page" id="p3">
+  <div class="top">
+    <div class="wordmark">D.A.R.K.S.T.A.R. <span>// DIE ANTWORTEN</span></div>
+    <div class="pagetag">3 / 3</div>
+  </div>
+
+  <div class="grid2">
+    <div class="block">
+      <h3>VON DIR AUS ODER VOM BULLSEYE</h3>
+      <p><b>Bogey dope</b> und <b>threat check</b> werden von deinem Flugzeug aus gemessen — Kurs
+        und Entfernung sind das, was du fliegst. <b>Picture</b> kommt vom Bullseye, weil es mehrere
+        Gruppen auf einmal beschreibt.</p>
+      <p>Hänge <code>bullseye</code> an einen davon an, um die Bullseye-Form zu erzwingen:
+        <i>"Overlord, bogey dope bullseye."</i></p>
+    </div>
+
+    <div class="block">
+      <h3>ASPECT — WOHIN DIE NASE ZEIGT</h3>
+      <div class="kv">
+        <b>HOT</b><span>kommt auf dich zu</span>
+        <b>FLANKING</b><span>kreuzend, etwa 45°</span>
+        <b>BEAMING</b><span>quer vor dir, 90°</span>
+        <b>COLD</b><span>läuft weg</span>
+      </div>
+      <p>Zahlen werden Ziffer für Ziffer gesprochen: <i>"zero niner zero"</i> ist 090. Norden ist
+        <i>"three six zero"</i>, nie null.</p>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>WENN DIE ANTWORT „STANDBY" IST</h3>
+    <div class="kv">
+      <b>"…message received, standby."</b>
+      <span>Er hat dich gehört und arbeitet noch. Die eigentliche Antwort kommt.</span>
+      <b>"…standby, working other traffic."</b>
+      <span>Du bist über dem Limit pro Pilot. Kurz warten; er sagt das einmal und schweigt dann,
+        bis das Limit wieder frei ist.</span>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>ES KAM NICHTS ZURÜCK</h3>
+    <ul>
+      <li>Zuerst <b>"radio check"</b> sagen. Das antwortet auf jeder Frequenz und braucht keine
+        Missionsdaten, trennt also „Bot ist weg" von „falsche Frequenz" von „er sieht dich
+        nicht".</li>
+      <li><i>"Loud and clear, <b>but no radar contact on you</b>"</i> heißt: dein Name konnte deinem
+        Flugzeug nicht zugeordnet werden. Du bekommst weiter Antworten, aber vom Bullseye statt
+        von deinem Jet. Name korrigieren — siehe unten.</li>
+      <li>Hast du das <b>Hotword</b> gesagt? Ohne das wird gar nicht erst zugehört.</li>
+      <li>Ein Call pro Aussendung. Zwei Fragen auf einmal ergeben bestenfalls eine Antwort.</li>
+      <li>Während der Bot spricht, hört er dich nicht. Ausreden lassen, dann senden.</li>
+    </ul>
+  </div>
+
+  <div class="warn">
+    <p><b>Dein SRS-Name entscheidet, ob er deinen Jet findet.</b> Schreib ihn als
+      <code>CALLSIGN 1-1 | DeinName</code> — der Teil vor dem <code>|</code> muss zum Rufzeichen
+      des Flugzeugs passen, das du in DCS fliegst. Dann werden BRAA-Calls von deinem Flugzeug aus
+      gemessen, und der Bot spricht dich als „Punch 1-1" an, statt deinen ganzen Namen
+      vorzulesen.</p>
+  </div>
+
+  <div>
+    <div class="block">
+      <h3>WENN ER DICH FALSCH VERSTEHT</h3>
+      <p>Das Hotword erkennt ein kleines Modell offline. Das ist kein Urteil über deinen Akzent —
+        es hört manche Stimmen schlicht besser als andere.</p>
+      <ul>
+        <li>Das Hotword <b>zuerst und deutlich</b> sagen, dann kurz absetzen.</li>
+        <li>Nicht schreien; ein übersteuertes Mikrofon verzerrt mehr, als es hilft.</li>
+        <li>Wenn er deine Stimme dauernd verfehlt: dem Server-Admin sagen — die Schreibweise, die er
+          hört, lässt sich eintragen, und dann sitzt es.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>D.A.R.K.S.T.A.R. — Kneeboard für Piloten</span>
+    <span>Standard-Wortlaut. Dein Server kann Hotword oder Phrasen geändert haben.</span>
+  </div>
+</section>
+
+<script>
+  // Lets the renderer grab one page at a time (…#p1), and measure it with the height released
+  // (…#p1-measure) so an overflow can be detected instead of being silently cut off. Without a
+  // fragment all three pages show, which is what you want in a browser and in a print preview.
+  var hash = location.hash.replace('#', '');
+  var measuring = hash.endsWith('-measure');
+  var page = hash.replace('-measure', '').replace('p', '');
+
+  if (page === '1' || page === '2' || page === '3') {
+    document.documentElement.className = 'only-' + page + (measuring ? ' measure' : '');
+  }
+</script>
+</body>
+</html>

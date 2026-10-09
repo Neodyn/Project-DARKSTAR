@@ -1,27 +1,35 @@
 # The pilot kneeboard
 
+**English** · [Deutsch](README.de.md)
+
 Three pages telling a player what they can say to the bot, in which words, and what comes back.
 Written for the people flying on your server, not for whoever runs it — hand it out, pin it in
 Discord, or put it on their kneeboard in the cockpit.
 
 | File | What it is |
 |---|---|
-| `DARKSTAR-Kneeboard-1.png` … `-3.png` | The kneeboard pages, 1536 × 2048 — the size DCS uses. |
-| `DARKSTAR-Kneeboard.pdf` | The same three pages, to print or post. |
-| `darkstar-kneeboard.html` | **The source.** Edit this, then re-render. |
-| `build-kneeboard.py` | Renders the PNGs and the PDF from the source. |
+| `DARKSTAR-Kneeboard-EN-1.png` … `-3.png` | The kneeboard pages, 1536 × 2048 — the size DCS uses. |
+| `DARKSTAR-Kneeboard-EN.pdf` | The same three pages, to print or post. |
+| `DARKSTAR-Kneeboard-DE-*` | The German set. Same pages, same calls. |
+| `darkstar-kneeboard-en.html` / `-de.html` | **The sources.** Edit these, then re-render. |
+| `build-kneeboard.py` | Renders both languages. |
+
+**The calls are English in both versions**, because that is what the bot listens for and what it
+says back. Only the explanations around them are translated — a pilot reading the German pages
+still says *"Overlord, bogey dope."*
 
 ## Putting it in DCS
 
-Copy the three PNGs into
+Copy **one language's** three PNGs into
 
 ```
 %USERPROFILE%\Saved Games\DCS\Kneeboard\
 ```
 
-for every aircraft, or into `…\Kneeboard\<Aircraft>\` (e.g. `…\Kneeboard\F-16C_50\`) for one type.
-They appear in the kneeboard in file-name order, which is why they are numbered. `DCS.openbeta`
-instead of `DCS` if that is your install.
+for every aircraft, or into `…\Kneeboard\<Aircraft>\` (e.g. `…\Kneeboard\F-16C_50\`) for one
+type. They appear in the kneeboard in file-name order, which is why they are numbered.
+`DCS.openbeta` instead of `DCS` if that is your install. Copying both languages works too — you
+just get six pages.
 
 ## Before you hand it out
 
@@ -43,11 +51,19 @@ python3 build-kneeboard.py              # finds Chromium or Chrome itself
 python3 build-kneeboard.py "C:\Program Files\Google\Chrome\Application\chrome.exe"
 ```
 
-Needs Chromium or Chrome, and Pillow (`pip install pillow`). It prints how full each page is and
-**fails if one of them overflows**, which is the point: a kneeboard page does not scroll, and a
-page whose content grew past 1024 px simply loses the bottom of itself with nothing in DCS to say
-so. That happened to the first draft of page 1 — two calls were missing and the render looked fine.
+Needs Chromium or Chrome, and Pillow (`pip install pillow`). Both languages are rendered on every
+run, so the two cannot drift apart.
+
+It prints how full each page is and **fails if one of them overflows**, which is the point: a
+kneeboard page does not scroll, and a page whose content grew past 1024 px simply loses the bottom
+of itself with nothing in DCS to say so. That happened to the first draft of page 1 — two calls
+were missing and the render looked fine.
 
 The script also measures how much of the window this particular browser gives the page (headless
 Chromium keeps some of it) rather than assuming, and checks that the finished image really is
 1536 × 2048 with the page reaching the bottom edge.
+
+## Related
+
+[Full manual](../manual-en.md) · [all default calls](../manual-en.md#all-default-calls-at-a-glance) ·
+[configuration fields](../configuration.md)

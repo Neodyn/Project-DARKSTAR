@@ -566,11 +566,12 @@ Alles, was der Bot ohne eine einzige Zeile Konfiguration beantwortet. Zuerst das
 der Call selbst darf irgendwo in derselben Aussendung stehen. Die Abschnitte darunter erklären die
 Calls im Detail; das hier ist die Nachschlageliste.
 
-**Für deine Piloten** gibt es dasselbe als dreiseitiges Handout in
-[docs/kneeboard/](kneeboard/README.md) — fertige PNGs für
-`Saved Games\DCS\Kneeboard\` und ein PDF zum Ausdrucken oder Posten. Geschrieben für jemanden,
-der fliegt, nicht für jemanden, der konfiguriert: was man sagt, was zurückkommt, und was zu tun
-ist, wenn nichts kommt.
+**Für deine Piloten** gibt es dasselbe als dreiseitiges Handout:
+[Kneeboard & Handout](kneeboard/README.de.md) — fertige PNGs für
+`Saved Games\DCS\Kneeboard\` und ein PDF zum Ausdrucken oder Posten, auf Deutsch und Englisch.
+Geschrieben für jemanden, der fliegt, nicht für jemanden, der konfiguriert: was man sagt, was
+zurückkommt, und was zu tun ist, wenn nichts kommt. Die Calls selbst bleiben auch dort Englisch —
+darauf hört der Bot.
 
 Erkannt wird über **enthaltenen Text**, *„Overlord, Punch 1-1, requesting a picture"* trifft also
 `picture`. Alle Listen sind änderbar: die Missionsdaten-Calls auf **CH8 → Replies**, der Radio Check
@@ -1334,7 +1335,7 @@ Wenn in den Transkripten von `--verbose` überhaupt nichts vorkommt, was dem Hot
 
 ## Weiterführend
 
-- [README.md](../README.md) — Projektüberblick
+- [README.de.md](../README.de.md) — Projektüberblick
 - [configuration.md](configuration.md) — Konfigurationsreferenz
 - [gui.md](gui.md) — der Konfigurationseditor im Detail
 - [contributing.md](contributing.md) — Entwicklungshinweise
