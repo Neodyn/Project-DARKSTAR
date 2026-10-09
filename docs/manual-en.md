@@ -777,7 +777,16 @@ Two things about that output are deliberate, and both are about failures rather 
 
 **The wake word stays the global one.** It is tempting to make each tower answer to its airfield's name. Don't: "Kobuleti" and "Senaki-Kolkhi" through a small English speech model, spoken by a non-native speaker, is precisely the failure that [chapter 12.5](#125-accents-accepting-how-the-word-is-really-heard) exists for — and as a *wake word* a miss means the bot never reacts at all, with nothing in the log to show for it. The **frequency** identifies the airfield. A pilot says one word they can pronounce, and the bot answers as "Batumi Tower".
 
-**Generating is additive**, so the airfields you already have keep their frequencies and nothing collides. When you change map, press **Remove N generated tower(s)** first — otherwise you end up with the old map's towers alongside the new ones, registering radios for airfields that no longer exist. A radio counts as generated when all four of these hold: its callsign ends with the configured suffix, it answers airfield requests, it answers nothing else, and it has no wake word of its own. A hand-built radio matching all four is indistinguishable from a generated one and goes with them — which is why the button names what it is about to remove, and why nothing is written until you press **Save changes**. With an empty callsign suffix there is no fingerprint left worth trusting, so the button refuses and says so rather than guessing.
+**Generating is additive**, so the airfields you already have keep their frequencies and nothing collides. When you change map, press **Remove N generated tower(s)** first — otherwise you end up with the old map's towers alongside the new ones, registering radios for airfields that no longer exist.
+
+A radio counts as generated when all four of these hold:
+
+- its callsign ends with the configured suffix,
+- it answers airfield requests,
+- it answers nothing else,
+- it has no wake word of its own.
+
+A hand-built radio matching all four is indistinguishable from a generated one and goes with them. Hence two safeguards: the button names what it is about to remove, and nothing is written until you press **Save changes**. With an empty callsign suffix there is no fingerprint left worth trusting, so the button refuses and says so rather than guessing.
 
 Is one tower per airfield better than a single tower for all of them? Performance barely enters it: the speech model is loaded once and shared, and a detector only works when audio arrives on *its* frequency, so idle towers cost a few MB of memory and no measurable CPU. The one real argument is that replies are serialised per radio — with a single tower, two pilots at different airfields wait for each other; with one each, they don't. The airfield itself is resolved from the pilot's position either way, so both are correct.
 

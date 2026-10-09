@@ -153,10 +153,6 @@ A failed or slow lookup answers with `RadioCheckReply`, never `RadioCheckReplyNo
 | `VoskKeyword` | `"computer"` | Global default keyword the continuously transcribed text is checked against. Overridable per radio via `Radios[].Keyword`. |
 | `VoskKeywordVariants` | `[]` | Further spellings that also count as the wake word. The hotword runs through a small English model, and on a server where most pilots are not native English speakers "Overlord" arrives as `over lord` — which fails the whole-word match on the space alone, so the bot stays silent with nothing to show why. Listing what the model really produces fixes that without touching the model. |
 | `Radios[].KeywordVariants` | `[]` | The same, per radio. **Variants follow the word, not the radio:** a radio using the global wake word inherits the global variants, while a radio with its own `Keyword` starts from an empty list — otherwise a tanker on "Texaco" would quietly begin answering to a variant configured for the AWACS. |
-
-Every accepted variant also raises the false-trigger rate, so the list is meant to be measured rather than guessed. `Darkstar.exe --test-hotword recordings --suggest-variants` reads the transcripts the model produced on the recordings that were supposed to trigger and didn't, proposes the candidates within an edit distance of the wake word (measured with spaces removed, so a word split in two scores 0), and flags any candidate that also appears on `_silence_` recordings instead of recommending it. `HotwordVariants` in `Darkstar.Core` holds both the resolution rule and the suggestion logic, both as pure functions so the arithmetic is tested rather than trusted.
-
-Wake words and trigger phrases must **never** go into `vocabulary.json` — that list makes the transcriber snap anything that merely sounds like an entry onto its exact spelling, turning unintelligible audio into a command nobody gave. Pronunciation variants belong here.
 | `HotwordAudioFilter` | `"LowPass"` | How 48 kHz radio audio is reduced to the 16 kHz Vosk wants. `LowPass` filters before discarding samples, so content above 8 kHz cannot fold down into the speech range and be misheard (measured: fold-over 60–79 dB down, against 5–22 dB for the old path). `"Average"` is that old path, kept only for comparing the two on the same recordings. See [manual-en.md, chapter 12](manual-en.md#12-wake-word-accuracy). |
 | `HotwordAutoGain` | `false` | Amplifies quiet pilots before the wake word is looked for. Off by default: automatic gain also lifts background noise, and lifted noise is what produces wake words nobody said. Never affects the audio that is transcribed or saved. |
 | `SaveRecordings` | `false` | Writes every transmission to `recordings\` as a WAV, tagged `_hit_` or `_missed_`, so accuracy can be measured with `Darkstar.exe --test-hotword recordings --compare`. Roughly 100 KB per second of speech, pruned by the two fields below. |
@@ -166,6 +162,10 @@ Wake words and trigger phrases must **never** go into `vocabulary.json` — that
 | `HotwordConsecutiveFramesNeeded` | `5` | Consecutive "loud" 20ms frames needed before the placeholder detector fires. Only relevant to the fallback above. |
 | `SilenceFramesToStopRecording` | `50` | Consecutive "silent" 20ms frames (1 second at the default) after the hotword that end the recording. |
 | `PreRollSeconds` | `2.0` | Seconds of audio always buffered before a hotword match and prepended to the recording, so the start of the actual message isn't cut off while detection is still triggering. |
+
+Every accepted variant also raises the false-trigger rate, so the list is meant to be measured rather than guessed. `Darkstar.exe --test-hotword recordings --suggest-variants` reads the transcripts the model produced on the recordings that were supposed to trigger and didn't, proposes the candidates within an edit distance of the wake word (measured with spaces removed, so a word split in two scores 0), and flags any candidate that also appears on `_silence_` recordings instead of recommending it. `HotwordVariants` in `Darkstar.Core` holds both the resolution rule and the suggestion logic, both as pure functions so the arithmetic is tested rather than trusted.
+
+Wake words and trigger phrases must **never** go into `vocabulary.json` — that list makes the transcriber snap anything that merely sounds like an entry onto its exact spelling, turning unintelligible audio into a command nobody gave. Pronunciation variants belong here.
 
 ### Speech-to-text & reply generation (Google Gemini)
 
@@ -183,11 +183,11 @@ Wake words and trigger phrases must **never** go into `vocabulary.json` — that
 |---|---|---|
 | `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | Path to the SRS tool used to transmit replies — it lives in the `ExternalAudio` folder of your SRS installation. The installer detects the real location and writes it here; **Detect SRS installation** on CH1 does the same at any time, and startup validation names the path it found when the configured one is missing. List available TTS voices with `DCS-SR-ExternalAudio.exe --help`. |
 | `VoiceName` | `""` | TTS voice for any radio that doesn't set its own, e.g. `"Microsoft David Desktop"`. Empty means no `--voice` flag is passed at all, so ExternalAudio picks. |
+| `ExternalAudioExtraArgs` | `""` | Extra command-line arguments appended to every transmission, for options this bot doesn't set itself. Whether your SRS build has a speaking-rate flag (and what it's called) depends on its version — check `DCS-SR-ExternalAudio.exe --help`, then put it here, e.g. `--speed=-1`. A wrong flag surfaces as an `[ExternalAudio]` error in the log. |
 
 **Which voices exist** is not a question about Windows but about ExternalAudio: it speaks through SAPI5, and the modern "natural" Windows 11 voices (Aria, Guy, Ryan…) are OneCore voices that SAPI5 usually cannot see. The authoritative list is what the tool itself prints, which `TtsVoices` in `Darkstar.Core` reads for the **List available voices** button on CH2 and CH3. Note that the tool prints that list from its *argument-error* handler rather than from a dedicated switch, so it is obtained by calling it with `--help` — a non-zero exit code and a page of usage text are therefore the normal, expected case there.
 
 **Azure and Google voices** work today through `ExternalAudioExtraArgs` — `--azureCredentials="KEY;region"` or `--googleCredentials="path\to.json"` — with the provider's own voice name in `VoiceName` or per radio (e.g. `en-US-AndrewNeural`, `en-US-Wavenet-D`). They sound far better than anything installed locally, cost money per character, and never appear in the button's list, which asks this machine. `--gender=male` and `--culture=en-GB` are the alternative when you'd rather request a kind of voice than a specific one — safer on machines whose voice list you don't know.
-| `ExternalAudioExtraArgs` | `""` | Extra command-line arguments appended to every transmission, for options this bot doesn't set itself. Whether your SRS build has a speaking-rate flag (and what it's called) depends on its version — check `DCS-SR-ExternalAudio.exe --help`, then put it here, e.g. `--speed=-1`. A wrong flag surfaces as an `[ExternalAudio]` error in the log. |
 
 ### "Standby" acknowledgement for slow replies
 
@@ -260,6 +260,45 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reports the caller's *own* position from the bullseye. Answered before the contact query, so it still works when the sensor source is unusable. |
 | `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check when the caller cannot be matched to a unit. |
 
+### Standard replies
+
+| Field | Default | Description |
+|---|---|---|
+| `DcsIntelNoContactsReply` | `"Picture clean."` | Used when nothing matches the filters. |
+| `UnintelligibleReply` | `"Say again, your last was unreadable."` | What the bot says when nothing intelligible came out of the transmission. Without it the bot would fall through to the phrase list or a guessed transcript and answer a request nobody made. |
+| `WrongChannelReply` | `"Contact {callsign} on {frequency}."` | Said when a request arrives on a radio that doesn't handle it while exactly one other radio does — a handoff rather than a refusal. `{callsign}` and `{frequency}` are filled in from that radio; the frequency is read digit by digit ("two five one decimal zero"). Empty means no handoff: the transmission falls through to `phrases.json`. With two radios serving the same request there is no single right answer, so none is given. |
+| `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | Used when the mission data could not be read at all. |
+
+### Where the contacts come from
+
+`DcsIntelContactSource` decides this, together with `DcsIntelAwacsUnitName`.
+
+| Mode | AWACS sensors | God's eye | "Sensors see nothing" means |
+|---|---|---|---|
+| `AwacsThenMissionData` (default) | used when a unit is named | used as fallback | fall back to mission data |
+| `AwacsOnly` | required | **never** | a clean picture is reported |
+| `MissionDataOnly` | ignored | always | — |
+
+In the default mode the fallback also triggers on an *empty* detection table, not just on an error: DCS only fills that table for **AI-controlled** units, so a player-flown AWACS always returns nothing, and "sees nothing right now" can't be told apart from "can never see anything" over the API. The trade-off is that while the AWACS detects nothing, you silently get god's-eye information.
+
+`AwacsOnly` removes that trade-off in the other direction: the bot reports exactly what the unit detects, and an empty table is answered as "picture clean". Use it with an **AI** AWACS — a player-flown one will always look blind. If the sensor call fails outright, or no unit is named, the bot answers `DcsIntelUnavailableReply` ("no tactical data") rather than claiming an empty sky, and a threat circle skips that sweep instead of implying the airspace is clear.
+
+Every `[Intel]` log line names the source actually used (`source=AWACS '<name>' sensors` or `source=mission data (god's eye)`), and the GUI's *"Try it without flying"* button shows the same — the quickest way to check which one you are really running on.
+
+### How the pilot is located
+
+The bot matches the requester's SRS name against the units from `GetPlayerUnits`. Those two names are typed in different places and rarely agree character for character, so matching is tolerant — see `PilotNames` in `Darkstar.Core`. The rules are tried strictest first, and every one is applied across all units before the next is considered, so a weak rule can never beat a strong one:
+
+| Rule | Matches |
+|---|---|
+| `ExactRaw` | The DCS field equals the full SRS name, character for character. |
+| `CanonicalFull` | Equal once case, spaces, hyphens, underscores and squadron tags are ignored — `[ISAF] Mobius 1-1`, `MOBIUS 11` and `mobius_1_1` are one pilot. |
+| `CanonicalHandle` | The part behind the separator matches (usually the DCS player name). |
+| `CanonicalCallsign` | The part in front of the separator matches the unit's callsign or name. |
+| `UniqueSubstring` | Last resort for a handle that differs only by a suffix (`Bernhard` against `Bernhard_S`). Applies **only** to the DCS player name, never to the unit's callsign — that field holds the *flight's* callsign, shared by every aircraft in it, so a partial match there would hand a wingman's call to the flight lead. Refused outright when more than one player would qualify. |
+
+On a match, bearings are given from the pilot's own aircraft (BRAA including aspect: hot / flanking / beaming / cold). If no match is found, the reply falls back to the bullseye format rather than failing — and, since that fallback is silent on the radio, the log says which rule matched or why none did (`DebugLogging`, `[Intel] Pilot "…"`).
+
 ### Friendly positions ("where is Springfield 2-1?")
 
 | Field | Default | Description |
@@ -281,10 +320,11 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 **The target is found by position in the sentence, not by scanning it.** A request like this names two pilots, and `PilotNames.FindMatchInTranscript` deliberately refuses to choose when more than one candidate is named — the safeguard that stopped a wingman being reported as their flight lead. So `TriggerMatcher.FindMatchWithTail` returns what follows the trigger, and only that is searched. Nothing was loosened. The practical consequence is that the name must come after the phrase, and that pronouns are treated as naming nobody.
 
 The reply is built by `BuildFriendlyPosition`, measuring from the caller's aircraft when known and the bullseye otherwise. The friendly's heading is included (half of what a rejoin needs); aspect never is, since it describes a contact closing on you and is meaningless about a wingman.
-| `DcsIntelNoContactsReply` | `"Picture clean."` | Used when nothing matches the filters. |
-| `UnintelligibleReply` | `"Say again, your last was unreadable."` | What the bot says when nothing intelligible came out of the transmission. Without it the bot would fall through to the phrase list or a guessed transcript and answer a request nobody made. |
-| `WrongChannelReply` | `"Contact {callsign} on {frequency}."` | Said when a request arrives on a radio that doesn't handle it while exactly one other radio does — a handoff rather than a refusal. `{callsign}` and `{frequency}` are filled in from that radio; the frequency is read digit by digit ("two five one decimal zero"). Empty means no handoff: the transmission falls through to `phrases.json`. With two radios serving the same request there is no single right answer, so none is given. |
-| `DcsIntelUnavailableReply` | `"Negative, no tactical data available at this time."` | Used when the mission data could not be read at all. |
+
+### Runway in use and ATIS
+
+| Field | Default | Description |
+|---|---|---|
 | `DcsAirfieldEnabled` | `false` | Answers "runway in use" and ATIS calls from live weather and runway data. Needs `DcsGrpcEnabled`. The runway part additionally needs `evalEnabled = true` on the DCS-gRPC server, since runway headings are only reachable through `Eval`; without it the weather still works and the runway is reported as unknown. The only Lua the bot ever runs is a fixed, read-only snippet built into `DcsAirfieldService`, cached per mission — nothing a pilot says reaches it. See [manual-en.md, chapter 8.4](manual-en.md#84-runway-in-use-and-atis). |
 | `DcsAirfieldRunwayTriggers` | `["runway in use", "active runway", "runway request", "which runway"]` | Phrases that ask for the runway only. |
 | `DcsAirfieldAtisTriggers` | `["atis", "weather", "airfield information", "field conditions"]` | Phrases that ask for the full report. Checked before the runway triggers, so a call containing both gets the fuller answer. |
@@ -293,32 +333,6 @@ The reply is built by `BuildFriendlyPosition`, measuring from the caller's aircr
 | `DcsAirfieldMaxDistanceNm` | `60` | How far the nearest airfield may be before the bot asks which one instead of assuming. |
 | `DcsAirfieldUnknownReply` | `"Say the airfield you want conditions for."` | When no airfield was named and the pilot couldn't be located. |
 | `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | When the airfield data couldn't be read at all. |
-
-**Where the contacts come from:** `DcsIntelContactSource` decides this, together with `DcsIntelAwacsUnitName`.
-
-| Mode | AWACS sensors | God's eye | "Sensors see nothing" means |
-|---|---|---|---|
-| `AwacsThenMissionData` (default) | used when a unit is named | used as fallback | fall back to mission data |
-| `AwacsOnly` | required | **never** | a clean picture is reported |
-| `MissionDataOnly` | ignored | always | — |
-
-In the default mode the fallback also triggers on an *empty* detection table, not just on an error: DCS only fills that table for **AI-controlled** units, so a player-flown AWACS always returns nothing, and "sees nothing right now" can't be told apart from "can never see anything" over the API. The trade-off is that while the AWACS detects nothing, you silently get god's-eye information.
-
-`AwacsOnly` removes that trade-off in the other direction: the bot reports exactly what the unit detects, and an empty table is answered as "picture clean". Use it with an **AI** AWACS — a player-flown one will always look blind. If the sensor call fails outright, or no unit is named, the bot answers `DcsIntelUnavailableReply` ("no tactical data") rather than claiming an empty sky, and a threat circle skips that sweep instead of implying the airspace is clear.
-
-Every `[Intel]` log line names the source actually used (`source=AWACS '<name>' sensors` or `source=mission data (god's eye)`), and the GUI's *"Try it without flying"* button shows the same — the quickest way to check which one you are really running on.
-
-**How the pilot is located:** the bot matches the requester's SRS name against the units from `GetPlayerUnits`. Those two names are typed in different places and rarely agree character for character, so matching is tolerant — see `PilotNames` in `Darkstar.Core`. The rules are tried strictest first, and every one is applied across all units before the next is considered, so a weak rule can never beat a strong one:
-
-| Rule | Matches |
-|---|---|
-| `ExactRaw` | The DCS field equals the full SRS name, character for character. |
-| `CanonicalFull` | Equal once case, spaces, hyphens, underscores and squadron tags are ignored — `[ISAF] Mobius 1-1`, `MOBIUS 11` and `mobius_1_1` are one pilot. |
-| `CanonicalHandle` | The part behind the separator matches (usually the DCS player name). |
-| `CanonicalCallsign` | The part in front of the separator matches the unit's callsign or name. |
-| `UniqueSubstring` | Last resort for a handle that differs only by a suffix (`Bernhard` against `Bernhard_S`). Applies **only** to the DCS player name, never to the unit's callsign — that field holds the *flight's* callsign, shared by every aircraft in it, so a partial match there would hand a wingman's call to the flight lead. Refused outright when more than one player would qualify. |
-
-On a match, bearings are given from the pilot's own aircraft (BRAA including aspect: hot / flanking / beaming / cold). If no match is found, the reply falls back to the bullseye format rather than failing — and, since that fallback is silent on the radio, the log says which rule matched or why none did (`DebugLogging`, `[Intel] Pilot "…"`).
 
 ### Threat circle (standing watch)
 

@@ -1776,7 +1776,9 @@ internal static class HousekeepingTests
 
         var guiDoc = ReadSource("docs/gui.md");
         var documented = System.Text.RegularExpressions.Regex
-            .Matches(guiDoc, @"^###+ CH([1-9])", System.Text.RegularExpressions.RegexOptions.Multiline)
+            // Any heading level: the channels are the document's top level now, and which level
+            // that is is a layout decision rather than something to assert.
+            .Matches(guiDoc, @"^#{2,} CH([1-9])", System.Text.RegularExpressions.RegexOptions.Multiline)
             .Select(m => int.Parse(m.Groups[1].Value))
             .Distinct()
             .OrderBy(n => n)
@@ -2440,6 +2442,130 @@ internal static class HousekeepingTests
 
         Check("no cross-reference is dead", brokenLinks.Count == 0,
             brokenLinks.Count == 0 ? "" : string.Join("; ", brokenLinks.Take(5)));
+
+        Console.WriteLine();
+        Console.WriteLine("The documentation can still be scanned rather than only read");
+
+        // Documentation rots towards the wall of text: every correction is one more clause on the end
+        // of a paragraph that was already long, and nobody rereads the whole thing afterwards. Several
+        // paragraphs had grown past 1,600 characters - a changelog entry you have to parse rather than
+        // skim - which is the point at which it stops being documentation and becomes an archive.
+        //
+        // The cap is deliberately generous. It is not a style rule about good prose; it is the point
+        // where a reader stops finding things, and it fires on the next one before it is thirty of them.
+        const int paragraphLimit = 800;
+
+        // A paragraph and a bullet are both one unit of reading. Headings, table rows, block quotes and
+        // fenced code are not prose and are left out: a long table row is a reference entry somebody
+        // looks one thing up in, and a code block is as long as the code is.
+        static List<(int Line, string Text)> ProseUnits(string markdown)
+        {
+            var units = new List<(int, string)>();
+            var lines = markdown.Replace("\r\n", "\n").Split('\n');
+            var buffer = new List<string>();
+            var start = 0;
+            var inFence = false;
+
+            void Flush()
+            {
+                if (buffer.Count > 0) units.Add((start, string.Join(" ", buffer)));
+                buffer.Clear();
+            }
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var trimmed = lines[i].TrimStart();
+
+                if (trimmed.StartsWith("```", StringComparison.Ordinal))
+                {
+                    inFence = !inFence;
+                    Flush();
+                    continue;
+                }
+                if (inFence) continue;
+
+                if (trimmed.Length == 0 ||
+                    trimmed.StartsWith('|') || trimmed.StartsWith('#') || trimmed.StartsWith('>'))
+                {
+                    Flush();
+                    continue;
+                }
+
+                // A list marker starts a new unit; its continuation lines belong to it.
+                if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^([-*+]|\d+\.)\s"))
+                {
+                    Flush();
+                    start = i + 1;
+                }
+                else if (buffer.Count == 0)
+                {
+                    start = i + 1;
+                }
+
+                buffer.Add(trimmed);
+            }
+
+            Flush();
+            return units;
+        }
+
+        var walls = new List<string>();
+        foreach (var path in markdown.Concat(
+                     System.IO.Directory.Exists(Root + System.IO.Path.Combine("docs", "kneeboard"))
+                         ? System.IO.Directory.GetFiles(
+                             Root + System.IO.Path.Combine("docs", "kneeboard"), "*.md")
+                         : Array.Empty<string>())
+                 .OrderBy(p => p))
+        {
+            foreach (var (line, text) in ProseUnits(System.IO.File.ReadAllText(path)))
+                if (text.Length > paragraphLimit)
+                    walls.Add($"{System.IO.Path.GetFileName(path)}:{line} ({text.Length} chars)");
+        }
+
+        Check($"no paragraph or bullet runs past {paragraphLimit} characters", walls.Count == 0,
+            walls.Count == 0 ? "" : string.Join("; ", walls.Take(5)));
+
+        // A paragraph written between two rows of a table ends the table in Markdown, and every row
+        // after it renders as a line of literal pipe characters. It looks perfectly fine in the source,
+        // which is why three of these survived in configuration.md until somebody read the rendered page.
+        var strandedRows = new List<string>();
+        foreach (var path in markdown)
+        {
+            var lines = System.IO.File.ReadAllText(path).Replace("\r\n", "\n").Split('\n');
+            var inFence = false;
+
+            for (var i = 0; i < lines.Length - 1; i++)
+            {
+                if (lines[i].TrimStart().StartsWith("```", StringComparison.Ordinal)) inFence = !inFence;
+                if (inFence) continue;
+
+                // The separator row under a header is what makes a table a table.
+                if (!lines[i].StartsWith('|') ||
+                    !System.Text.RegularExpressions.Regex.IsMatch(lines[i + 1], @"^\|[\s:|-]+\|\s*$"))
+                    continue;
+
+                var body = i + 2;
+                while (body < lines.Length && lines[body].StartsWith('|')) body++;
+
+                // Past the table: prose is fine, a further row without a header of its own is not.
+                for (var j = body; j < lines.Length; j++)
+                {
+                    if (lines[j].StartsWith('#')) break;
+                    if (!lines[j].StartsWith('|')) continue;
+
+                    var hasOwnHeader = j + 1 < lines.Length &&
+                        System.Text.RegularExpressions.Regex.IsMatch(lines[j + 1], @"^\|[\s:|-]+\|\s*$");
+                    if (!hasOwnHeader)
+                        strandedRows.Add($"{System.IO.Path.GetFileName(path)}:{j + 1}");
+                    break;
+                }
+
+                i = body - 1;
+            }
+        }
+
+        Check("no table row is stranded behind a paragraph", strandedRows.Count == 0,
+            strandedRows.Count == 0 ? "" : string.Join("; ", strandedRows.Take(5)));
     }
 }
 

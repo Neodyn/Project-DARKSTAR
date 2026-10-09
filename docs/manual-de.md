@@ -777,7 +777,16 @@ Zwei Dinge daran sind bewusst so, und beide betreffen Fehlerfälle, nicht Geschm
 
 **Das Hotword bleibt das globale.** Es liegt nahe, jeden Tower auf seinen Flugplatznamen hören zu lassen. Tu es nicht: „Kobuleti" und „Senaki-Kolkhi" durch ein kleines englisches Sprachmodell, gesprochen von einem Nicht-Muttersprachler, ist genau der Fehlerfall, für den [Kapitel 12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt) existiert — und als *Hotword* heißt ein Fehlschlag, dass der Bot überhaupt nicht reagiert, ohne jede Spur im Log. Die **Frequenz** identifiziert den Platz. Der Pilot sagt ein Wort, das er aussprechen kann, und der Bot antwortet als „Batumi Tower".
 
-**Das Erzeugen ist additiv**, vorhandene Plätze behalten also ihre Frequenzen und nichts kollidiert. Beim Kartenwechsel zuerst **Remove N generated tower(s)** drücken — sonst stehen die Tower der alten Karte neben den neuen, und der Bot registriert Radios für Plätze, die es nicht mehr gibt. Als erzeugt gilt ein Radio, wenn alle vier Merkmale zutreffen: Rufzeichen endet auf den eingestellten Suffix, es beantwortet Flugplatz-Anfragen, sonst nichts, und es hat kein eigenes Hotword. Ein handgebautes Radio, auf das alle vier passen, ist davon nicht zu unterscheiden und verschwindet mit — darum nennt der Knopf, was er entfernen wird, und darum wird nichts geschrieben, bis du **Save changes** drückst. Ohne Suffix bleibt kein verlässliches Merkmal übrig, dann lehnt der Knopf ab und sagt es, statt zu raten.
+**Das Erzeugen ist additiv**, vorhandene Plätze behalten also ihre Frequenzen und nichts kollidiert. Beim Kartenwechsel zuerst **Remove N generated tower(s)** drücken — sonst stehen die Tower der alten Karte neben den neuen, und der Bot registriert Radios für Plätze, die es nicht mehr gibt.
+
+Als erzeugt gilt ein Radio, wenn alle vier Merkmale zutreffen:
+
+- Rufzeichen endet auf den eingestellten Suffix,
+- es beantwortet Flugplatz-Anfragen,
+- es beantwortet sonst nichts,
+- es hat kein eigenes Hotword.
+
+Ein handgebautes Radio, auf das alle vier passen, ist davon nicht zu unterscheiden und verschwindet mit. Daher zwei Sicherungen: der Knopf nennt, was er entfernen wird, und es wird nichts geschrieben, bis du **Save changes** drückst. Ohne Suffix bleibt kein verlässliches Merkmal übrig, dann lehnt der Knopf ab und sagt es, statt zu raten.
 
 Ist ein Tower pro Platz besser als einer für alle? Performance spielt kaum eine Rolle: das Sprachmodell wird einmal geladen und geteilt, und ein Detektor arbeitet nur, wenn auf *seiner* Frequenz Audio ankommt — stille Tower kosten ein paar MB Speicher und keine messbare CPU. Das eine echte Argument ist, dass Antworten pro Radio serialisiert sind: mit einem einzigen Tower warten zwei Piloten an verschiedenen Plätzen aufeinander, mit je einem nicht. Der Platz selbst wird in beiden Fällen aus der Position des Piloten ermittelt, beide Varianten sind also korrekt.
 
