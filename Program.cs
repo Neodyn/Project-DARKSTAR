@@ -1,3 +1,4 @@
+using System.Globalization;
 using Darkstar;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -6,8 +7,34 @@ using Microsoft.Extensions.Logging;
 // IMPORTANT: use the executable's own directory for the log folder, not the current working
 // directory - a Windows Service starts with C:\Windows\System32 as its working directory by
 // default, which would otherwise put the logs in the wrong place.
+// Numbers are formatted the same way on every machine. A frequency is "133.000 MHz"
+// whether the operator's Windows is English, German or Japanese: it is read off an F10
+// marker, typed into SRS and compared against config.json, none of which have a regional
+// setting. Without this, a German Windows writes "133,000 MHz" into the log and into the
+// generated tower notes - which is how this was found, by a test suite that was green here
+// and failed on the author's machine.
+//
+// Nothing this application shows is localized: the replies are English radio phraseology
+// and the editor's labels are hardcoded English, so there is nothing to lose by it. Blazor
+// already binds numeric inputs invariantly, so the editor's fields are unaffected.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+
+// Which build is this? Asked and answered before anything else runs: a bot that is not the
+// version somebody just installed explains a whole class of "but I fixed that" reports, and
+// nothing else in a running service says so.
+if (args.Any(a => string.Equals(a, "--version", StringComparison.OrdinalIgnoreCase)))
+{
+    Console.WriteLine($"D.A.R.K.S.T.A.R. {VersionInfo.Display}");
+    return 0;
+}
+
 Logger.Init(Path.Combine(AppContext.BaseDirectory, "logs"));
-Logger.Log("D.A.R.K.S.T.A.R. - Digital Assistant for Radio Keyword-activated Speech Transcription And Response");
+Logger.Log($"D.A.R.K.S.T.A.R. {VersionInfo.Display} - Digital Assistant for Radio Keyword-activated Speech Transcription And Response");
+
+if (!VersionInfo.IsRelease)
+    Logger.Log("This build was not made by build-installer.ps1, so it carries no version - " +
+               "normal when running from source, worth a second look on a server.");
 
 // "--test-hotword" measures wake word detection against recorded audio and exits. It never
 // connects to SRS, so it is safe to run while the service is live - useful for checking whether

@@ -116,8 +116,8 @@ public static class TowerPlan
                 airfield.Lon));
         }
 
-        notes.Add($"{towers.Count} tower(s) planned from {config.TowerPlanBaseMHz:0.000} MHz " +
-                  $"in steps of {step:0.000} MHz. The wake word stays the global one - the frequency " +
+        notes.Add($"{towers.Count} tower(s) planned from {Mhz(config.TowerPlanBaseMHz)} MHz " +
+                  $"in steps of {Mhz(step)} MHz. The wake word stays the global one - the frequency " +
                   "identifies the airfield, so nobody has to pronounce its name.");
 
         return new Result(towers, notes);
@@ -128,6 +128,15 @@ public static class TowerPlan
     /// hyphenated second half of names like "Senaki-Kolkhi" - a callsign is spoken on every reply,
     /// and the short form is what a controller would actually say.
     /// </summary>
+    /// <summary>
+    /// A frequency in MHz the way it is written everywhere else in this project: "133.000", with a
+    /// dot, whatever the operator's Windows is set to. These notes are shown in the config editor
+    /// next to the frequency fields and are copied into radio entries from there, so a comma would
+    /// not just look wrong - it would be a different number to anyone reading it back.
+    /// </summary>
+    private static string Mhz(double megahertz) =>
+        megahertz.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+
     public static string CallsignFor(Airfield airfield, string? suffix)
     {
         var name = string.IsNullOrWhiteSpace(airfield.DisplayName) ? airfield.Name : airfield.DisplayName;
@@ -192,7 +201,7 @@ public static class TowerPlan
         notes.Add(generated.Count == 0
             ? $"No radio looks like a generated tower (callsign ending in \"{suffix}\", airfield requests only, no own wake word)."
             : $"{generated.Count} radio(s) look generated: " +
-              string.Join(", ", generated.Select(r => $"{r.Callsign} {r.FrequencyHz / 1_000_000:0.000}")));
+              string.Join(", ", generated.Select(r => $"{r.Callsign} {Mhz(r.FrequencyHz / 1_000_000.0)}")));
 
         return new GeneratedSet(generated, notes);
     }

@@ -560,6 +560,76 @@ Der Bot entscheidet in dieser Reihenfolge:
 2. **Bekannte Phrase** aus `phrases.json` → die feste Antwort.
 3. **Sonst** → je nach `RestrictToKnownPhrases`: entweder die Fallback-Antwort oder eine frei formulierte Gemini-Antwort.
 
+### Alle Standard-Calls auf einen Blick
+
+Alles, was der Bot ohne eine einzige Zeile Konfiguration beantwortet. Zuerst das **Hotword** sagen —
+der Call selbst darf irgendwo in derselben Aussendung stehen. Die Abschnitte darunter erklären die
+Calls im Detail; das hier ist die Nachschlageliste.
+
+**Für deine Piloten** gibt es dasselbe als dreiseitiges Handout in
+[docs/kneeboard/](kneeboard/README.md) — fertige PNGs für
+`Saved Games\DCS\Kneeboard\` und ein PDF zum Ausdrucken oder Posten. Geschrieben für jemanden,
+der fliegt, nicht für jemanden, der konfiguriert: was man sagt, was zurückkommt, und was zu tun
+ist, wenn nichts kommt.
+
+Erkannt wird über **enthaltenen Text**, *„Overlord, Punch 1-1, requesting a picture"* trifft also
+`picture`. Alle Listen sind änderbar: die Missionsdaten-Calls auf **CH8 → Replies**, der Radio Check
+auf **CH4 Phrases**, die festen Phrasen in `phrases.json`.
+
+**Missionsdaten — braucht DCS-gRPC und `DcsIntelEnabled`**
+
+| Call | Antwort | Standard-Auslösephrasen |
+|---|---|---|
+| Bogey dope | Die nächste feindliche Gruppe: BRAA vom eigenen Flugzeug aus, mit Aspekt und Typ. | `bogey dope`, `bogie dope`, `bogey dobe`, `boogie dope`, `nearest bandit`, `closest contact` |
+| Picture | Das gesamte Luftbild, gruppiert, vom Bullseye aus. | `picture`, `request picture`, `say picture` |
+| Threat check | Nur die nächstgelegene Bedrohung, kurz. | `threat check`, `any threats`, `threats` |
+| Alpha check | Die **eigene** Position vom Bullseye aus — Navigationsabgleich. | `alpha check`, `position check`, `say my position` |
+| Where is *Rufzeichen* | Die Position eines **menschlichen** Spielers der eigenen Seite. Standardmäßig aus. | `where is`, `where's`, `position of`, `say position of`, `posit on`, `locate` |
+| Threat circle *N* miles | Aktiviert eine stehende Wache um das eigene Flugzeug; sie warnt, sobald ein Feind hineinfliegt. | `threat circle`, `threat ring`, `set threat circle` |
+| Cancel threat circle | Beendet sie. | `cancel threat circle`, `stop threat circle`, `threat circle off`, `cancel threat ring` |
+| …*bullseye* | Kein eigener Call: an einen der obigen angehängt, erzwingt es die Antwort vom Bullseye statt vom eigenen Flugzeug aus. | `bullseye` |
+
+Drei der Bogey-Dope-Auslöser sind kein Englisch — `bogey dobe`, `boogie dope`, `bogie dope` sind das,
+was das Sprachmodell regelmäßig *hört*. Sie stehen mit Absicht in der Liste, siehe
+[Kapitel 12.5](#125-akzent-akzeptieren-wie-das-wort-wirklich-ankommt).
+
+**Flugplatz — braucht DCS-gRPC und `DcsAirfieldEnabled`**
+
+| Call | Antwort | Standard-Auslösephrasen |
+|---|---|---|
+| Runway in use | Die Bahn, die der Wind begünstigt, samt Wind. Für den Bahn-Teil braucht es `evalEnabled` auf dem DCS-gRPC-Server. | `runway in use`, `active runway`, `runway request`, `which runway` |
+| ATIS | Wind, Temperatur, Druck und Bahn in Benutzung als Informationsdurchsage. | `atis`, `weather`, `airfield information`, `field conditions` |
+
+Mit Platznamen (*„Overlord, Batumi ATIS"*) wird nach diesem gefragt, ohne Namen nach dem Platz, der
+dem eigenen Flugzeug am nächsten liegt.
+
+**Immer verfügbar — ohne jede Missionsdaten**
+
+| Call | Antwort | Standard-Auslösephrasen |
+|---|---|---|
+| Radio check | *„Loud and clear"*, auf **jedem** Radio — und mit aktivem DCS-gRPC zusätzlich, ob dein Name einem Flugzeug zugeordnet werden konnte. | `radio check`, `comm check`, `how do you read`, `how do you hear me` |
+
+**Feste Phrasen — die `phrases.json`, die der Bot beim ersten Start anlegt**
+
+Das sind Beispiele zum Ändern oder Löschen, kein Teil des Bots: Was in der Datei steht, sagt er.
+Sie brauchen gar nichts — kein DCS, kein Gemini-Kontingent.
+
+| Call | Antwort | Auslöser |
+|---|---|---|
+| Say again | *„Copy, say again your last transmission."* | `say again` |
+| Status | *„All systems nominal."* | `status` |
+| Check in | *„Copy your check-in."* | `check in` |
+| Request weather | *„Weather is clear, visibility unrestricted."* | `request weather` |
+| Request RTB | *„Copy, cleared to RTB."* | `request rtb`, `requesting rtb` |
+
+Eine Überschneidung sollte man kennen, weil sie wie ein Fehler aussieht: **`request weather` enthält
+`weather`, und das ist ein ATIS-Auslöser** — Missionsdaten-Calls werden vor `phrases.json`
+entschieden. Mit eingeschalteten Flugplatz-Antworten liefert dieser Call also das echte ATIS statt
+des Konservensatzes. Meistens ist genau das gewollt; wenn nicht, eine der beiden Phrasen ändern.
+
+Was auf nichts davon passt, geht an Gemini — oder an `FallbackResponse`, wenn
+`RestrictToKnownPhrases` an ist.
+
 ### Taktische Anfragen
 
 | Anfrage | Beispielantwort |
@@ -998,6 +1068,29 @@ Und während einer Anfrage:
 ```
 
 Am nützlichsten sind die `[STT]`-Zeilen: Sie zeigen, was der Bot tatsächlich *verstanden* hat, und beantworten die meisten „Warum hat er das gemacht?“-Fragen sofort.
+
+### Welcher Build läuft gerade
+
+Die erste Zeile jedes Logs sagt es, und die Titelleiste des Konfigurationseditors ebenfalls:
+
+```
+D.A.R.K.S.T.A.R. 1.2 (built 2026-10-08 14:33 UTC) - Digital Assistant for Radio Keyword-...
+```
+
+`Darkstar.exe --version` gibt dieselbe Zeile aus und beendet sich, ohne irgendetwas zu starten —
+der schnellste Weg auf einem Server, auf dem der Bot als Dienst läuft.
+
+Version und Bauzeit stempelt `build-installer.ps1` ein, sie bezeichnen also genau einen Installer.
+Ein Build aus der IDE oder per `dotnet run` meldet **`0.0.0-dev`**, und das Log sagt das in einer
+zweiten Zeile — normal beim Arbeiten aus dem Quelltext, auf einem Server, der ein Release fahren
+soll, einen zweiten Blick wert.
+
+Das gibt es wegen eines Fehlers, der ohne diese Anzeige unsichtbar war: Eine Quelldatei, die älter
+datiert ist als die Ausgabe des vorherigen Builds, wird vom Compiler übersprungen — der Installer
+konnte also älteren Code enthalten als der Baum, aus dem er gebaut wurde, ohne dass irgendwo etwas
+darauf hinwies. Das Build-Script verhindert und prüft das jetzt (siehe
+[building-the-installer.md](building-the-installer.md)); diese beiden Zeilen sind die Stelle, an
+der man das Ergebnis nachsieht, statt es zu glauben.
 
 ### Alle Kennzeichen im Log
 

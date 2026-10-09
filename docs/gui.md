@@ -4,6 +4,8 @@ A desktop configuration editor for `config.json`, `phrases.json`, and `vocabular
 
 Build/run target: `Darkstar.ConfigEditor.exe` (assembly name of the `Darkstar.Gui` project), `net8.0-windows`, requires the WebView2 Runtime (installed automatically by `setup-dev-environment.ps1` or the Inno Setup installer if missing).
 
+The title bar carries the build: `1.2 (built 2026-10-08 14:33 UTC)` for an installed release, `0.0.0-dev` for one built from source. It is small and grey on purpose — reference information, not a headline — but always visible, because the question it answers ("is this the version I just installed?") only comes up when something is already wrong.
+
 ## Shared config with the bot
 
 On startup, the GUI resolves the same `config.json`/`phrases.json`/`vocabulary.json` the bot service reads, by first checking its own folder, then walking up the ancestor directory chain, and at each level also searching any `bin\` subfolder recursively — so it finds the bot's actual output folder (e.g. `bin\Debug\net8.0\`) even though that's a sibling branch rather than a direct ancestor of the GUI's own build output. If no existing config is found anywhere, it falls back to its own folder and lets you create fresh files there.

@@ -7,8 +7,22 @@ using Darkstar.Tests;
 // request. Nothing here connects to SRS, DCS or Gemini; the tests are about arithmetic, text and the
 // arrangement of the code, and run on a machine with none of that installed.
 
+// Everything below runs under a culture that writes 133,000 where this project means 133.000.
+//
+// WHY ON PURPOSE: the suite was green on an English machine and failed on the author's German one,
+// on two assertions about tower frequencies - because a plain ToString("0.000") follows whoever is
+// running it. The frequencies a pilot reads off an F10 marker, types into SRS, or hears spoken back
+// must not depend on the operator's regional settings, and neither must a test. Running the whole
+// suite under a comma-decimal culture is what makes that a property of the code rather than of the
+// machine: anything formatting numbers without CultureInfo.InvariantCulture fails here, now,
+// instead of on somebody else's server.
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = new System.Globalization.CultureInfo("de-DE");
+System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+
 Console.WriteLine("D.A.R.K.S.T.A.R. test suite");
 Console.WriteLine($"Repository: {Test.Root}");
+Console.WriteLine($"Culture:    {System.Globalization.CultureInfo.CurrentCulture.Name} " +
+                  "(deliberately not invariant - see the comment in Program.cs)");
 
 // A precondition, not an assertion inside a suite: a test that reads a file by an absolute path
 // passes on the machine it was written on and throws everywhere else, halfway through the run, with a

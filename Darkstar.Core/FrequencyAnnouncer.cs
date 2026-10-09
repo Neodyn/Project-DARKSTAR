@@ -209,6 +209,13 @@ public static class FrequencyAnnouncer
     /// <summary>Upper bound on markers, which is also the id range that gets cleared on every run.</summary>
     public const int MaxMarkers = 32;
 
-    private static string Mhz(double frequencyHz) =>
+    /// <summary>
+    /// A frequency the way a pilot reads it off the marker: "133.000". Always with a dot, whatever
+    /// the operator's Windows is set to - the number is typed into SRS and compared against
+    /// config.json, and neither of those has a regional setting. Internal rather than private so
+    /// the tests can assert the spelling directly; they run under a comma-decimal culture for
+    /// exactly this reason.
+    /// </summary>
+    internal static string Mhz(double frequencyHz) =>
         (frequencyHz / 1_000_000.0).ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
 }

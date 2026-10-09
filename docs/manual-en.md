@@ -560,6 +560,76 @@ The bot decides in this order:
 2. **Known phrase** from `phrases.json` → the fixed answer.
 3. **Otherwise** → depends on `RestrictToKnownPhrases`: either the fallback reply, or a freely generated Gemini answer.
 
+### All default calls at a glance
+
+Everything the bot answers without a single line of configuration. Say the **wake word** first — the
+call itself can sit anywhere in the same transmission. Each section below explains the calls in
+detail; this is the reference list.
+
+**For your pilots** there is a three-page handout of the same thing in
+[docs/kneeboard/](kneeboard/README.md) — ready-made PNGs to drop into
+`Saved Games\DCS\Kneeboard\`, plus a PDF to print or post. Written for somebody flying, not for
+somebody configuring: what to say, what comes back, and what to do when nothing does.
+
+Matching is by **contained text**, so *"Overlord, Punch 1-1, requesting a picture"* matches
+`picture`. All trigger lists are editable: the mission-data ones on **CH8 → Replies**, the radio
+check on **CH4 Phrases**, the fixed phrases in `phrases.json`.
+
+**Mission data — needs DCS-gRPC and `DcsIntelEnabled`**
+
+| Say | You get | Default trigger phrases |
+|---|---|---|
+| Bogey dope | The nearest hostile group: BRAA from your own aircraft, with aspect and type. | `bogey dope`, `bogie dope`, `bogey dobe`, `boogie dope`, `nearest bandit`, `closest contact` |
+| Picture | The whole hostile air picture, grouped, from the bullseye. | `picture`, `request picture`, `say picture` |
+| Threat check | The single nearest threat, short. | `threat check`, `any threats`, `threats` |
+| Alpha check | **Your own** position from the bullseye — a navigation cross-check. | `alpha check`, `position check`, `say my position` |
+| Where is *callsign* | The position of a **human** player on your own side. Off by default. | `where is`, `where's`, `position of`, `say position of`, `posit on`, `locate` |
+| Threat circle *N* miles | Arms a standing watch around your aircraft; it warns when a hostile enters. | `threat circle`, `threat ring`, `set threat circle` |
+| Cancel threat circle | Ends it. | `cancel threat circle`, `stop threat circle`, `threat circle off`, `cancel threat ring` |
+| …*bullseye* | Not a call of its own: added to one of the above, it forces the answer to be given from the bullseye instead of from your aircraft. | `bullseye` |
+
+Three of the bogey-dope triggers are not English — `bogey dobe`, `boogie dope`, `bogie dope` are
+what the speech model regularly *hears*. They are in the list on purpose; see
+[chapter 12.5](#125-accents-accepting-how-the-word-is-really-heard).
+
+**Airfield — needs DCS-gRPC and `DcsAirfieldEnabled`**
+
+| Say | You get | Default trigger phrases |
+|---|---|---|
+| Runway in use | The runway the wind favours, plus that wind. Needs `evalEnabled` on the DCS-gRPC server for the runway part. | `runway in use`, `active runway`, `runway request`, `which runway` |
+| ATIS | Wind, temperature, pressure and the runway in use, as an information broadcast. | `atis`, `weather`, `airfield information`, `field conditions` |
+
+Naming an airfield (*"Overlord, Batumi ATIS"*) asks about that one; saying nothing asks about the
+field nearest your aircraft.
+
+**Always available — no mission data needed**
+
+| Say | You get | Default trigger phrases |
+|---|---|---|
+| Radio check | *"Loud and clear"*, on **every** radio — and, with DCS-gRPC on, whether your name was matched to your aircraft. | `radio check`, `comm check`, `how do you read`, `how do you hear me` |
+
+**Fixed phrases — the `phrases.json` the bot writes on first start**
+
+These are examples to edit or delete, not part of the bot: whatever stands in that file is what it
+says. They need nothing at all — no DCS, no Gemini quota.
+
+| Say | It answers | Trigger |
+|---|---|---|
+| Say again | *"Copy, say again your last transmission."* | `say again` |
+| Status | *"All systems nominal."* | `status` |
+| Check in | *"Copy your check-in."* | `check in` |
+| Request weather | *"Weather is clear, visibility unrestricted."* | `request weather` |
+| Request RTB | *"Copy, cleared to RTB."* | `request rtb`, `requesting rtb` |
+
+One overlap is worth knowing about, because it is the kind of thing that looks like a bug:
+**`request weather` contains `weather`, which is an ATIS trigger** — and mission-data calls are
+decided before `phrases.json`. So with the airfield replies switched on, that call gives you the
+real ATIS rather than the canned sentence. That is usually what you want; if it isn't, change one
+of the two phrases.
+
+Anything that matches none of the above goes to Gemini, or to `FallbackResponse` when
+`RestrictToKnownPhrases` is on.
+
 ### Tactical calls
 
 | Request | Example reply |
@@ -998,6 +1068,28 @@ And during a request:
 ```
 
 The `[STT]` lines are the most useful of all: they show what the bot actually *understood*, which answers most "why did it do that?" questions immediately.
+
+### Which build is running
+
+The first line of every log says it, and so does the config editor's title bar:
+
+```
+D.A.R.K.S.T.A.R. 1.2 (built 2026-10-08 14:33 UTC) - Digital Assistant for Radio Keyword-...
+```
+
+`Darkstar.exe --version` prints the same line and exits without starting anything, which is the
+quickest check on a server where the bot runs as a service.
+
+The version and the build time are stamped in by `build-installer.ps1`, so they identify one
+specific installer. A build made in the IDE or with plain `dotnet run` reports **`0.0.0-dev`** and
+the log says so in a second line — normal when running from source, worth a second look on a
+server that should be running a release.
+
+This exists because of a failure that was invisible without it: a source file dated earlier than
+the previous build's output is skipped by the compiler, so the installer could contain older code
+than the tree it was built from, with nothing anywhere to show it. The build script now prevents
+that and verifies it ([building-the-installer.md](building-the-installer.md)) — and these two
+lines are how you check the result rather than trust it.
 
 ### Every tag the log uses
 

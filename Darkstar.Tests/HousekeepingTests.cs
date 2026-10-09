@@ -1008,6 +1008,77 @@ internal static class HousekeepingTests
         Check("and -Clean really cleans", buildScript.Contains("\"obj\", \"bin\""));
 
         Console.WriteLine();
+        Console.WriteLine("Which build is this?");
+
+        // Nothing in the installed files used to say. Every assembly reported 1.0.0.0, so "the
+        // installer seems to contain an older version" could neither be confirmed nor ruled out
+        // from the outside - and that is exactly what happened.
+        Eq("a release stamp splits into its version and its build time",
+            string.Join(" | ", new[] { VersionInfo.Parse("1.2+build.20261008143300").Version,
+                                       VersionInfo.Parse("1.2+build.20261008143300").BuiltUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-" }),
+            "1.2 | 2026-10-08 14:33");
+        Eq("a plain version has no build time", VersionInfo.Parse("1.2").Version, "1.2");
+        Check("and says so rather than inventing one", VersionInfo.Parse("1.2").BuiltUtc == null);
+
+        // Other tooling writes its own metadata after the '+'. Reading that as a build time would
+        // put a wrong date in front of somebody debugging a version question.
+        Eq("somebody else's metadata still yields the version",
+            VersionInfo.Parse("1.2+a1b2c3d").Version, "1.2");
+        Check("but not a build time", VersionInfo.Parse("1.2+a1b2c3d").BuiltUtc == null);
+        Check("an unparseable stamp is dropped, not guessed at",
+            VersionInfo.Parse("1.2+build.not-a-date").BuiltUtc == null);
+        Eq("and whitespace around it is not part of the version",
+            VersionInfo.Parse("  1.2+build.20261008143300  ").Version, "1.2");
+
+        Check("a build nobody stamped is recognisable as such",
+            !VersionInfo.IsRelease || VersionInfo.Version != VersionInfo.DevelopmentVersion);
+
+        var program = ReadSource("Program.cs");
+        Check("the bot writes its version as the first line of every log",
+            program.Contains("Logger.Log($\"D.A.R.K.S.T.A.R. {VersionInfo.Display}", StringComparison.Ordinal));
+        Check("and answers --version without starting anything",
+            program.Contains("\"--version\"", StringComparison.Ordinal) &&
+            program.IndexOf("--version", StringComparison.Ordinal) <
+            program.IndexOf("Host.CreateApplicationBuilder", StringComparison.Ordinal));
+        Check("the config editor shows it in the title bar",
+            ReadSource("Darkstar.Gui/Pages/Main.razor").Contains("@VersionInfo.Display", StringComparison.Ordinal));
+
+        foreach (var project in new[] { "Darkstar.csproj", "Darkstar.Gui/Darkstar.Gui.csproj",
+                                        "Darkstar.Core/Darkstar.Core.csproj" })
+            Check($"{System.IO.Path.GetFileName(project)} defaults to a version that is visibly not a release",
+                ReadSource(project).Contains("<InformationalVersion>0.0.0-dev</InformationalVersion>", StringComparison.Ordinal));
+
+        Console.WriteLine();
+        Console.WriteLine("The installer cannot pack a build other than the one just made");
+
+        // The failure: MSBuild decides whether to recompile by comparing timestamps, so a source
+        // file dated earlier than the previous build's output is treated as already built. Unpack
+        // an archive over a working copy and that is every file in it. The publish reports success
+        // and copies the PREVIOUS assemblies - silently, which is what made this hard to see.
+        Check("every build gets a stamp of its own",
+            buildScript.Contains("$buildStamp    = (Get-Date).ToUniversalTime().ToString(\"yyyyMMddHHmmss\")", StringComparison.Ordinal) &&
+            buildScript.Contains("$informational = \"$Version+build.$buildStamp\"", StringComparison.Ordinal));
+        Check("which is stamped into the assemblies",
+            buildScript.Contains("-p:InformationalVersion=$informational", StringComparison.Ordinal));
+        Check("the intermediates are deleted first, so no timestamp decides what gets compiled",
+            buildScript.Contains("-Include obj, bin", StringComparison.Ordinal));
+
+        var verifyAt = buildScript.IndexOf("$stamped = Get-PublishedVersion $assemblyPath", StringComparison.Ordinal);
+        var publishAt = buildScript.IndexOf("& dotnet publish $projectPath", StringComparison.Ordinal);
+        Check("and the stamp is read back out of what was actually produced",
+            verifyAt > 0 && publishAt > 0 && publishAt < verifyAt);
+        Check("a mismatch stops the build rather than shipping the wrong code",
+            buildScript.Contains("is NOT the build that was just made", StringComparison.Ordinal));
+        Check("read from the managed assembly, not from the apphost beside it",
+            buildScript.Contains("[System.IO.Path]::ChangeExtension($exePath, \".dll\")", StringComparison.Ordinal));
+
+        // Found while testing the above: an external command's output goes into the function's
+        // return value, so $botOk was an array of dotnet's console lines and "-not $botOk" could
+        // never be true. Every failure guard below that line was dead.
+        Check("dotnet's output does not become the function's return value",
+            buildScript.Contains("-p:InformationalVersion=$informational | Out-Host", StringComparison.Ordinal));
+
+        Console.WriteLine();
         Console.WriteLine("A missing payload cannot end the build in the compiler");
 
         // What this is about: Inno Setup does not warn about a Source: line matching nothing, it
@@ -1122,8 +1193,13 @@ internal static class HousekeepingTests
         var plan = TowerPlan.Plan(caucasus, planConfig);
 
         Check("one tower per airfield", plan.Towers.Count == 4, $"{plan.Towers.Count} planned");
-        Eq("the first gets the base frequency", (plan.Towers[0].FrequencyHz / 1_000_000).ToString("0.000"), "133.000");
-        Eq("and they step upwards", (plan.Towers[1].FrequencyHz / 1_000_000).ToString("0.000"), "133.500");
+
+        // Through the formatter the pilots actually read, not through a plain ToString(): this
+        // suite runs under a comma-decimal culture on purpose (see Program.cs), and the first
+        // version of these two lines passed here and failed on a German machine with
+        // got "133,000", expected "133.000". A frequency is typed into SRS; it has one spelling.
+        Eq("the first gets the base frequency", FrequencyAnnouncer.Mhz(plan.Towers[0].FrequencyHz), "133.000");
+        Eq("and they step upwards", FrequencyAnnouncer.Mhz(plan.Towers[1].FrequencyHz), "133.500");
 
         // Pilots write these numbers down. Running the planner again must not move them.
         var again = TowerPlan.Plan(caucasus.Reverse().ToArray(), planConfig);
@@ -1254,6 +1330,39 @@ internal static class HousekeepingTests
             panel.Contains("RemoveGeneratedTowers", StringComparison.Ordinal));
         Check("and says nothing is saved until the operator says so",
             panel.Contains("Not saved yet", StringComparison.Ordinal));
+
+        Section("Numbers read the same on every machine");
+
+        // The whole suite runs under de-DE (Program.cs), so these assertions are the real check:
+        // anything formatting a number for a pilot without InvariantCulture produces a comma here.
+        Check("the suite is running under a comma-decimal culture, or this proves nothing",
+            (1.5).ToString("0.0") == "1,5", $"1.5 formats as {(1.5).ToString("0.0")}");
+
+        // The pilot-facing strings above are invariant in the library itself, so they hold wherever
+        // they are hosted. Everything else - log lines, diagnostics, the editor's own output - is
+        // covered by both applications setting the culture once at startup, which is cheaper than
+        // auditing forty interpolations and cannot be forgotten in a new one.
+        Check("the bot sets the culture before anything else runs",
+            ReadSource("Program.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
+                StringComparison.Ordinal));
+        Check("and so does the config editor",
+            ReadSource("Darkstar.Gui/App.xaml.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
+                StringComparison.Ordinal));
+
+        Eq("a frequency on an F10 marker", FrequencyAnnouncer.Mhz(133_000_000), "133.000");
+        Eq("a frequency spoken as digits", RadioRoles.SpeakFrequency(251_000_000, spellOutDigits: true),
+            "two five one decimal zero");
+        Eq("and spoken as a number", RadioRoles.SpeakFrequency(251_000_000, spellOutDigits: false), "251.0");
+        Eq("an altimeter setting in inches",
+            DcsAirfieldService.SpeakPressure(
+                new AirfieldConditions { QnhHectopascals = 1013, QnhInchesHg = 29.92 },
+                new AppConfig { DcsIntelSlowSpeech = false, DcsAirfieldPressureUnit = PressureUnit.InchesHg }),
+            "altimeter 29.92");
+
+        var towerNotes = TowerPlan.Plan(caucasus, planConfig).Notes;
+        Check("and the planner's own notes",
+            towerNotes.All(n => !n.Contains(",0", StringComparison.Ordinal)),
+            string.Join(" | ", towerNotes));
 
         Section("Announcing the frequencies in game");
 
@@ -1721,6 +1830,43 @@ internal static class HousekeepingTests
             gitignore.Contains("noreply", StringComparison.OrdinalIgnoreCase),
             "the author name and e-mail in every commit is the actual identity leak");
 
+        // --- the project files are valid XML -------------------------------------------------------
+
+        Section("Every project file still parses as XML");
+
+        // This is here because of a comment. A .csproj is XML, and XML forbids the string "--"
+        // inside a comment - so a sentence mentioning a command-line switch written with two
+        // hyphens makes the file malformed. MSBuild on the command line swallowed it and built
+        // happily; Visual Studio refused to load the project. Nothing in this suite noticed,
+        // because the sandbox harness compiles the SOURCES through stand-in project files and
+        // never reads the repository's own .csproj at all.
+        var xmlFiles = System.IO.Directory
+            .GetFiles(Root, "*.csproj", System.IO.SearchOption.AllDirectories)
+            .Concat(System.IO.Directory.GetFiles(Root, "*.xaml", System.IO.SearchOption.AllDirectories))
+            .Concat(System.IO.Directory.GetFiles(Root, "*.config", System.IO.SearchOption.AllDirectories))
+            .Where(p => !p.Contains($"{System.IO.Path.DirectorySeparatorChar}obj{System.IO.Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal) &&
+                        !p.Contains($"{System.IO.Path.DirectorySeparatorChar}bin{System.IO.Path.DirectorySeparatorChar}",
+                                    StringComparison.Ordinal))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        Check("the project files were found", xmlFiles.Count >= 4, $"{xmlFiles.Count} files");
+
+        foreach (var file in xmlFiles)
+        {
+            var name = System.IO.Path.GetRelativePath(Root, file);
+            try
+            {
+                System.Xml.Linq.XDocument.Load(file);
+                Check($"{name} parses", true);
+            }
+            catch (Exception ex)
+            {
+                Check($"{name} parses", false, ex.Message);
+            }
+        }
+
         // --- no project compiles another project's sources -----------------------------------------
 
         Section("No project swallows another project's sources");
@@ -1885,6 +2031,132 @@ internal static class HousekeepingTests
         Check($"contributing.md names all {sourceFiles.Count} source files",
             unmapped.Count == 0,
             unmapped.Count == 0 ? "" : "missing: " + string.Join(", ", unmapped));
+
+        Console.WriteLine();
+        Console.WriteLine("Every call a pilot can make by default is in the call list");
+
+        // The list of default calls is the one page somebody reads before their first flight with
+        // this bot, and the one that rots fastest: a trigger phrase added to AppConfig works
+        // immediately, is covered by the settings test above as a NAME, and appears nowhere a
+        // pilot would look. So the phrases themselves are compared, not the setting names.
+        var shipped = new AppConfig();
+
+        var everyTrigger = typeof(AppConfig).GetProperties()
+            .Where(p => p.Name.Contains("Trigger", StringComparison.Ordinal) &&
+                        p.PropertyType == typeof(List<string>))
+            .SelectMany(p => (List<string>)(p.GetValue(shipped) ?? new List<string>()))
+            .Concat(PhraseBook.DefaultPhrases().Select(e => e.Trigger))
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        Check("there are default calls to check", everyTrigger.Count >= 30, $"{everyTrigger.Count} phrases");
+
+        foreach (var manual in new[] { "docs/manual-en.md", "docs/manual-de.md" })
+        {
+            var text = references[manual];
+
+            // Inside the reference list specifically - a phrase mentioned somewhere else in the
+            // manual is not the same as a phrase a pilot can look up.
+            var listStart = text.IndexOf("| Say | You get |", StringComparison.Ordinal);
+            if (listStart < 0) listStart = text.IndexOf("| Call | Antwort |", StringComparison.Ordinal);
+            // Ends at the next heading, so this really checks the reference list rather than the
+            // whole chapter - a phrase explained in prose further down is not something a pilot
+            // can look up in a table.
+            var listEnd = text.IndexOf("\n### ", listStart > 0 ? listStart : 0, StringComparison.Ordinal);
+            var list = listStart > 0 && listEnd > listStart ? text[listStart..listEnd] : "";
+
+            Check($"{System.IO.Path.GetFileName(manual)} has a call list", list.Length > 1500,
+                $"{list.Length} characters");
+
+            var absent = everyTrigger
+                .Where(t => !list.Contains($"`{t}`", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            Check($"{System.IO.Path.GetFileName(manual)} lists all {everyTrigger.Count} default phrases",
+                absent.Count == 0,
+                absent.Count == 0 ? "" : "missing: " + string.Join(", ", absent));
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("The pilot kneeboard matches the bot the pilots are flying with");
+
+        // The kneeboard is the one page players actually read, and the one nobody re-renders when
+        // a call is added. It cannot list every spelling - a kneeboard is read at a glance, so it
+        // shows one wording per call - but a whole call that exists and is not on it is a call
+        // nobody will make.
+        var kneeboard = ReadSource("docs/kneeboard/darkstar-kneeboard.html");
+
+        var everyCall = new (string Call, string MustAppear)[]
+        {
+            ("bogey dope", "bogey dope"),
+            ("picture", "picture"),
+            ("threat check", "threat check"),
+            ("alpha check", "alpha check"),
+            ("friendly position", "where is"),
+            ("threat circle", "threat circle"),
+            ("cancel threat circle", "cancel threat circle"),
+            ("runway in use", "runway in use"),
+            ("ATIS", "ATIS"),
+            ("radio check", "radio check"),
+            ("bullseye", "bullseye"),
+        };
+
+        // Only the "SAY" lines count - the words a pilot is told to speak. Searching the whole page
+        // is not the same check: "ATIS" also appears in a side note, so deleting the ATIS call
+        // entirely still left the page looking complete to a first version of this test.
+        var spokenLines = string.Join("\n", System.Text.RegularExpressions.Regex
+            .Matches(kneeboard, @"<div class=""say"">(.*?)</div>",
+                System.Text.RegularExpressions.RegexOptions.Singleline)
+            .Select(m => m.Groups[1].Value));
+
+        Check("the kneeboard tells pilots what to say", spokenLines.Length > 200,
+            $"{spokenLines.Length} characters of spoken wording");
+
+        var notOnTheKneeboard = everyCall
+            .Where(c => !spokenLines.Contains(c.MustAppear, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Call)
+            .ToList();
+
+        Check($"all {everyCall.Length} calls are on it", notOnTheKneeboard.Count == 0,
+            notOnTheKneeboard.Count == 0 ? "" : "missing: " + string.Join(", ", notOnTheKneeboard));
+
+        // The sample phrases too - but grouped by the answer they produce. "request rtb" and
+        // "requesting rtb" are two ways to ask for the same thing; a kneeboard shows one of them,
+        // because its job is to tell a pilot what to say, not to enumerate what is accepted.
+        var missingAnswers = PhraseBook.DefaultPhrases()
+            .GroupBy(e => e.Response, StringComparer.OrdinalIgnoreCase)
+            .Where(group => !group.Any(e => kneeboard.Contains(e.Trigger, StringComparison.OrdinalIgnoreCase)))
+            .Select(group => string.Join(" / ", group.Select(e => e.Trigger)))
+            .ToList();
+
+        Check("and every sample phrase a first start writes can be asked for from it",
+            missingAnswers.Count == 0,
+            missingAnswers.Count == 0 ? "" : "no wording for: " + string.Join("; ", missingAnswers));
+
+        // The rendered pages ship in the repository, because a server admin should not need a
+        // browser and Python to hand something to their pilots. A page of the wrong size is not a
+        // kneeboard page: DCS scales it, and the text stops being readable in the cockpit.
+        foreach (var page in new[] { 1, 2, 3 })
+        {
+            var path = Root + System.IO.Path.Combine("docs", "kneeboard", $"DARKSTAR-Kneeboard-{page}.png");
+
+            if (!System.IO.File.Exists(path))
+            {
+                Check($"page {page} has been rendered", false, "run docs/kneeboard/build-kneeboard.py");
+                continue;
+            }
+
+            // The PNG header: width and height are big-endian 32-bit values at offsets 16 and 20.
+            var header = new byte[24];
+            using (var stream = System.IO.File.OpenRead(path)) _ = stream.Read(header, 0, header.Length);
+
+            var width = (header[16] << 24) | (header[17] << 16) | (header[18] << 8) | header[19];
+            var height = (header[20] << 24) | (header[21] << 16) | (header[22] << 8) | header[23];
+
+            Check($"page {page} is a 1536x2048 kneeboard page", width == 1536 && height == 2048,
+                $"{width}x{height}");
+        }
 
         Console.WriteLine();
         Console.WriteLine("Every tag the log writes is explained in the manuals");

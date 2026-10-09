@@ -38,6 +38,9 @@ html, body {
     flex-shrink: 0;
 }
 .titlebar .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 1px; color: #E7EDEF; font-weight: 600; }
+/* Which build this is. Quiet on purpose - it is reference information, not a headline -
+   but always visible, because the question it answers only comes up when something is wrong. */
+.titlebar .brand .build { font-size: 10px; letter-spacing: 0.5px; color: #5A6A70; font-weight: 400; }
 .titlebar .status { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.5px; }
 .titlebar .status.connected { color: #5FBF7A; }
 .titlebar .status.disconnected { color: #E2543A; }

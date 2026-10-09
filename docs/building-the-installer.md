@@ -44,6 +44,34 @@ makes when it cannot elevate — then in both `Program Files` folders, in `%LOCA
 and on the `PATH`, each folder matched as `Inno Setup*` so a future version is found too. If it is
 genuinely missing, the script offers to install it via winget.
 
+### The installer contains the code it was built from
+
+This needed fixing, and the failure is worth knowing because it is invisible and not specific to
+this project.
+
+MSBuild decides whether to recompile by comparing timestamps. A source file dated **earlier** than
+the previous build's output counts as already built — and when an archive is unpacked over a
+working copy, that is every file in it, because the archive carries the dates the files had when
+it was made. `dotnet publish` then reports success, skips the compile and copies the **previous**
+assemblies into `installer\publish\`. Nothing warns anywhere. It reproduces in four lines: edit a
+file, set its date to last week, publish — the old code is still in the output.
+
+Three things now make that impossible to miss:
+
+1. **The intermediates are deleted before every publish** (`obj\` and `bin\` of every project in
+   the tree), so no timestamp decides what gets compiled. It costs a full compile per installer
+   build; an installer is a release artefact and has to contain the tree it was built from.
+2. **Every build gets a unique stamp**, `-Version` plus the UTC build time, written into the
+   assemblies as `InformationalVersion` (`1.2+build.20261008143300`). A version string that is
+   different on every run is itself a reason for MSBuild to recompile.
+3. **The stamp is read back out of the published assembly.** If what landed in
+   `installer\publish\` does not carry the stamp this run asked for, the build stops and says so,
+   naming both values. That is the check that turns "it feels like an old version" into a fact.
+
+The same stamp is what the bot writes in the first line of its log and what the config editor
+shows in its title bar, so the running software can be compared against the installer that
+produced it.
+
 ### When something is missing, the build still finishes
 
 Inno Setup does not warn about a `Source:` line that matches no files — it stops with an error. A

@@ -26,22 +26,34 @@ public static class PhraseBook
         DefaultIgnoreCondition = JsonIgnoreCondition.Never
     };
 
+    /// <summary>
+    /// The phrases.json a first start writes. Examples to edit or delete rather than part of the
+    /// bot: whatever stands in that file is what it says.
+    /// </summary>
+    /// <remarks>
+    /// Its own method so there is exactly one list: this is what the manuals' call list is checked
+    /// against, and a default added here without a line in that list fails the test rather than
+    /// quietly existing where no pilot would find it.
+    ///
+    /// No "radio check" entry: the bot answers that itself (see <see cref="RadioCheck"/>), and can
+    /// add whether it has the caller on scope - something a fixed phrase cannot know. An entry
+    /// added here still takes priority, for anyone who wants their own wording.
+    /// </remarks>
+    public static List<PhraseEntry> DefaultPhrases() => new()
+    {
+        new() { Trigger = "say again", Response = "Copy, say again your last transmission." },
+        new() { Trigger = "status", Response = "All systems nominal." },
+        new() { Trigger = "check in", Response = "Copy your check-in." },
+        new() { Trigger = "request weather", Response = "Weather is clear, visibility unrestricted." },
+        new() { Trigger = "request rtb", Response = "Copy, cleared to RTB." },
+        new() { Trigger = "requesting rtb", Response = "Copy, cleared to RTB." },
+    };
+
     public static List<PhraseEntry> LoadOrCreateDefault(string path)
     {
         if (!File.Exists(path))
         {
-            var defaults = new List<PhraseEntry>
-            {
-                // No "radio check" entry: the bot answers that itself (see RadioCheck), and can add
-                // whether it has the caller on scope - something a fixed phrase cannot know. An
-                // entry added here still takes priority, for anyone who wants their own wording.
-                new() { Trigger = "say again", Response = "Copy, say again your last transmission." },
-                new() { Trigger = "status", Response = "All systems nominal." },
-                new() { Trigger = "check in", Response = "Copy your check-in." },
-                new() { Trigger = "request weather", Response = "Weather is clear, visibility unrestricted." },
-                new() { Trigger = "request rtb", Response = "Copy, cleared to RTB." },
-                new() { Trigger = "requesting rtb", Response = "Copy, cleared to RTB." },
-            };
+            var defaults = DefaultPhrases();
 
             var json = JsonSerializer.Serialize(defaults, JsonOptions);
             File.WriteAllText(path, json);

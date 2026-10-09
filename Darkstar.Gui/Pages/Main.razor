@@ -3,7 +3,10 @@
 @implements IDisposable
 
 <div class="titlebar">
-    <div class="brand">D.A.R.K.S.T.A.R. // CONFIG EDITOR</div>
+    <div class="brand">
+        D.A.R.K.S.T.A.R. // CONFIG EDITOR
+        <span class="build" title="@(VersionInfo.IsRelease ? "Installed build" : "Built from source, not by the installer script")">@VersionInfo.Display</span>
+    </div>
     <div class="status @(Store.IsLoaded ? "connected" : "disconnected")">
         <span class="dot"></span>
         @(Store.IsLoaded ? $"Loaded from {Store.ConfigFolder}" : "Not loaded")

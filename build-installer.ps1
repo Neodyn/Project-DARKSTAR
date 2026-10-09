@@ -135,6 +135,34 @@ $outputDir     = Join-Path $installerDir "output"
 $setupSuffix   = if ($SkipVoskModel) { "-slim" } else { "" }
 $expectedSetup = Join-Path $outputDir "DARKSTAR-Setup-$Version$setupSuffix.exe"
 
+# The stamp that goes into every assembly this build produces, and that is read back out of the
+# published one afterwards. Two jobs in one string:
+#
+#   1. It tells anyone looking at a running bot or at the config editor's title bar WHICH build
+#      they have. Nothing used to say: every assembly reported 1.0.0.0.
+#   2. It is different on every run, which is what forces MSBuild to recompile. Without that, a
+#      source file whose timestamp is older than the previous output is silently skipped - the
+#      compile is considered up to date and the installer ends up packing the PREVIOUS build.
+#      That is not a theory: it reproduces in four lines (edit a file, set its date to last week,
+#      publish - the old code is still in the output, with no warning anywhere).
+function Expand-ToFourPartVersion {
+    <#
+        Turns "1", "1.2" or "1.2.3" into the four-part form Windows requires for a file's
+        VersionInfo ("1.0.0.0", "1.2.0.0", "1.2.3.0"). A version that already has four parts is
+        returned unchanged. Kept as its own function so it can be tested without running a build.
+    #>
+    param([Parameter(Mandatory)] [string]$Version)
+
+    $parts = @($Version.Split('.'))
+    while ($parts.Count -lt 4) { $parts += "0" }
+    return ($parts[0..3] -join '.')
+}
+
+$buildStamp    = (Get-Date).ToUniversalTime().ToString("yyyyMMddHHmmss")
+$informational = "$Version+build.$buildStamp"
+# Windows' file-version fields insist on exactly four numbers, while -Version may be "1.2".
+$versionInfo   = Expand-ToFourPartVersion $Version
+
 Write-Host ""
 Write-Host "D.A.R.K.S.T.A.R. installer build" -ForegroundColor White
 Write-Host "--------------------------------" -ForegroundColor White
@@ -310,6 +338,23 @@ if ($Clean) {
 
 Write-Step "Publishing bot and GUI ($Configuration, framework-dependent, win-x64)"
 
+<#
+.SYNOPSIS
+    The informational version stamped into a published executable, '' when there is none.
+.DESCRIPTION
+    ProductVersion is where .NET puts AssemblyInformationalVersion, which is the field carrying
+    the build stamp. Read from the file rather than from the build log: the log says what the
+    compiler was asked to do, the file says what somebody is actually going to install.
+#>
+function Get-PublishedVersion($exePath) {
+    try {
+        return [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath).ProductVersion
+    }
+    catch {
+        return ""
+    }
+}
+
 function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
     Write-Info "$label -> $outputPath ($Configuration)"
 
@@ -323,7 +368,26 @@ function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
     # otherwise be picked up by the installer.
     if (Test-Path -LiteralPath $outputPath) { Remove-Item -LiteralPath $outputPath -Recurse -Force }
 
-    & dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained false -o $outputPath --nologo
+    # And the intermediates of the project being published, together with those of everything it
+    # references. This is the fix for an installer that contains an older version of the code than
+    # the source tree it was built from: MSBuild decides whether to recompile by comparing
+    # timestamps, so a source file dated earlier than the last build's output is treated as
+    # already built - which is what happens to every file in an archive unpacked over a working
+    # copy. Nothing warns; the publish reports success and copies the previous assemblies.
+    #
+    # Costs a full compile per installer build. An installer is a release artefact: it has to
+    # contain the tree it was built from, and ten seconds is not a reason to gamble on that.
+    foreach ($intermediate in Get-ChildItem -LiteralPath $ProjectRoot -Directory -Recurse -Include obj, bin -ErrorAction SilentlyContinue) {
+        Remove-Item -LiteralPath $intermediate.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # Out-Host rather than letting it run bare: the output of an external command goes into the
+    # FUNCTION'S return value, so every line dotnet printed used to come back alongside the
+    # $true/$false - and "if (-not $botOk)" on a non-empty array is never true. The failure
+    # guards below this line could not fire at all. Out-Host writes the same text to the console
+    # and keeps the return value a single boolean.
+    & dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained false -o $outputPath --nologo `
+        -p:Version=$versionInfo -p:FileVersion=$versionInfo -p:InformationalVersion=$informational | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "$label failed to publish (dotnet exit code $LASTEXITCODE)."
         return $false
@@ -335,7 +399,36 @@ function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
         return $false
     }
 
-    Write-Ok "$label published in $Configuration ($expectedExe)"
+    # The point of the whole exercise: prove that what is about to be packed is the build that was
+    # just made, rather than taking the compiler's word for it. The stamp is unique per run, so an
+    # assembly carrying anything else was not produced by this build - which is exactly the failure
+    # that put an older version of the bot into the installer with nothing to show for it.
+    # Read from the managed assembly rather than from the .exe next to it. The .exe is the
+    # apphost - a native launcher the SDK stamps separately - and verifying the thing that
+    # actually contains the code is one less assumption. The .exe is the fallback for the case
+    # where there is no .dll beside it.
+    $assemblyPath = [System.IO.Path]::ChangeExtension($exePath, ".dll")
+    if (-not (Test-Path -LiteralPath $assemblyPath)) { $assemblyPath = $exePath }
+
+    $stamped = Get-PublishedVersion $assemblyPath
+    if ($stamped -eq $informational) {
+        Write-Ok "$label published in $Configuration ($expectedExe, $stamped)"
+    }
+    elseif ([string]::IsNullOrWhiteSpace($stamped)) {
+        Write-Warn2 "$label published, but $expectedExe carries no version at all - cannot confirm it is this build."
+        $summary.Add("[!] $label could not be verified against this build")
+    }
+    else {
+        Write-Host ""
+        Write-Fail "$label is NOT the build that was just made."
+        Write-Info "  expected: $informational"
+        Write-Info "  packed:   $stamped"
+        Write-Info "That means the compile was skipped and older output was published. Re-run with"
+        Write-Info "-Clean; if it happens again, something outside this script is writing into"
+        Write-Info "$outputPath."
+        return $false
+    }
+
     return $true
 }
 
@@ -467,18 +560,6 @@ function Test-VoskModelFolder($path) {
     present, tolerates archives that are already flat, and refuses anything that isn't a model.
     Throws on failure so the caller can carry on without a bundled model.
 #>
-function Expand-ToFourPartVersion {
-    <#
-        Turns "1", "1.2" or "1.2.3" into the four-part form Windows requires for a file's
-        VersionInfo ("1.0.0.0", "1.2.0.0", "1.2.3.0"). A version that already has four parts is
-        returned unchanged. Kept as its own function so it can be tested without running a build.
-    #>
-    param([Parameter(Mandatory)] [string]$Version)
-
-    $parts = @($Version.Split('.'))
-    while ($parts.Count -lt 4) { $parts += "0" }
-    return ($parts[0..3] -join '.')
-}
 
 function Expand-VoskModel {
     param(
@@ -625,10 +706,6 @@ if ($DryRun) {
     foreach ($line in $summary) { Write-Info $line }
     exit 0
 }
-
-# Windows' file-version fields insist on exactly four numbers, while -Version may be "1.2".
-# Pad it out rather than making the caller type the padding.
-$versionInfo = Expand-ToFourPartVersion $Version
 
 $isccArgs = @("/DMyAppVersion=$Version", "/DMyVersionInfo=$versionInfo")
 if ($buildSlim)   { $isccArgs += "/DNoVoskModel" }   # leaves the model component out entirely

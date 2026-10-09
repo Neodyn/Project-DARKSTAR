@@ -5,6 +5,21 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Darkstar</RootNamespace>
+
+    <!--
+      Which build is this? Answered by VersionInfo (Darkstar.Core), shown in the bot's startup log,
+      in the config editor's title bar and by the version switch of Darkstar.exe.
+
+      The default says "not a release" on purpose: a binary built in the IDE should be
+      distinguishable from one the installer script made. build-installer.ps1 overrides both
+      properties, and the InformationalVersion it passes carries the UTC build time
+      ("1.2+build.20261008143300"). That suffix is load-bearing rather than decorative - it makes
+      every build's version unique, which forces a recompile even when a source file's timestamp
+      lies in the past, and it is what the script reads back out of the published assembly to
+      prove the installer is packing the build it just made.
+    -->
+    <Version>0.0.0</Version>
+    <InformationalVersion>0.0.0-dev</InformationalVersion>
   </PropertyGroup>
 
   <!--
