@@ -743,6 +743,22 @@ Each radio can also have **its own voice** (`Radios[].Voice`, or the field on CH
 
 A name that isn't available fails **silently** — the transmission simply doesn't happen. Two things make that visible: the startup log names each radio's voice, and an `[ExternalAudio:ERR]` line appears when the tool complains. If a radio goes quiet after a voice change, look there first.
 
+**Assigning one without typing it:** press **Pick a voice** on the radio in question and click a name — or click the VOICE field itself, which drops the same list down. Both write the exact spelling, which matters because a voice name is matched literally and a typo fails the silent way described above. On CH3 the chips under the global voice field do the same for the default.
+
+#### Getting more SAPI5 voices
+
+There is no download link for this. Windows has been installing OneCore voices for years, ExternalAudio reads the SAPI5 list, and the two barely overlap — so the honest answer is three routes, cheapest first. After every one of them, press **List available voices** and believe that list rather than the Windows settings.
+
+**1. A Windows language pack.** Settings → Time & language → Language & region → add a language, then its speech features. Free and reversible, so try it first. It is a coin toss: the older "… Desktop" voices do show up for SAPI5, the modern natural ones don't.
+
+**2. Copy a voice into the SAPI5 registry branch.** The voices Windows hides from SAPI5 live under `HKLM\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens`. Export the one you want, change `Speech_OneCore` to `Speech` in the exported `.reg` file, merge it back. Back up the registry first.
+
+> If your ExternalAudio build is 32-bit it reads `HKLM\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens` instead, and the entries have to go there as well. Rather than working out which build you have, do one of them and press **List available voices** — if the voice isn't there, it was the other branch.
+
+**3. [NaturalVoiceSAPIAdapter](https://github.com/gexgd0419/NaturalVoiceSAPIAdapter).** A third-party SAPI5 engine that hands the Windows 11 Narrator and Azure voices to any SAPI5 program, this bot included. It is the only way to get genuinely good voices without leaving SAPI — and the one route that can break under you. Its own author calls it "more like a hack than a proper solution": it uses keys extracted from system files, a Windows update can stop it working, and the newest Narrator voices already don't work with it. Install the 32-bit and 64-bit versions both, since which one matters depends on ExternalAudio.
+
+If none of that appeals, the next section is the better answer: the cloud voices need no registry work and sound better than anything on this list.
+
 #### Much better voices: Azure or Google
 
 Locally installed voices sound like a speech computer. ExternalAudio can also speak through Azure AI Speech or Google Cloud Text-to-Speech, whose neural voices sound like a person. Both need an account and cost money per character, and both work today through `ExternalAudioExtraArgs` (CH3):

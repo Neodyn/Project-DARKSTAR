@@ -743,6 +743,22 @@ Jedes Radio kann auch **seine eigene Stimme** haben (`Radios[].Voice`, oder das 
 
 Ein nicht vorhandener Name schlägt **stumm** fehl — die Aussendung passiert einfach nicht. Zwei Dinge machen das sichtbar: Das Startup-Log nennt die Stimme jedes Radios, und bei einer Beschwerde des Tools erscheint eine `[ExternalAudio:ERR]`-Zeile. Wenn ein Radio nach einem Stimmenwechsel verstummt, dort zuerst nachsehen.
 
+**Zuweisen, ohne zu tippen:** bei dem betreffenden Radio **Pick a voice** drücken und einen Namen anklicken — oder das VOICE-Feld selbst anklicken, das dieselbe Liste aufklappt. Beides schreibt die exakte Schreibweise, und darauf kommt es an: Ein Stimmenname wird wörtlich verglichen, ein Tippfehler schlägt auf die oben beschriebene stumme Art fehl. Auf CH3 tun die Chips unter dem globalen Stimmenfeld dasselbe für den Standard.
+
+#### Mehr SAPI5-Stimmen bekommen
+
+Dafür gibt es keinen Download-Link. Windows installiert seit Jahren OneCore-Stimmen, ExternalAudio liest die SAPI5-Liste, und die beiden überschneiden sich kaum — die ehrliche Antwort sind daher drei Wege, der günstigste zuerst. Nach jedem davon **List available voices** drücken und dieser Liste glauben, nicht den Windows-Einstellungen.
+
+**1. Ein Windows-Sprachpaket.** Einstellungen → Zeit und Sprache → Sprache und Region → Sprache hinzufügen, dann deren Sprachfunktionen. Kostenlos und umkehrbar, also zuerst probieren. Es ist ein Münzwurf: Die älteren „… Desktop"-Stimmen tauchen in SAPI5 auf, die modernen natürlichen nicht.
+
+**2. Eine Stimme in den SAPI5-Registry-Zweig kopieren.** Die Stimmen, die Windows vor SAPI5 versteckt, liegen unter `HKLM\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens`. Die gewünschte exportieren, in der `.reg`-Datei `Speech_OneCore` durch `Speech` ersetzen, zurück importieren. Vorher die Registry sichern.
+
+> Ist dein ExternalAudio 32-bit, liest es stattdessen `HKLM\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens`, und die Einträge müssen zusätzlich dorthin. Statt herauszufinden, welche Variante du hast: einen der beiden Zweige machen und **List available voices** drücken — fehlt die Stimme, war es der andere.
+
+**3. [NaturalVoiceSAPIAdapter](https://github.com/gexgd0419/NaturalVoiceSAPIAdapter).** Eine SAPI5-Engine von dritter Seite, die die Windows-11-Narrator- und die Azure-Stimmen an jedes SAPI5-Programm weiterreicht, diesen Bot eingeschlossen. Der einzige Weg zu wirklich guten Stimmen, ohne SAPI zu verlassen — und der einzige, der dir unter den Füßen wegbrechen kann. Der Autor nennt es selbst „more like a hack than a proper solution": Es benutzt aus Systemdateien extrahierte Schlüssel, ein Windows-Update kann es lahmlegen, und mit den neuesten Narrator-Stimmen funktioniert es bereits nicht mehr. Die 32- und die 64-bit-Version beide installieren, denn welche zählt, hängt an ExternalAudio.
+
+Wenn nichts davon reizt: Der nächste Abschnitt ist die bessere Antwort — die Cloud-Stimmen brauchen keine Registry-Arbeit und klingen besser als alles auf dieser Liste.
+
 #### Deutlich bessere Stimmen: Azure oder Google
 
 Lokal installierte Stimmen klingen nach Sprachcomputer. ExternalAudio kann auch über Azure AI Speech oder Google Cloud Text-to-Speech sprechen, deren neuronale Stimmen nach einem Menschen klingen. Beide brauchen ein Konto und kosten pro Zeichen — und beide funktionieren heute schon über `ExternalAudioExtraArgs` (CH3):

@@ -338,7 +338,7 @@ public static class PilotNames
         }
 
         // 5. Last resort: a partial match, for the common case of a handle that differs by a
-        //    suffix - "Bernhard" in DCS against "Enfield 1-1 | Bernhard_S" in SRS.
+        //    suffix - "Nomad" in DCS against "Enfield 1-1 | Nomad_S" in SRS.
         //
         //    Deliberately narrow, because a loose version of this rule is worse than no rule at
         //    all. It applies ONLY to the first field (the caller's most trustworthy one, i.e. the

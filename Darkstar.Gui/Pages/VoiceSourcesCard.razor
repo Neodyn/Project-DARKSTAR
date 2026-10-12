@@ -1,0 +1,54 @@
+@*
+    Where more SAPI5 voices come from, on CH2 and CH3 both, from one source so the two can't drift.
+
+    Deliberately not a "download voices" button. There is no link that reliably yields a voice
+    DCS-SR-ExternalAudio.exe can see: it speaks through SAPI5, and what Windows installs these days
+    are OneCore voices, which SAPI5 usually cannot enumerate. A button pointing at the Microsoft
+    download pages would mostly produce voices that look installed, get typed into the field, and
+    then fail silently - no audio, no error. So this says what actually works, cheapest first, and
+    names the risk of the two routes that carry one.
+
+    The routes are ordered by what they cost you if they go wrong, not by how good they sound.
+*@
+
+<details class="voice-sources">
+    <summary>Where do I get more voices?</summary>
+
+    <div class="route">
+        <strong>1. A Windows language pack</strong> — Settings → Time &amp; language → Language &amp;
+        region → add a language, then its speech features. The free, reversible one, so try it first.
+        It is a coin toss, though: the older <em>"… Desktop"</em> voices (<code>Microsoft Hedda
+        Desktop</code>) do appear to SAPI5, the modern "natural" ones don't. Install, press
+        <strong>List available voices</strong>, and believe that list rather than the Windows
+        settings.
+    </div>
+
+    <div class="route">
+        <strong>2. Copy a voice into the SAPI5 registry branch</strong> — the voices Windows hides
+        from SAPI5 sit under
+        <code>HKLM\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens</code>. Export the one you want,
+        change <code>Speech_OneCore</code> to <code>Speech</code> in the exported file, and merge it
+        back. Back up the registry first. If your ExternalAudio build is 32-bit, it reads
+        <code>HKLM\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens</code> instead, so the entries
+        have to go there as well — the surest way to find out which is to do one and check whether
+        the voice shows up in the list.
+    </div>
+
+    <div class="route warn">
+        <strong>3. NaturalVoiceSAPIAdapter</strong> — a third-party SAPI5 engine that hands the
+        Windows 11 Narrator and Azure voices to any SAPI5 program, Darkstar included. It is the only
+        route that gets you the genuinely good voices without leaving SAPI, and its own author calls
+        it <em>"more like a hack than a proper solution"</em>: it uses keys extracted from system
+        files, a Windows update can break it, and the newest Narrator voices already don't work with
+        it. Install the 32-bit and 64-bit versions both, since which one matters depends on
+        ExternalAudio.
+        <a href="https://github.com/gexgd0419/NaturalVoiceSAPIAdapter" target="_blank">github.com/gexgd0419/NaturalVoiceSAPIAdapter</a>
+    </div>
+
+    <div class="route">
+        <strong>Or skip SAPI entirely.</strong> Azure AI Speech and Google Cloud TTS already work
+        through <code>ExternalAudioExtraArgs</code> on CH3 — far better voices, charged per
+        character, and the provider's voice names go straight into the voice fields even though they
+        never appear in the list.
+    </div>
+</details>

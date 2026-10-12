@@ -2444,6 +2444,62 @@ internal static class HousekeepingTests
             brokenLinks.Count == 0 ? "" : string.Join("; ", brokenLinks.Take(5)));
 
         Console.WriteLine();
+        Console.WriteLine("Where more SAPI5 voices come from is documented, and in both languages");
+
+        // This one exists because the honest answer is awkward and therefore easy to quietly drop:
+        // there is no download link for a SAPI5 voice. The three routes that do work each have a
+        // catch, and the catch is the useful part - a route named without its warning sends somebody
+        // into a registry edit or a third-party engine with no idea what they are taking on.
+        var voiceSources = ReadSource("Darkstar.Gui/Pages/VoiceSourcesCard.razor");
+
+        // The component is the single source for both panels. If one stops using it, the two drift
+        // apart silently - which is precisely what a shared component was supposed to prevent.
+        foreach (var voicePanel in new[] { "RadiosPanel", "SpeechPanel" })
+            Check($"CH{(voicePanel == "RadiosPanel" ? 2 : 3)} shows the voice-sources block",
+                ReadSource($"Darkstar.Gui/Pages/{voicePanel}.razor").Contains("<VoiceSourcesCard", StringComparison.Ordinal));
+
+        // Each route is identified by the thing you cannot paraphrase away. For three of them that
+        // is a literal that survives translation - a registry path, a project name - so the same
+        // needle works everywhere. The language-pack route has no such literal, and an English word
+        // as its marker would only be satisfied by leaving English in the German manual, which is
+        // the opposite of what this file checks elsewhere. So that one carries a needle per language.
+        var routes = new (string Name, string Panel, string English, string German)[]
+        {
+            ("the language-pack route", "Language",                     "language pack", "Sprachpaket"),
+            ("the registry route",      @"Speech_OneCore\Voices\Tokens", @"Speech_OneCore\Voices\Tokens", @"Speech_OneCore\Voices\Tokens"),
+            ("the 32-bit branch",       "WOW6432Node",                  "WOW6432Node",   "WOW6432Node"),
+            ("the adapter route",       "NaturalVoiceSAPIAdapter",      "NaturalVoiceSAPIAdapter", "NaturalVoiceSAPIAdapter"),
+        };
+
+        foreach (var (name, panelNeedle, englishNeedle, germanNeedle) in routes)
+        {
+            Check($"the panel names {name}", voiceSources.Contains(panelNeedle, StringComparison.OrdinalIgnoreCase));
+
+            Check($"manual-en.md names {name}",
+                references["docs/manual-en.md"].Contains(englishNeedle, StringComparison.OrdinalIgnoreCase));
+            Check($"manual-de.md names {name}",
+                references["docs/manual-de.md"].Contains(germanNeedle, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // The adapter is the one route that can break under the user, so its warning travels with it.
+        Check("the panel keeps the adapter's own caveat with it",
+            voiceSources.Contains("more like a hack", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var manual in new[] { "docs/manual-en.md", "docs/manual-de.md" })
+            Check($"{System.IO.Path.GetFileName(manual)} keeps the adapter's own caveat with it",
+                references[manual].Contains("more like a hack", StringComparison.OrdinalIgnoreCase));
+
+        // Backing the registry up first is the difference between an experiment and a bad evening.
+        Check("the registry route says to back up first",
+            voiceSources.Contains("Back up the registry", StringComparison.OrdinalIgnoreCase));
+
+        // A link in this editor used to render navy on a near-black panel, because nothing styled one -
+        // the voice-sources block is the first panel to contain a real link.
+        Check("links in the editor have a colour of their own",
+            ReadSource("Darkstar.Gui/wwwroot/css/app.css")
+                .Contains("a { color:", StringComparison.Ordinal));
+
+        Console.WriteLine();
         Console.WriteLine("The documentation can still be scanned rather than only read");
 
         // Documentation rots towards the wall of text: every correction is one more clause on the end

@@ -106,6 +106,30 @@ html, body {
 .link-action { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4FD1C5; cursor: pointer; background: none; border: none; padding: 0; margin-bottom: 16px; }
 .link-action:hover { color: #7EE4D8; }
 
+/* The editor had no links at all until the voice-sources block, so none were ever styled - and a
+   browser default link is navy on this background, which is close to invisible. Same teal as the
+   other actionable text. */
+a { color: #4FD1C5; }
+a:hover { color: #7EE4D8; }
+
+/* A detected TTS voice, as a button rather than a label: the voice field is a combo box, but
+   nothing about an <input list> says so, so the voices somebody just listed are also the
+   quickest way to fill the field. Clicking one writes its name into the field it belongs to. */
+.voice-chip { font-size: 11px; color: #8CA0A8; background: none; border: 1px solid #2A363C; border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: inherit; }
+.voice-chip:hover { color: #E7EDEF; border-color: #4FD1C5; }
+.voice-chip.is-current { color: #4FD1C5; border-color: #4FD1C5; }
+.voice-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* The "where do I get more voices" block. Collapsed by default - it is a detour somebody takes
+   once, and open by default it would push the fields off the page. */
+details.voice-sources { border: 1px solid #2A363C; border-radius: 6px; padding: 10px 14px; margin: 4px 0 12px; }
+details.voice-sources > summary { font-size: 12.5px; color: #4FD1C5; cursor: pointer; }
+details.voice-sources > summary:hover { color: #7EE4D8; }
+details.voice-sources[open] > summary { margin-bottom: 8px; }
+details.voice-sources .route { font-size: 11.5px; color: #8CA0A8; margin-top: 10px; }
+details.voice-sources .route strong { color: #E7EDEF; }
+details.voice-sources .route.warn strong { color: #F2A93B; }
+
 table.phrase-table { width: 100%; border: 1px solid #2A363C; border-radius: 6px; border-collapse: collapse; margin-bottom: 12px; overflow: hidden; }
 table.phrase-table td { padding: 8px 12px; border-bottom: 1px solid #202A2E; font-size: 12px; vertical-align: middle; }
 table.phrase-table tr:last-child td { border-bottom: none; }

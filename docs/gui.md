@@ -115,6 +115,21 @@ provider's, and a picker would make exactly the best-sounding option impossible 
 panel also says why that list is shorter than the Windows voice settings suggest — ExternalAudio
 speaks through SAPI5, which cannot see Windows' modern "natural" voices.
 
+**Pick a voice**, next to each radio's voice field, expands the same list for that radio; clicking
+a name writes it in, and `global default` clears the field again. One radio's list is open at a
+time, because a generated tower per airfield can mean twenty radios on this page. The chips in the
+card below are deliberately *not* clickable: that card sits under every radio, so a click there
+would have no radio to write to. On CH3, where there is only one voice field, the chips do write
+into it.
+
+**Where do I get more voices?** is a collapsed block on both panels, from one shared component so
+the two can't drift. It is not a download button, because no link reliably produces a voice
+ExternalAudio can see: Windows installs OneCore voices, SAPI5 mostly cannot enumerate them, and a
+voice that looks installed but isn't visible fails silently. So the block names the three routes
+that do work — a language pack, a registry copy out of `Speech_OneCore`, or the third-party
+`NaturalVoiceSAPIAdapter` — ordered by what they cost if they go wrong, with the warning attached
+to the one that carries it.
+
 Below the role switches sits `WrongChannelReply`, the sentence that sends a pilot to the frequency
 that does serve their request. The hint states the rule that makes it safe: it is used only when
 **exactly one** other radio serves the request, and emptying the field switches the handoff off.
@@ -166,7 +181,7 @@ Everything about hearing and answering:
 | Card | Holds |
 |---|---|
 | Gemini | API key, primary and optional fallback model, retry count and delay. |
-| Voice | The global TTS voice, with the same **List available voices** button as CH2, a note that a per-radio voice overrides it, and the Azure/Google credentials hint on the extra-arguments field. |
+| Voice | The global TTS voice, with the same **List available voices** button as CH2, clickable chips that write into the field (`let ExternalAudio pick` clears it), the **Where do I get more voices?** block, a note that a per-radio voice overrides it, and the Azure/Google credentials hint on the extra-arguments field. |
 | Detection | Pre-roll seconds, Vosk model folder, global wake word and its variants, silence frames to end a recording. |
 | Standby acknowledgement | `AckEnabled` / `AckAfterSeconds` / `AckMessage`, with `{pilot}` and `{callsign}`. |
 | Rate limit | Requests per pilot per sliding window, and what to say when somebody goes over. |

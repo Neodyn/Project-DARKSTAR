@@ -67,6 +67,46 @@
         <div class="field" style="margin-top:12px;margin-bottom:0">
             <label>VOICE (empty = global default)</label>
             <input type="text" @bind="radio.Voice" list="tts-voices" placeholder="@GlobalVoicePlaceholder" />
+
+            @* The field is already a combo box - clicking it drops the detected voices down - but an
+               <input list> looks exactly like a plain text box, so somebody who has never used one
+               types the name from memory and gets it subtly wrong. This makes the same list visible
+               for THIS radio, which is also what "a different voice per frequency" actually means
+               in practice: pick, pick, pick down the list of radios. *@
+            @if (Store.TtsVoiceList.Count > 0)
+            {
+                var index = i;
+                <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <button class="link-action" style="margin-bottom:0"
+                            @onclick="() => ToggleVoicePicker(index)">
+                        <span>@(_voicePickerFor == index ? "Hide voices" : "Pick a voice")</span>
+                    </button>
+                    <span>or click the field above.</span>
+                </div>
+
+                @if (_voicePickerFor == index)
+                {
+                    var current = radio.Voice;
+                    <div class="voice-chips">
+                        @foreach (var voice in Store.TtsVoiceList)
+                        {
+                            var name = voice.Name;
+                            <button type="button"
+                                    class="@(string.Equals(name, current, StringComparison.OrdinalIgnoreCase) ? "voice-chip is-current" : "voice-chip")"
+                                    @onclick="() => PickVoiceFor(radio, name)">
+                                @voice.Describe()
+                            </button>
+                        }
+                        @* Getting back to the global default has to be possible, or an accidental
+                           pick can only be undone by clearing the field by hand. *@
+                        <button type="button"
+                                class="@(string.IsNullOrWhiteSpace(current) ? "voice-chip is-current" : "voice-chip")"
+                                @onclick="() => PickVoiceFor(radio, string.Empty)">
+                            global default
+                        </button>
+                    </div>
+                }
+            }
         </div>
 
         <div class="row2" style="margin-top:12px">
@@ -131,15 +171,23 @@
         </div>
     }
 
+    @* Informational here on purpose, unlike the per-radio chips above: this card sits below every
+       radio, so a click would have no radio to write to. Assigning happens per radio, where the
+       question "which one?" already has an answer. *@
     @if (Store.TtsVoiceList.Count > 0)
     {
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <div class="voice-chips">
             @foreach (var voice in Store.TtsVoiceList)
             {
                 <span style="font-size:11px;color:#8CA0A8;border:1px solid #2A363C;border-radius:3px;padding:3px 7px">
                     @voice.Describe()
                 </span>
             }
+        </div>
+
+        <div class="hint" style="margin-top:8px">
+            To assign one, use <strong>Pick a voice</strong> on the radio that should use it — or click
+            its VOICE field, which drops the same list down.
         </div>
     }
 
@@ -151,6 +199,8 @@
         credentials in <code>ExternalAudioExtraArgs</code> on CH3.
     </div>
 </div>
+
+<VoiceSourcesCard />
 
 <p style="color:#8CA0A8;font-size:11.5px;margin:4px 0 12px">
     Splitting the roles is how you get a tower: give one frequency the airfield requests and turn
@@ -395,9 +445,28 @@
     private bool FriendlyGloballyOn => TacticalGloballyOn && Store.Config.DcsIntelFriendlyPositionEnabled;
 
     /// <summary>
-    /// What an empty voice field falls back to, spelled out rather than left blank - "empty =
-    /// global default" is only useful if you can see what the global default currently is.
+    /// Which radio currently has its voice list open, by index, or null for none. One at a time on
+    /// purpose: with a generated tower per airfield there can be twenty radios on this page, and
+    /// twenty expanded voice lists is not a page anybody can use.
     /// </summary>
+    private int? _voicePickerFor;
+
+    private void ToggleVoicePicker(int index)
+    {
+        _voicePickerFor = _voicePickerFor == index ? null : index;
+    }
+
+    /// <summary>
+    /// Writes a picked voice into one radio and closes the list again - the pick is the end of the
+    /// errand, so leaving it open would just cover the fields below it. An empty name is the "back
+    /// to the global default" choice rather than a cleared field by accident.
+    /// </summary>
+    private void PickVoiceFor(RadioConfig radio, string voiceName)
+    {
+        radio.Voice = voiceName;
+        _voicePickerFor = null;
+    }
+
     /// <summary>
     /// The variant list as one editable line. Bound through a helper rather than directly, because
     /// the underlying value is a list and the field is comma-separated text.
@@ -427,6 +496,10 @@
             : "(none)";
     }
 
+    /// <summary>
+    /// What an empty voice field falls back to, spelled out rather than left blank - "empty =
+    /// global default" is only useful if you can see what the global default currently is.
+    /// </summary>
     private string GlobalVoicePlaceholder =>
         string.IsNullOrWhiteSpace(Store.Config.VoiceName)
             ? "(whatever ExternalAudio picks)"

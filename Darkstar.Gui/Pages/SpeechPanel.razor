@@ -92,6 +92,30 @@
                 <span style="color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">@Store.TtsVoiceStatus</span>
             }
         </div>
+        @* Unambiguous here, unlike on CH2: there is exactly one field on this panel, so a chip can
+           simply write into it. Clicking the field drops the same list down, but an <input list>
+           gives no sign of that, and a voice name typed from memory fails silently. *@
+        @if (Store.TtsVoiceList.Count > 0)
+        {
+            <div class="voice-chips">
+                @foreach (var voice in Store.TtsVoiceList)
+                {
+                    var name = voice.Name;
+                    <button type="button"
+                            class="@(string.Equals(name, Store.Config.VoiceName, StringComparison.OrdinalIgnoreCase) ? "voice-chip is-current" : "voice-chip")"
+                            @onclick="() => Store.Config.VoiceName = name">
+                        @voice.Describe()
+                    </button>
+                }
+                @* Back to letting ExternalAudio choose, which is what an empty field means. *@
+                <button type="button"
+                        class="@(string.IsNullOrWhiteSpace(Store.Config.VoiceName) ? "voice-chip is-current" : "voice-chip")"
+                        @onclick="() => Store.Config.VoiceName = string.Empty">
+                    let ExternalAudio pick
+                </button>
+            </div>
+        }
+
         <div class="hint">
             A per-radio voice on <strong>CH2</strong> overrides this, which is how the AWACS, the tanker
             and the tower end up sounding like three different people.
@@ -122,6 +146,8 @@
         specific one.
     </div>
 </div>
+
+<VoiceSourcesCard />
 
 <div class="field">
     <label>VOSK MODEL FOLDER</label>

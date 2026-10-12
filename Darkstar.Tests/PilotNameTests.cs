@@ -118,27 +118,27 @@ internal static class PilotNameTests
 
         // Matching on the unit's callsign field rather than the player name.
         var byCallsign = new FakePilot("SomeoneElse", "Springfield 21", "Springfield21-1");
-        r = Match("Springfield 2-1 | Bernhard", byCallsign, wardog);
+        r = Match("Springfield 2-1 | Nomad", byCallsign, wardog);
         Check("the unit callsign matches when the player name doesn't",
             r.Match == byCallsign, $"{r.Rule}: {r.Explanation}");
 
         // The partial rule: helpful when unambiguous.
-        var partial = new FakePilot("Bernhard_S", "Enfield", "Enfield11-1");
-        r = Match("Enfield 1-1 | Bernhard", partial, wardog);
+        var partial = new FakePilot("Nomad_S", "Enfield", "Enfield11-1");
+        r = Match("Enfield 1-1 | Nomad", partial, wardog);
         Check("a handle that is only part of the DCS name still matches when it's unambiguous",
             r.Match == partial && r.Rule == PilotNames.MatchRule.UniqueSubstring, $"{r.Rule}: {r.Explanation}");
 
         // ...and refuses when it isn't.
-        var twin1 = new FakePilot("Bernhard_S", "Enfield", "Enfield11-1");
-        var twin2 = new FakePilot("Bernhard_M", "Enfield", "Enfield12-1");
-        r = Match("Enfield 1-1 | Bernhard", twin1, twin2);
+        var twin1 = new FakePilot("Nomad_S", "Enfield", "Enfield11-1");
+        var twin2 = new FakePilot("Nomad_M", "Enfield", "Enfield12-1");
+        r = Match("Enfield 1-1 | Nomad", twin1, twin2);
         Check("two candidates containing the name are refused, not guessed between",
             r.Match == null && r.Explanation.Contains("ambiguous"), $"{r.Rule}: {r.Explanation}");
 
         // A stricter rule must always win over a looser one, whatever the list order.
-        var exact = new FakePilot("Bernhard", "Enfield", "Enfield11-1");
-        var contains = new FakePilot("Bernhard_Other", "Wardog", "Wardog14-1");
-        r = Match("Enfield 1-1 | Bernhard", contains, exact);
+        var exact = new FakePilot("Nomad", "Enfield", "Enfield11-1");
+        var contains = new FakePilot("Nomad_Other", "Wardog", "Wardog14-1");
+        r = Match("Enfield 1-1 | Nomad", contains, exact);
         Check("an exact-key match beats a partial one even when listed second",
             r.Match == exact && r.Rule == PilotNames.MatchRule.CanonicalHandle, $"{r.Rule}: {r.Explanation}");
 

@@ -295,7 +295,7 @@ The bot matches the requester's SRS name against the units from `GetPlayerUnits`
 | `CanonicalFull` | Equal once case, spaces, hyphens, underscores and squadron tags are ignored — `[ISAF] Mobius 1-1`, `MOBIUS 11` and `mobius_1_1` are one pilot. |
 | `CanonicalHandle` | The part behind the separator matches (usually the DCS player name). |
 | `CanonicalCallsign` | The part in front of the separator matches the unit's callsign or name. |
-| `UniqueSubstring` | Last resort for a handle that differs only by a suffix (`Bernhard` against `Bernhard_S`). Applies **only** to the DCS player name, never to the unit's callsign — that field holds the *flight's* callsign, shared by every aircraft in it, so a partial match there would hand a wingman's call to the flight lead. Refused outright when more than one player would qualify. |
+| `UniqueSubstring` | Last resort for a handle that differs only by a suffix (`Nomad` against `Nomad_S`). Applies **only** to the DCS player name, never to the unit's callsign — that field holds the *flight's* callsign, shared by every aircraft in it, so a partial match there would hand a wingman's call to the flight lead. Refused outright when more than one player would qualify. |
 
 On a match, bearings are given from the pilot's own aircraft (BRAA including aspect: hot / flanking / beaming / cold). If no match is found, the reply falls back to the bullseye format rather than failing — and, since that fallback is silent on the radio, the log says which rule matched or why none did (`DebugLogging`, `[Intel] Pilot "…"`).
 
