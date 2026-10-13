@@ -79,6 +79,16 @@
          see the README. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
 
+    <!-- Whisper.net: optional local transcription (SpeechEngine = "Whisper"), through whisper.cpp.
+         The Runtime package carries the native binaries and needs the Visual C++ Redistributable,
+         which the installer already provides for Vosk. It also wants Windows 11 or Server 2022 and
+         a CPU with AVX2; on older machines the Whisper.net.Runtime.NoAvx package is the fallback.
+         Referenced unconditionally so the engine is always present and switching to it needs no
+         rebuild, which is what makes it an option rather than a separate edition. Models are not
+         shipped: see docs/configuration.md. -->
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+
     <!-- Generic Host: lets the bot run either as a normal console app (for testing) or as a
          real Windows Service (for unattended background operation), using the same .exe. -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />

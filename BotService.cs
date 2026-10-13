@@ -355,6 +355,7 @@ public sealed class BotService : BackgroundService
         DcsIntelService? intel = null;
         ThreatCircleService? threatCircles = null;
         DcsAirfieldService? airfields = null;
+        DcsMenuService? menus = null;
         if (config.DcsIntelEnabled && config.DcsGrpcEnabled)
         {
             intel = new DcsIntelService(config);
@@ -376,6 +377,20 @@ public sealed class BotService : BackgroundService
                            "The runway headings need \"evalEnabled = true\" on the DCS-gRPC server; " +
                            "without it the weather still works and the runway is reported as unknown.");
             }
+
+            if (config.F10MenuEnabled)
+            {
+                menus = new DcsMenuService(config);
+                Logger.Log($"[Menu] Enabled - the bot's calls also appear under F10 > \"{menus.RootName}\", " +
+                           $"refreshed every {Math.Max(5, config.F10MenuRefreshSeconds)}s, " +
+                           $"up to {Math.Max(1, config.F10MenuMaxGroups)} flight(s), " +
+                           $"replies sent as {config.F10ReplyMode}. Nothing is installed on any pilot's machine.");
+            }
+        }
+        else if (config.F10MenuEnabled)
+        {
+            Logger.Log("[Menu] F10MenuEnabled is true, but DcsGrpcEnabled is false - the menu is built over " +
+                       "DCS-gRPC, so it cannot appear. Switch on DcsGrpcEnabled or switch this off.");
         }
         else if (config.DcsIntelEnabled)
         {
@@ -445,11 +460,57 @@ public sealed class BotService : BackgroundService
                           FriendlyPosition: r.AnswersFriendlyPosition))
             .ToList();
 
-        if (string.IsNullOrWhiteSpace(config.GeminiApiKey))
+        // Which engine turns a transmission into text. Gemini is the default and the only one
+        // built in; selecting Whisper is checked here rather than failing later, because the
+        // failure would otherwise be a bot that connects, listens, and answers nothing.
+        var whisperSelected = string.Equals(config.SpeechEngine?.Trim(), "Whisper", StringComparison.OrdinalIgnoreCase);
+
+        WhisperClient? whisper = null;
+
+        if (whisperSelected)
         {
-            Logger.Log("WARNING: GeminiApiKey is empty in config.json - transcription/reply will not work.");
-            Logger.Log("Create a key at https://aistudio.google.com/apikey and enter it in config.json.");
+            // Checked before the native library ever sees the path: a bad model reported here is a
+            // sentence naming the file, reported there it is "invalid model data" from inside a
+            // native call, or nothing at all.
+            var model = WhisperModelCheck.Check(config.WhisperModelPath);
+            Logger.Log($"[Speech] Engine: Whisper (local). {WhisperModelCheck.Describe(model)}");
+
+            foreach (var hint in model.Hints)
+                Logger.Log($"[Speech]   {hint}");
+
+            // Deliberately a refusal, not a silent fall back to Gemini. Somebody who selected
+            // Whisper did so for a reason - no API key, no traffic to Google, or no internet at
+            // all - and quietly using the other engine would defeat every one of those.
+            if (!model.IsUsable)
+                throw new InvalidOperationException(
+                    $"SpeechEngine is \"Whisper\", but the model is not usable: {model.Message} " +
+                    "Fix WhisperModelPath, or set SpeechEngine back to \"Gemini\".");
+
+            whisper = new WhisperClient(model.ResolvedPath!, config.WhisperLanguage);
+
+            Logger.Log("[Speech] Transcription stays on this machine. Freely worded replies are off with " +
+                       "this engine - mission data, the radio check, phrases.json and FallbackResponse " +
+                       "answer everything.");
         }
+        else
+        {
+            Logger.Log("[Speech] Engine: Gemini (transcription and reply in one call).");
+
+            if (string.IsNullOrWhiteSpace(config.GeminiApiKey))
+            {
+                Logger.Log("WARNING: GeminiApiKey is empty in config.json - transcription/reply will not work.");
+                Logger.Log("Create a key at https://aistudio.google.com/apikey and enter it in config.json.");
+            }
+        }
+
+        // Stated at every start, under both engines. "We run this offline" is a promise somebody
+        // makes to their squadron, and it is kept or broken by four unrelated settings - switching
+        // the engine is only the most obvious one. A list of what reaches the internet can be
+        // checked; a claim that nothing does has to be trusted.
+        Logger.Log($"[Privacy] {NetworkUse.Summarise(config)}");
+
+        foreach (var reach in NetworkUse.Describe(config))
+            Logger.Log($"[Privacy]   {reach.Component}: {reach.Detail}");
 
         var gemini = new GeminiClient(
             config.GeminiApiKey,
@@ -669,7 +730,23 @@ public sealed class BotService : BackgroundService
                 Logger.Log($"[Recording finished] {freqLabel}: {audio.Length} bytes of PCM, transcribing...");
 
                 var coalitionLabel = senderCoalition is 1 or 2 ? CoalitionLabel(senderCoalition) : null;
-                var (text, geminiReply) = await gemini.TranscribeAndReplyAsync(audio, vocabulary, coalitionLabel);
+                // Two engines, two shapes. Gemini answers transcript and reply in one call, which
+                // is what halves its quota use and is worth keeping. Whisper transcribes and
+                // nothing more, so there is no free reply to fall back on - which the chain below
+                // handles the same way it handles RestrictToKnownPhrases.
+                string text;
+                string? geminiReply;
+
+                if (whisper != null)
+                {
+                    text = await whisper.TranscribeAsync(audio, stoppingToken);
+                    geminiReply = null;
+                }
+                else
+                {
+                    (text, geminiReply) = await gemini.TranscribeAndReplyAsync(audio, vocabulary, coalitionLabel);
+                }
+
                 Logger.Log($"[STT] \"{text}\"");
 
                 // Tactical requests (bogey dope / picture / threat) are answered from live mission
@@ -828,6 +905,15 @@ public sealed class BotService : BackgroundService
                     // fixed fallback reply instead. This makes the bot respond only to configured phrases.
                     reply = config.FallbackResponse;
                     Logger.Log("[Phrase Match] No known trigger detected, using FallbackResponse.");
+                }
+                else if (geminiReply == null)
+                {
+                    // Whisper transcribes and nothing more, so there is no freely worded answer to
+                    // reach for. Same outcome as RestrictToKnownPhrases, different reason - logged
+                    // separately, because "the bot keeps saying the fallback" has two causes and
+                    // they are fixed in different places.
+                    reply = config.FallbackResponse;
+                    Logger.Log("[Phrase Match] No known trigger, and this engine writes no free replies - using FallbackResponse.");
                 }
                 else
                 {
@@ -1054,6 +1140,239 @@ public sealed class BotService : BackgroundService
 
                 await TransmitAsync(session, $"{prefix} {ForSpeech(alert.SpokenText)}", stoppingToken);
             }, stoppingToken), stoppingToken);
+        }
+
+        // The F10 menu: the same calls, reachable without being understood. Two loops, because the
+        // two halves fail independently - a menu nobody clicks is harmless, a click nobody hears is
+        // the bug this feature exists to prevent.
+        if (menus != null && intel != null)
+        {
+            // Group name to DCS group id: the menu is addressed by name, on-screen text by id, and
+            // only the sweep sees both. Written by the sweep, read by the click handler.
+            var menuGroupIds = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+            // Which radio answers an F10 request? The pilot never tuned one, so the bot picks the
+            // radio whose role covers the call - the same rule WrongChannelReply uses when a spoken
+            // request lands on the wrong frequency. With two radios serving it, the first is taken:
+            // on the radio it would be refused as ambiguous, but here refusing would mean a menu
+            // entry that does nothing, which is worse than answering on one of two right places.
+            RadioSession? RadioFor(CallDefinition call) =>
+                sessions.Values.FirstOrDefault(s => call.Capability switch
+                {
+                    RadioCapability.Tactical => s.AnswersTactical,
+                    RadioCapability.Airfield => s.AnswersAirfield,
+                    _ => true,
+                });
+
+            // What the menu should hold for one flight right now. Deliberately cheap: everything
+            // here is either config or already in memory, so a sweep costs one gRPC call for the
+            // player list and nothing per group.
+            CallContext ContextFor(string groupName, bool nearAirfield) => new()
+            {
+                TacticalAvailable = sessions.Values.Any(s => s.AnswersTactical),
+                AirfieldAvailable = airfields != null && sessions.Values.Any(s => s.AnswersAirfield),
+                // Threat circles are in the catalogue but not in the menu yet - see
+                // CallCatalog.MenuOffers - so there is nothing for these two to change here.
+                ThreatCircleSupported = false,
+                ThreatCircleActive = false,
+                NearAirfield = nearAirfield,
+
+                // Left false deliberately. Knowing it would mean a contact query per sweep per
+                // coalition, and the only thing it buys is moving the bogey dope above the threat
+                // check - which are already next to each other. Not worth the traffic.
+                HostilesNearby = false,
+            };
+
+            _ = Task.Run(async () =>
+            {
+                var every = TimeSpan.FromSeconds(Math.Max(5, config.F10MenuRefreshSeconds));
+
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var channel = DcsGrpcChannels.For(config.DcsGrpcAddress);
+                        var headers = DcsGrpcChannels.HeadersFor(config.DcsGrpcApiKey);
+
+                        // Only to decide whether the airfield calls come first. A failure here is
+                        // not worth skipping the sweep for - the menu is still correct, just
+                        // ordered as if everybody were airborne.
+                        var fields = new List<(double, double)>();
+                        if (airfields != null)
+                        {
+                            try
+                            {
+                                fields = (await airfields.ListAirfieldsAsync(stoppingToken))
+                                    .Select(a => (a.Lat, a.Lon))
+                                    .ToList();
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Debug($"[Menu] Could not read the airfields for ordering: {ex.Message}");
+                            }
+                        }
+
+                        var plans = new Dictionary<string, List<DcsMenu.Entry>>(StringComparer.OrdinalIgnoreCase);
+                        var groups = await menus.ListPlayerGroupsAsync(
+                            channel, headers, fields, (int)Math.Ceiling(config.DcsAirfieldAtFieldNm), stoppingToken);
+
+                        foreach (var group in groups)
+                            plans[group.Name] = DcsMenu.Plan(ContextFor(group.Name, group.NearAirfield));
+
+                        lock (menuGroupIds)
+                        {
+                            foreach (var group in groups) menuGroupIds[group.Name] = group.Id;
+                        }
+
+                        var result = await menus.SyncAsync(channel, headers, plans, stoppingToken);
+
+                        if (!result.Ok)
+                            Logger.Log($"[Menu] {result.Error}");
+                        else if (result.GroupsWritten > 0 || result.GroupsRemoved > 0 || result.GroupsSkipped > 0)
+                            Logger.Log($"[Menu] {result.GroupsWritten} written, {result.GroupsRemoved} removed" +
+                                       (result.GroupsSkipped > 0
+                                           ? $", {result.GroupsSkipped} skipped (cap {Math.Max(1, config.F10MenuMaxGroups)})"
+                                           : "") + ".");
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        // A mission change, a paused server, a dropped connection. The menus that
+                        // existed belong to a mission that may be gone, so the bookkeeping has to go
+                        // with it or the next sweep skips exactly the groups that need rebuilding.
+                        menus.Forget();
+                        Logger.Debug($"[Menu] Sweep failed, will try again: {ex.Message}");
+                    }
+
+                    try { await Task.Delay(every, stoppingToken); }
+                    catch (OperationCanceledException) { break; }
+                }
+            }, stoppingToken);
+
+            _ = Task.Run(async () =>
+            {
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var channel = DcsGrpcChannels.For(config.DcsGrpcAddress);
+                        var headers = DcsGrpcChannels.HeadersFor(config.DcsGrpcApiKey);
+
+                        await foreach (var (groupName, groupId, callId) in
+                                       menus.StreamClicksAsync(channel, headers, stoppingToken))
+                        {
+                            var call = CallCatalog.ById(callId);
+                            if (call == null) continue; // somebody else's menu, not ours
+
+                            var session = RadioFor(call);
+                            if (session == null)
+                            {
+                                Logger.Log($"[Menu] \"{call.Id}\" from group \"{groupName}\" - no radio serves it.");
+                                continue;
+                            }
+
+                            // One click at a time, in its own task: answering can take seconds
+                            // (a gRPC round trip plus a transmission), and holding the stream
+                            // open behind it would queue up everybody else's clicks.
+                            var clicked = call;
+                            var name = groupName;
+                            var id = groupId;
+                            var radio = session;
+                            _ = Task.Run(() => AnswerMenuCallAsync(clicked, name, id, radio, stoppingToken), stoppingToken);
+                        }
+                    }
+                    catch (OperationCanceledException) { break; }
+                    catch (Exception ex)
+                    {
+                        Logger.Debug($"[Menu] Event stream dropped, reconnecting: {ex.Message}");
+                        try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
+                        catch (OperationCanceledException) { break; }
+                    }
+                }
+            }, stoppingToken);
+        }
+
+        // Answers one F10 click and sends the reply the way F10ReplyMode asks for.
+        async Task AnswerMenuCallAsync(CallDefinition call, string groupName, uint groupId,
+            RadioSession session, CancellationToken token)
+        {
+            string? reply = null;
+
+            try
+            {
+                if (call.Kind == CallKind.RadioCheck)
+                {
+                    // Deliberately the plain reply, not the one that reports radar contact: that
+                    // variant exists to tell a pilot whether their SRS name was matched, and an F10
+                    // request never went through name matching at all.
+                    reply = config.RadioCheckReply;
+                }
+                else if (call.Capability == RadioCapability.Airfield && airfields != null)
+                {
+                    var kind = call.Kind == CallKind.Atis ? AirfieldRequestKind.Atis : AirfieldRequestKind.RunwayInUse;
+
+                    // No transcript to name an airfield in, so this is the pure position-based
+                    // path - which is the one the airfield lookup prefers anyway.
+                    var result = await airfields.AnswerAsync(kind, "", "", config.Coalition, token);
+                    reply = result.Handled ? result.Reply : config.DcsAirfieldUnavailableReply;
+                }
+                else if (intel != null)
+                {
+                    var kind = call.Kind switch
+                    {
+                        CallKind.BogeyDope => IntelRequestKind.BogeyDope,
+                        CallKind.Picture => IntelRequestKind.Picture,
+                        CallKind.ThreatCheck => IntelRequestKind.Threat,
+                        CallKind.AlphaCheck => IntelRequestKind.AlphaCheck,
+                        _ => IntelRequestKind.None,
+                    };
+
+                    if (kind != IntelRequestKind.None)
+                    {
+                        // No transcript and no SRS name: the group DCS attributed the click to is
+                        // what identifies the pilot, and it cannot be wrong the way a matched name
+                        // can. This path gets BRAA where a spoken call sometimes falls back to the
+                        // bullseye.
+                        var result = await intel.AnswerAsync(kind, "", "", config.Coalition, token,
+                            knownGroupName: groupName);
+                        reply = result.Handled ? result.Reply : config.DcsIntelUnavailableReply;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"[Menu] \"{call.Id}\" from \"{groupName}\" failed: {ex.Message}");
+                reply = config.DcsIntelUnavailableReply;
+            }
+
+            if (string.IsNullOrWhiteSpace(reply)) return;
+
+            var mode = (config.F10ReplyMode ?? "Both").Trim();
+            var overRadio = !mode.Equals("Text", StringComparison.OrdinalIgnoreCase);
+            var onScreen = !mode.Equals("Radio", StringComparison.OrdinalIgnoreCase);
+
+            Logger.Log($"[Menu] \"{call.Id}\" from \"{groupName}\" -> " +
+                       $"{session.FrequencyHz / 1_000_000:0.000} MHz ({mode}): {reply}");
+
+            if (overRadio)
+                await TransmitAsync(session, $"This is {ForSpeech(session.Callsign)}... {ForSpeech(reply)}", token);
+
+            if (onScreen && menus != null)
+            {
+                try
+                {
+                    await menus.ShowTextToGroupAsync(
+                        DcsGrpcChannels.For(config.DcsGrpcAddress),
+                        DcsGrpcChannels.HeadersFor(config.DcsGrpcApiKey),
+                        groupId, $"{session.Callsign}: {reply}", token);
+                }
+                catch (Exception ex)
+                {
+                    // The radio half may well have gone out fine, so this is a note rather than a
+                    // failure - and if it didn't, the log line above already recorded the attempt.
+                    Logger.Debug($"[Menu] On-screen reply to group {groupId} failed: {ex.Message}");
+                }
+            }
         }
 
         var radioSummary = string.Join(", ", radioConfigs.Select(r => $"{r.FrequencyHz / 1_000_000:0.000} MHz ({r.Modulation})"));

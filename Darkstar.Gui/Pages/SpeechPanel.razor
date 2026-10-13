@@ -1,7 +1,106 @@
 @namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
 
-<h1>SPEECH — GEMINI</h1>
+<h1>SPEECH — TRANSCRIPTION &amp; REPLY</h1>
+
+<div class="card">
+    <div class="card-head">
+        <span style="font-size:12.5px;color:#E7EDEF">Which engine turns a transmission into text</span>
+    </div>
+
+    <div class="row2">
+        <div class="field" style="margin-bottom:0">
+            <label>ENGINE</label>
+            <select @bind="Store.Config.SpeechEngine">
+                <option value="Gemini">Gemini — transcription and reply in one call (default)</option>
+                <option value="Whisper">Whisper — transcribed locally, no account</option>
+            </select>
+        </div>
+        <div class="field" style="margin-bottom:0">
+            <label>&nbsp;</label>
+            <div class="hint" style="margin-top:8px">
+                Vosk keeps doing the wake word either way — that runs on every 20 ms frame, which is
+                not something either of these is for.
+            </div>
+        </div>
+    </div>
+
+    @if (WhisperSelected)
+    {
+        <div class="hint" style="margin-top:10px">
+            Transcription stays on this machine: no API key, no per-transmission cost, no daily quota,
+            and no recording of anybody's voice leaving the PC. <strong>Freely worded replies are off
+            with this engine</strong> &mdash; mission data, the radio check, <code>phrases.json</code>
+            and the fallback reply answer everything, which on a server running the tactical replies
+            is nearly all of it.
+        </div>
+
+        <div class="field" style="margin-top:10px">
+            <label>WHISPER MODEL FILE (ggml-*.bin)</label>
+            <input type="text" @bind="Store.Config.WhisperModelPath"
+                   placeholder="e.g. models\ggml-small.en.bin" />
+        </div>
+
+        <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="link-action" style="margin-bottom:0" @onclick="CheckWhisperModel">
+                <span>Check the model</span>
+            </button>
+            <span>Reads the file's size and header — which is what catches a half-finished download.</span>
+        </div>
+
+        @if (_whisperResult != null)
+        {
+            <div style="font-size:11.5px;color:@(_whisperResult.IsUsable ? "#5FBF7A" : "#F2A93B");margin-top:6px">
+                @(_whisperResult.IsUsable ? WhisperModelCheck.Describe(_whisperResult) : _whisperResult.Message)
+            </div>
+
+            @foreach (var hint in _whisperResult.Hints)
+            {
+                <div class="hint" style="margin-top:2px">@hint</div>
+            }
+        }
+
+        <div class="row2" style="margin-top:10px">
+            <div class="field" style="margin-bottom:0">
+                <label>LANGUAGE</label>
+                <input type="text" @bind="Store.Config.WhisperLanguage" placeholder="en" />
+                <div class="hint">
+                    <code>en</code> because radio phraseology is English whatever the crew speaks — saying
+                    so is what stops a German-accented call coming back as German. <code>auto</code> lets
+                    it decide.
+                </div>
+            </div>
+        </div>
+
+        <details class="voice-sources" style="margin-top:12px">
+            <summary>Where do I get a model?</summary>
+
+            <div class="route">
+                <strong>The models are not on GitHub</strong> — the <em>script</em> that fetches them is.
+                <code>models\download-ggml-model.cmd</code> in the whisper.cpp repository downloads from
+                Hugging Face, which is where the files actually live. Either works; the script just saves
+                you picking the right file name.
+                <a href="https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.cmd" target="_blank">download-ggml-model.cmd</a>
+                &middot;
+                <a href="https://huggingface.co/ggerganov/whisper.cpp" target="_blank">huggingface.co/ggerganov/whisper.cpp</a>
+            </div>
+
+            <div class="route">
+                <strong>Which one.</strong> <code>tiny.en</code> 75 MB, <code>base.en</code> 142 MB,
+                <code>small.en</code> 466 MB, <code>medium.en</code> 1.5 GB — each needing roughly twice
+                its size in memory while it runs. The <code>.en</code> variants are English-only and
+                better at it than the multilingual ones of the same size.
+            </div>
+
+            <div class="route warn">
+                <strong>Check the machine first.</strong> The Whisper runtime needs Windows 11 or Server
+                2022 and a CPU with AVX2 — a DCS server on Server 2019 or Windows 10 cannot run it. It
+                also needs the Visual C++ Redistributable, which this installer already puts there for
+                Vosk.
+            </div>
+        </details>
+    }
+</div>
 
 <div class="field">
     <label>API KEY</label>
@@ -296,6 +395,27 @@
 </div>
 
 @code {
+    /// <summary>
+    /// Whether the Whisper half of this panel is shown. Hidden entirely under Gemini rather than
+    /// greyed out: it is a whole second engine's worth of fields, and nobody running the default
+    /// needs to scroll past them.
+    /// </summary>
+    private bool WhisperSelected =>
+        string.Equals(Store.Config.SpeechEngine?.Trim(), "Whisper", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The last model check, or null if the button has not been pressed.</summary>
+    private WhisperModelCheckResult? _whisperResult;
+
+    /// <summary>
+    /// Runs the same check the bot runs at startup, so the editor cannot say a model is fine while
+    /// the bot refuses it. No Whisper dependency involved - this reads the file's size and its
+    /// first four bytes, which is exactly what separates a model from a half-finished download.
+    /// </summary>
+    private void CheckWhisperModel()
+    {
+        _whisperResult = WhisperModelCheck.Check(Store.Config.WhisperModelPath);
+    }
+
     /// <summary>
     /// The variant list as one editable line. value + onchange rather than @bind, because the stored
     /// value is a list and the field is comma-separated text.

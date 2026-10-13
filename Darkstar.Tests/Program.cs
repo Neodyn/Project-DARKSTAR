@@ -59,6 +59,14 @@ Console.WriteLine("======== Airfields, ATIS, radio roles ========");
 AirfieldTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== The Whisper model check ========");
+WhisperModelTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The call catalogue and the F10 menu ========");
+CallCatalogTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== Housekeeping, requests, documentation ========");
 await HousekeepingTests.RunAsync();
 

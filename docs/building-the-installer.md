@@ -202,6 +202,28 @@ Because `Setup.iss` packs those folders wholesale, whatever a NuGet package deci
 
 It warns — without failing the build — when a file turns up whose extension a running bot has no use for, and separately when a localized resource folder survived, which is how you'd notice that one of the two properties above got lost in a merge. It never fails the build on its own: a new file type may well be legitimate, and only a person can tell which.
 
+### Whisper's native binaries, and why they are not in the installer
+
+`Whisper.net.Runtime` ships whisper.cpp compiled for every platform it supports — Windows, Linux,
+macOS, Android, iOS, WebAssembly. Left alone, that is a good ten megabytes of `.so` and `.dylib`
+files on a Windows user's disk, which is exactly the freight the two properties above exist to
+keep out.
+
+Nothing extra was needed, because the publish step already passes an explicit runtime identifier:
+
+```powershell
+dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained false -o $outputPath
+```
+
+With a RID named, NuGet resolves only the matching runtime assets, so `publish\bot\` gets the
+Windows natives and nothing else. Worth knowing rather than rediscovering: a plain
+`dotnet build` **without** `-r win-x64` — what Visual Studio does — does copy every platform's
+binaries into `bin\`. That is harmless, since the installer is built from `publish\`, not from
+`bin\`, but it is why the folder looks alarming if you go and look at it.
+
+If the inventory ever does report `.so` or `.dylib` files, the RID has gone missing from the
+publish command, and the installer is about to ship them.
+
 That output is also the honest way to answer "how big is it and why": run `.\build-installer.ps1 -SkipVoskModel -SkipDependencyDownload` and read the two lines. Nothing here is estimated.
 
 ## Internet access on the target machine

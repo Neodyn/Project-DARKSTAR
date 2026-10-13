@@ -177,6 +177,33 @@ Wake words and trigger phrases must **never** go into `vocabulary.json` — that
 | `GeminiMaxRetries` | `2` | Retry attempts per model after a transient error (429/500/502/503/504) before giving up. |
 | `GeminiRetryDelayMs` | `1000` | Delay in milliseconds between retry attempts. |
 
+### Transcribing locally instead (Whisper)
+
+| Field | Default | Description |
+|---|---|---|
+| `SpeechEngine` | `"Gemini"` | `"Gemini"` sends the audio to Google and gets the transcript and a reply back in one call. `"Whisper"` transcribes on this machine instead. |
+| `WhisperModelPath` | `""` | The ggml model file, e.g. `models\ggml-small.en.bin`. A folder holding exactly one `ggml-*.bin` is accepted and resolved to that file. |
+| `WhisperLanguage` | `"en"` | ISO code, or `auto`. English by default because radio phraseology is English whatever the crew speaks — saying so is what stops a German-accented call coming back as German. |
+
+> **A bad model stops the bot rather than reverting to Gemini.** Somebody who chose Whisper did so to avoid an API key, the traffic, or the internet, and silently using the other engine defeats all three. The startup check names the file and what to do; fix `WhisperModelPath` or set `SpeechEngine` back to `Gemini`.
+
+**Whisper only transcribes.** Gemini does transcription and the freely generated reply in one call; Whisper does the first half. Everything above the last rung of the reply chain — the radio check, the mission-data calls, the airfield calls, the handoff, `phrases.json` — needs only the transcript and is unaffected. The freely generated answer is the one thing that needs a language model, and with Whisper selected it becomes `FallbackResponse`. On a server running the tactical replies that is very little; on one that relies on free answers, it is the feature.
+
+**Where the models come from.** The *script* is on GitHub, the *models* are not: [`models\download-ggml-model.cmd`](https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.cmd) in the whisper.cpp repository downloads them from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp). Either route works — the script just saves you picking the right file name.
+
+| Model | Disk | Memory while running |
+|---|---|---|
+| `tiny.en` | 75 MB | ~390 MB |
+| `base.en` | 142 MB | ~500 MB |
+| `small.en` | 466 MB | ~1.0 GB |
+| `medium.en` | 1.5 GB | ~2.6 GB |
+
+**What the check looks at**, because the failure that actually happens is not a missing file but a half-finished one: the size (anything under 20 MB cannot be a Whisper model) and the first four bytes, which must be the ggml marker. A download interrupted by a dropped connection, or an HTML error page saved under a `.bin` name, both pass a "does the file exist" test and are both caught here — with a message naming the file, rather than `invalid model data (bad magic)` from inside a native library.
+
+> **Check the machine before you plan on this.** The Whisper runtime needs **Windows 11 or Server 2022** and a CPU with AVX2. A DCS server on Server 2019 or Windows 10 cannot run it. It also needs the Visual C++ Redistributable, which the installer already puts there for Vosk.
+
+Vosk keeps doing the wake word under either engine. That runs continuously on every 20 ms frame, which is not what either of these is for.
+
 ### Reply audio
 
 | Field | Default | Description |
@@ -333,6 +360,29 @@ The reply is built by `BuildFriendlyPosition`, measuring from the caller's aircr
 | `DcsAirfieldMaxDistanceNm` | `60` | How far the nearest airfield may be before the bot asks which one instead of assuming. |
 | `DcsAirfieldUnknownReply` | `"Say the airfield you want conditions for."` | When no airfield was named and the pilot couldn't be located. |
 | `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | When the airfield data couldn't be read at all. |
+
+### The F10 menu
+
+The same calls, picked from the DCS F10 menu instead of spoken. For the pilot whose accent, cockpit noise or missed wake word means the radio route does not work — and nothing is installed on their machine: the menu is built over the DCS-gRPC connection the tactical replies already use.
+
+| Field | Default | Description |
+|---|---|---|
+| `F10MenuEnabled` | `false` | Master switch. Needs `DcsGrpcEnabled`; with it off the bot says so at startup and builds nothing. |
+| `F10MenuRootName` | `"Darkstar"` | The entry everything hangs under. One root means one removal clears the lot, which is what stops a slot change leaving a second stale menu behind. |
+| `F10ReplyMode` | `"Both"` | `Radio` transmits over SRS like a spoken call, `Text` puts it on screen for that flight, `Both` does each. |
+| `F10TextSeconds` | `20` | How long an on-screen answer stays up. |
+| `F10MenuMaxGroups` | `24` | How many flights may hold a menu at once. A flight that already has one is never pushed out by the cap. |
+| `F10MenuRefreshSeconds` | `20` | Seconds between sweeps. |
+
+**Leave `F10ReplyMode` on `Both`** unless you have a reason. "The radio does not work" covers two faults: if speech recognition is the problem, the radio still carries the answer — but if SRS itself is silent, an answer sent only over SRS is an answer nobody hears, and that is exactly the situation somebody reaches for the menu in.
+
+**What appears in the menu** follows the radio plan and the situation. An airfield radio offers the runway and ATIS calls, a tactical one the bogey dope, threat check, picture and alpha check. On the ground near a field the airfield calls come first, so `F1` is the one you want; the radio check is always present and always last.
+
+Two calls stay spoken-only. Asking where another pilot is needs their name, and a menu entry carries no argument. A threat circle is held per pilot under their SRS name, while a menu click identifies a DCS group — keying that bookkeeping both ways is a change to the service pilots notice fastest when it misbehaves, so it waits.
+
+> An F10 request identifies the aircraft **outright**, because DCS reports which group clicked. These answers therefore give BRAA from the pilot's own aircraft even in the cases where a spoken call falls back to the bullseye — the menu is not only the fallback, it is the more reliable route for position-based answers.
+
+Each sweep rewrites only the menus whose contents actually changed, so `F10MenuRefreshSeconds` is the delay before a pilot who just took off sees the tactical calls move up, not a cost paid every tick.
 
 ### Threat circle (standing watch)
 

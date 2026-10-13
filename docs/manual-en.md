@@ -47,9 +47,13 @@ Recording starts (including ~2 s of buffered audio from before the wake word)
         ▼
 Recording ends
         │
+        ▼
+Transcribed — by Google Gemini, or locally by Whisper (SpeechEngine)
+        │
         ├─▶ Tactical request ("bogey dope")?     → answer from live mission data (DCS-gRPC)
         ├─▶ Known phrase from phrases.json?      → fixed answer
-        └─▶ otherwise                            → Google Gemini transcribes and answers
+        └─▶ otherwise                            → Gemini writes one, or FallbackResponse
+                                                   (Whisper transcribes only)
         │
         ▼
 Reply text → DCS-SR-ExternalAudio.exe → Windows TTS → transmitted on the same frequency
@@ -75,7 +79,7 @@ Each configured radio is fully independent: its own wake word, its own callsign,
 | **A running SRS server** | The bot connects as an external AWACS-mode client. It does not have to run on the same machine, but `DCS-SR-ExternalAudio.exe` currently transmits to `127.0.0.1` (see [Troubleshooting](#11-troubleshooting)). |
 | **`DCS-SR-ExternalAudio.exe`** | Ships with DCS-SimpleRadio-Standalone, in its `ExternalAudio` subfolder. Used for every reply. |
 | **A Vosk speech model** | Offline, free, no account. [Download list](https://alphacephei.com/vosk/models) — see the table below for which one to pick. |
-| **A Google Gemini API key** | Free to create at [Google AI Studio](https://aistudio.google.com/apikey). Only needed for transcription and freely generated replies; the free tier is enough for testing and small groups. |
+| **A Google Gemini API key** *(or a Whisper model instead)* | Free to create at [Google AI Studio](https://aistudio.google.com/apikey); the free tier is enough for testing and small groups. Needed for transcription and freely generated replies — unless you switch `SpeechEngine` to `Whisper`, which transcribes locally and needs no account at all. See [chapter 5.1](#51-configjson). |
 | **Visual C++ Redistributable (x64)** | Vosk's native `libvosk.dll` needs it. The installer and the dev-setup script both handle this. |
 
 ### Optional
@@ -202,6 +206,7 @@ Its parameters and the project layout are described in [contributing.md](contrib
    | `Coalition` | CH1 Connection | `2` = Blue, `1` = Red, `0` = Spectator. |
    | `ExternalAudioExePath` | CH1 Connection | Path to `DCS-SR-ExternalAudio.exe`, in the `ExternalAudio` folder of your SRS installation. Normally already filled in by the installer; **Detect SRS installation** finds it otherwise. |
    | `Radios` | CH2 Radios | The frequencies to monitor, each with wake word and callsign. |
+   | `SpeechEngine` | CH3 Speech | `Gemini` (default) or `Whisper`. With `Whisper` you set a model file instead of an API key. |
    | `GeminiApiKey` | CH3 Speech | Your API key. |
    | `VoskModelPath` | CH3 Speech | Already filled in by the installer; only needed by hand after a `-slim` install or a source build. |
 
@@ -328,6 +333,60 @@ The keyword is matched as a **whole word**, case-insensitively.
 | `GeminiRetryDelayMs` | `1000` | Delay between retries. |
 
 Transcription and reply are one single API call — that halves the quota usage compared to separate calls.
+
+#### Transcribing locally instead (Whisper)
+
+| Field | Default | Description |
+|---|---|---|
+| `SpeechEngine` | `"Gemini"` | `Gemini` transcribes and answers in one call. `Whisper` transcribes on this machine instead. |
+| `WhisperModelPath` | `""` | The ggml model file, e.g. `models\ggml-small.en.bin`. A folder holding exactly one `ggml-*.bin` is resolved to that file. |
+| `WhisperLanguage` | `"en"` | ISO code or `auto`. English by default, because radio phraseology is English whatever the crew speaks. |
+
+> **A bad model stops the bot rather than reverting to Gemini**, because somebody who chose Whisper did so to avoid the key, the traffic or the internet. The startup check names the file and what to do about it.
+
+**Whisper only transcribes.** Everything above the last rung of the reply chain needs just the transcript and is unaffected: the radio check, the mission-data calls, the airfield calls, the handoff, `phrases.json`. The freely generated answer is the one thing that needs a language model, and with Whisper selected it becomes `FallbackResponse`.
+
+**The script is on GitHub, the models are not.** [`models\download-ggml-model.cmd`](https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.cmd) in the whisper.cpp repository fetches them from [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp). `tiny.en` is 75 MB, `base.en` 142 MB, `small.en` 466 MB, `medium.en` 1.5 GB — each needing roughly twice that in memory while it runs.
+
+**Press *Check the model* on CH3** rather than trusting the path. The failure that actually happens is not a missing file but a half-finished download, so the check reads the size and the first four bytes: under 20 MB cannot be a model, and the file must start with the ggml marker. An interrupted transfer and an HTML error page saved as `.bin` both pass "does the file exist" and are both caught.
+
+> **Check the machine first.** The Whisper runtime needs **Windows 11 or Server 2022** and a CPU with AVX2 — a DCS server on Server 2019 or Windows 10 cannot run it.
+
+Vosk keeps doing the wake word under either engine.
+
+#### The two variants, side by side
+
+|  | **Online** (default) | **Offline** |
+|---|---|---|
+| `SpeechEngine` | `Gemini` | `Whisper` |
+| Needs | an API key | a model file on disk |
+| Transcription | sent to Google | on this machine |
+| Freely worded replies | yes | no — `FallbackResponse` instead |
+| Costs | free tier, then per character | CPU time |
+| Daily quota | yes | no |
+| Wake word | Vosk, locally | Vosk, locally |
+| Mission data, airfield calls, `phrases.json` | identical | identical |
+
+**Switching the engine is not the whole job** if offline is the point. Two other settings reach
+the internet regardless of it, and both survive every obvious switch:
+
+- **Discord notifications** (`DiscordEnabled`) post start, stop and connection changes to a
+  webhook. No pilot audio and no transcripts, but it is traffic.
+- **Cloud speech output** — `--azureCredentials` or `--googleCredentials` inside
+  `ExternalAudioExtraArgs` sends every reply's *text* to Azure or Google to be spoken. This is the
+  one that hides: it is a flag inside a free-form string, not a setting with a name that suggests
+  it.
+
+You do not have to work it out. Every start writes a `[Privacy]` line saying what reaches the
+internet with the settings as they are, and one line per item. With none, it says so:
+
+```
+[Privacy] Nothing in this configuration reaches the internet: transcription, the wake word and
+          the replies all run on this machine.
+```
+
+SRS and DCS-gRPC are deliberately not counted — both are services you run yourself, usually on the
+same host.
 
 #### Fixed phrases
 
@@ -1025,6 +1084,39 @@ Below the tactical settings, the explorer shows what a running mission exposes �
 
 This is the tool to use when you want to know what else could be built on top of the mission data.
 
+### 8.6 The F10 menu, for when the radio route does not work
+
+Speech recognition is the one part of this bot that fails for reasons a pilot cannot fix in the air: an accent the model was not trained on, a noisy cockpit, a wake word that simply did not register. Until now the answer to "it does not hear me" was to try again, louder. This is the way through.
+
+Switch on **F10MenuEnabled** (CH8 → Replies, *The F10 menu*) and the bot's calls also appear under **F10 → Darkstar** in the game. Pick one, get the same answer. **Nothing is installed on any pilot's machine** — the menu is built over the DCS-gRPC connection the tactical replies already use, so if those work, this works.
+
+| Setting | Default | What it decides |
+|---|---|---|
+| `F10MenuEnabled` | `false` | Whether the menu exists at all. |
+| `F10MenuRootName` | `Darkstar` | What pilots look for under F10. |
+| `F10ReplyMode` | `Both` | Radio, on-screen text, or both. |
+| `F10TextSeconds` | `20` | How long the on-screen answer stays up. |
+| `F10MenuMaxGroups` | `24` | How many flights may hold a menu. |
+| `F10MenuRefreshSeconds` | `20` | How often the menus are brought up to date. |
+
+**Leave the reply mode on `Both`.** "The radio does not work" covers two different faults, and only one of them leaves the radio able to carry the answer:
+
+- **Speech recognition is the problem.** The request gets in by menu, the answer comes back over SRS as always.
+- **SRS itself is silent.** The request gets in, and an answer sent only over SRS is an answer nobody hears — which is precisely the situation somebody reaches for the menu in.
+
+**What is in the menu** follows the radio plan and the situation, so the entry you want is usually `F1`:
+
+- An airfield radio offers *Runway in use* and *ATIS*; a tactical one offers *Bogey dope*, *Threat check*, *Picture* and *Alpha check*.
+- On the ground near a field, the airfield calls come first — a BRAA call from the ramp is noise.
+- Airborne, the tactical calls come first.
+- *Radio check* is always there and always last. It is the call you make when you suspect nothing works, not one you want to scroll past.
+
+Two calls stay spoken-only. Asking **where another pilot is** needs their name, and a menu entry carries no argument. A **threat circle** is bookkeeping held under the caller's SRS name, while a menu click identifies a DCS group instead; keying it both ways is a change to the service pilots notice fastest when it misbehaves, so it waits.
+
+> **The menu is not just the fallback.** An F10 request identifies the aircraft outright, because DCS reports which group clicked — no matching an SRS name against a DCS name, which is the step that silently turns a BRAA call into a bullseye call. These answers give BRAA from the pilot's own aircraft even where a spoken call would not.
+
+Menus are rebuilt rather than added to: one root entry, removed and written again whenever its contents change, so a pilot who changes slot twice does not end up with three of them. Only the menus that actually changed are rewritten, so the refresh interval is the delay before a pilot who just took off sees the tactical calls move up — not work done every tick.
+
 ---
 
 ## 9. Running as a Windows Service
@@ -1132,6 +1224,9 @@ Each line is tagged with the part of the bot it came from. A startup line says w
 | `[STT]` | What the transcription understood — or that nothing was intelligible | The single most useful line in the file. |
 | `[Phrase Match]` | A known trigger decided the answer, or none did and the fallback was used | |
 | `[Intel]` | Tactical replies: the startup state, and per request the kind, trigger and data source | Also says when `DcsIntelEnabled` is on while DCS-gRPC is off, which answers that question before it is asked. |
+| `[Menu]` | The F10 menu: how many menus were written, removed or skipped at the cap, and every click with the call, the flight and the frequency it was answered on | Silent while nothing changes, so a line here means a menu was rebuilt or a pilot used one. |
+| `[Speech]` | Which engine transcribes, and with Whisper selected the model check plus its hints | One line at startup. The place to look when the bot hears but answers nothing. |
+| `[Privacy]` | One line at every start naming what reaches the internet with the current settings, and a line per item | Empty of items means nothing does. The place to look before telling your squadron the server is offline. |
 | `[Airfield]` | Runway in use and ATIS: the startup state, each request, and gRPC errors underneath | |
 | `[RadioCheck]` | A radio check was answered, with the trigger that matched | |
 | `[ThreatCircle]` | A circle armed, cancelled or expired, each sweep's warnings | |

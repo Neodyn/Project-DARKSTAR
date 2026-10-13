@@ -39,6 +39,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | ⭕ **Threat Circle** | Ein Pilot schaltet eine mitfliegende Überwachung scharf („threat circle forty miles") und wird gewarnt, sobald ein Feind eindringt. |
 | 📻 **Mehrere Radios gleichzeitig** | Jede Frequenz mit eigenem Hotword, Rufzeichen, **eigener Stimme**, Gesprächsverlauf **und Aufgabe** — Taktik auf der AWACS-Frequenz, Bahn und ATIS auf dem Tower. Drei Radios klingen nach drei Personen. Wer den falschen anruft, wird weitergeleitet. |
 | 💬 **Feste Phrasen oder freie Antworten** | Bekannte Frage-/Antwortpaare werden direkt bedient; alles andere geht an Google Gemini oder wird abgelehnt — deine Entscheidung. |
+| 🔒 **Transkription in der Cloud oder auf der Maschine** | Standardmäßig Google Gemini; mit `SpeechEngine = "Whisper"` lokal — kein Key, kein Kontingent, keine Spielerstimme verlässt den PC. |
 | 🎯 **Realistische Sensorlogik** | Nur melden, was eine konfigurierte KI-AWACS tatsächlich erfasst — oder alles, was in der Mission fliegt. |
 | 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
 | 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer und Dienstverwaltung per Knopfdruck. |
@@ -59,7 +60,8 @@ Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](
 |---|---|---|
 | **Windows** | alles | Antworten laufen über `DCS-SR-ExternalAudio.exe` und Windows-TTS-Stimmen. |
 | **SRS-Server** | alles | Samt `ExternalAudio\DCS-SR-ExternalAudio.exe`, worüber der Bot sendet — der Installer findet die Datei selbst. |
-| **[Gemini-API-Key](https://aistudio.google.com/apikey)** | Transkription, freie Antworten | Die kostenlose Stufe reicht für Tests und kleine Gruppen. |
+| **[Gemini-API-Key](https://aistudio.google.com/apikey)** | Transkription, freie Antworten | Die kostenlose Stufe reicht für Tests und kleine Gruppen. Entfällt, wenn du lokal transkribierst — siehe die Zeile darunter. |
+| **[Whisper-Modell](https://huggingface.co/ggerganov/whisper.cpp)** *(optional)* | Transkription, lokal | Die Alternative zum Key: `SpeechEngine = "Whisper"`, kein Account, kein Kontingent, nichts verlässt die Maschine. Frei formulierte Antworten entfallen dafür. |
 | **[Vosk-Modell](https://alphacephei.com/vosk/models)** | Hotword | Liegt dem Installer bei. Offline, kostenlos, ohne Account. |
 | .NET 8 Desktop Runtime, VC++ Redistributable, WebView2 | Betrieb von Bot und GUI | Werden vom Installer **automatisch** nachinstalliert, falls sie fehlen. |
 | **[DCS-gRPC](https://github.com/DCS-gRPC/rust-server)** | taktische Antworten, Threat Circle | Optional. Ohne läuft alles andere trotzdem. |

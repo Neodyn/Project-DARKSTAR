@@ -47,9 +47,13 @@ Aufnahme startet (inklusive ~2 s gepufferter Audio von VOR dem Hotword)
         ▼
 Aufnahme endet
         │
+        ▼
+Transkribiert — von Google Gemini oder lokal von Whisper (SpeechEngine)
+        │
         ├─▶ Taktische Anfrage („bogey dope“)?   → Antwort aus Live-Missionsdaten (DCS-gRPC)
         ├─▶ Bekannte Phrase aus phrases.json?   → feste Antwort
-        └─▶ sonst                               → Google Gemini transkribiert und antwortet
+        └─▶ sonst                               → Gemini formuliert eine, sonst FallbackResponse
+                                                 (Whisper transkribiert nur)
         │
         ▼
 Antworttext → DCS-SR-ExternalAudio.exe → Windows-TTS → Aussendung auf derselben Frequenz
@@ -75,7 +79,7 @@ Jedes konfigurierte Radio ist vollständig eigenständig: eigenes Hotword, eigen
 | **Laufender SRS-Server** | Der Bot verbindet sich als External-AWACS-Client. Er muss nicht auf derselben Maschine laufen — allerdings sendet `DCS-SR-ExternalAudio.exe` derzeit an `127.0.0.1` (siehe [Fehlersuche](#11-fehlersuche)). |
 | **`DCS-SR-ExternalAudio.exe`** | Teil von DCS-SimpleRadio-Standalone, im Unterordner `ExternalAudio`. Wird für jede Antwort verwendet. |
 | **Vosk-Sprachmodell** | Offline, kostenlos, ohne Account. [Übersicht](https://alphacephei.com/vosk/models) — welches, siehe Tabelle unten. |
-| **Google-Gemini-API-Key** | Kostenlos bei [Google AI Studio](https://aistudio.google.com/apikey). Nur für Transkription und frei formulierte Antworten nötig; die kostenlose Stufe reicht für Tests und kleine Gruppen. |
+| **Google-Gemini-API-Key** *(oder stattdessen ein Whisper-Modell)* | Kostenlos bei [Google AI Studio](https://aistudio.google.com/apikey); die kostenlose Stufe reicht für Tests und kleine Gruppen. Nötig für Transkription und frei formulierte Antworten — außer du stellst `SpeechEngine` auf `Whisper`, das lokal transkribiert und gar keinen Account braucht. Siehe [Kapitel 5.1](#51-configjson). |
 | **Visual C++ Redistributable (x64)** | Wird von Vosks nativer `libvosk.dll` benötigt. Installer und Setup-Skript erledigen das. |
 
 ### Optional
@@ -202,6 +206,7 @@ Seine Parameter und der Projektaufbau stehen in [contributing.md](contributing.m
    | `Coalition` | CH1 Connection | `2` = Blau, `1` = Rot, `0` = Zuschauer. |
    | `ExternalAudioExePath` | CH1 Connection | Pfad zu `DCS-SR-ExternalAudio.exe` im Ordner `ExternalAudio` der SRS-Installation. Wird normalerweise schon vom Installer eingetragen; sonst findet ihn **Detect SRS installation**. |
    | `Radios` | CH2 Radios | Die zu überwachenden Frequenzen, je mit Hotword und Rufzeichen. |
+   | `SpeechEngine` | CH3 Speech | `Gemini` (Standard) oder `Whisper`. Mit `Whisper` trägst du eine Modelldatei statt eines API-Keys ein. |
    | `GeminiApiKey` | CH3 Speech | Dein API-Key. |
    | `VoskModelPath` | CH3 Speech | Vom Installer bereits gesetzt; von Hand nur nach einer `-slim`-Installation oder einem Quellcode-Build nötig. |
 
@@ -328,6 +333,61 @@ Das Schlüsselwort wird als **ganzes Wort** verglichen, Groß-/Kleinschreibung s
 | `GeminiRetryDelayMs` | `1000` | Wartezeit zwischen Wiederholungen. |
 
 Transkription und Antwort sind ein einziger API-Aufruf — das halbiert den Kontingentverbrauch gegenüber getrennten Aufrufen.
+
+#### Stattdessen lokal transkribieren (Whisper)
+
+| Feld | Vorgabe | Beschreibung |
+|---|---|---|
+| `SpeechEngine` | `"Gemini"` | `Gemini` transkribiert und antwortet in einem Aufruf. `Whisper` transkribiert auf dieser Maschine. |
+| `WhisperModelPath` | `""` | Die ggml-Modelldatei, z. B. `models\ggml-small.en.bin`. Ein Ordner mit genau einer `ggml-*.bin` wird auf diese Datei aufgelöst. |
+| `WhisperLanguage` | `"en"` | ISO-Code oder `auto`. Englisch als Vorgabe, denn Funkphraseologie ist Englisch, egal was die Crew spricht. |
+
+> **Ein unbrauchbares Modell hält den Bot an, statt auf Gemini zurückzufallen** — wer Whisper wählt, will Key, Datenverkehr oder Internet vermeiden. Die Startprüfung nennt die Datei und was zu tun ist.
+
+**Whisper transkribiert nur.** Alles oberhalb der letzten Stufe der Antwortkette braucht lediglich das Transkript und bleibt unberührt: Radio Check, Missionsdaten-Calls, Flugplatz-Calls, die Weiterleitung, `phrases.json`. Die frei formulierte Antwort ist das Einzige, was ein Sprachmodell braucht — mit Whisper wird daraus `FallbackResponse`.
+
+**Das Skript liegt auf GitHub, die Modelle nicht.** [`models\download-ggml-model.cmd`](https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.cmd) aus dem whisper.cpp-Repository holt sie von [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp). `tiny.en` 75 MB, `base.en` 142 MB, `small.en` 466 MB, `medium.en` 1,5 GB — jeweils etwa das Doppelte an Arbeitsspeicher zur Laufzeit.
+
+**Auf CH3 *Check the model* drücken**, statt dem Pfad zu vertrauen. Der Fehler, der wirklich passiert, ist nicht die fehlende, sondern die halbe Datei — die Prüfung liest daher Größe und die ersten vier Bytes: unter 20 MB kann kein Modell sein, und die Datei muss mit der ggml-Kennung beginnen. Ein abgebrochener Download und eine als `.bin` gespeicherte HTML-Fehlerseite bestehen beide ein bloßes „existiert die Datei" und werden beide erkannt.
+
+> **Vorher die Maschine prüfen.** Die Whisper-Runtime braucht **Windows 11 oder Server 2022** und eine CPU mit AVX2 — ein DCS-Server auf Server 2019 oder Windows 10 kann sie nicht ausführen.
+
+Das Hotword macht in beiden Fällen weiterhin Vosk.
+
+#### Die beiden Varianten im Vergleich
+
+|  | **Online** (Standard) | **Offline** |
+|---|---|---|
+| `SpeechEngine` | `Gemini` | `Whisper` |
+| Braucht | einen API-Key | eine Modelldatei auf der Platte |
+| Transkription | geht an Google | auf dieser Maschine |
+| Frei formulierte Antworten | ja | nein — stattdessen `FallbackResponse` |
+| Kosten | Freikontingent, danach pro Zeichen | Rechenzeit |
+| Tageskontingent | ja | nein |
+| Hotword | Vosk, lokal | Vosk, lokal |
+| Missionsdaten, Flugplatz-Calls, `phrases.json` | identisch | identisch |
+
+**Die Engine umzustellen ist nicht die ganze Arbeit**, wenn es um Offline geht. Zwei weitere
+Einstellungen gehen unabhängig davon ins Netz und überleben jeden naheliegenden Schalter:
+
+- **Discord-Benachrichtigungen** (`DiscordEnabled`) melden Start, Stopp und Verbindungswechsel an
+  einen Webhook. Kein Pilotenaudio, keine Transkripte — aber Datenverkehr.
+- **Cloud-Sprachausgabe** — `--azureCredentials` oder `--googleCredentials` in
+  `ExternalAudioExtraArgs` schickt den *Text* jeder Antwort zum Sprechen an Azure oder Google. Das
+  ist die Versteckte: ein Flag in einer freien Zeichenkette, keine Einstellung mit sprechendem
+  Namen.
+
+Du musst das nicht selbst zusammensuchen. Jeder Start schreibt eine `[Privacy]`-Zeile, die nennt,
+was mit den aktuellen Einstellungen ins Internet geht, und eine Zeile je Posten. Wenn nichts
+hinausgeht, steht das dort:
+
+```
+[Privacy] Nothing in this configuration reaches the internet: transcription, the wake word and
+          the replies all run on this machine.
+```
+
+SRS und DCS-gRPC werden bewusst nicht mitgezählt — beides sind Dienste, die du selbst betreibst,
+meist auf demselben Rechner.
 
 #### Feste Phrasen
 
@@ -1025,6 +1085,39 @@ Unter den taktischen Einstellungen zeigt der Explorer, welche Daten eine laufend
 
 Das ist das Werkzeug, wenn du wissen willst, was sich sonst noch aus den Missionsdaten bauen ließe.
 
+### 8.6 Das F10-Menü, wenn der Funkweg nicht funktioniert
+
+Die Spracherkennung ist der eine Teil dieses Bots, der aus Gründen versagt, die ein Pilot in der Luft nicht beheben kann: ein Akzent, auf den das Modell nicht trainiert ist, ein lautes Cockpit, ein Hotword, das einfach nicht ankam. Bisher lautete die Antwort auf „er hört mich nicht": noch einmal, lauter. Das hier ist der Weg daran vorbei.
+
+**F10MenuEnabled** einschalten (CH8 → Replies, *The F10 menu*), und die Calls des Bots erscheinen zusätzlich unter **F10 → Darkstar** im Spiel. Einen auswählen, dieselbe Antwort bekommen. **Auf keinem Piloten-PC wird etwas installiert** — das Menü entsteht über dieselbe DCS-gRPC-Verbindung, die die taktischen Antworten ohnehin benutzen: funktionieren die, funktioniert auch das.
+
+| Einstellung | Standard | Was sie entscheidet |
+|---|---|---|
+| `F10MenuEnabled` | `false` | Ob es das Menü überhaupt gibt. |
+| `F10MenuRootName` | `Darkstar` | Wonach die Piloten unter F10 suchen. |
+| `F10ReplyMode` | `Both` | Funk, Bildschirmtext oder beides. |
+| `F10TextSeconds` | `20` | Wie lange die Antwort am Bildschirm steht. |
+| `F10MenuMaxGroups` | `24` | Wie viele Flights ein Menü haben dürfen. |
+| `F10MenuRefreshSeconds` | `20` | Wie oft die Menüs nachgezogen werden. |
+
+**Den Antwortweg auf `Both` lassen.** „Der Funk geht nicht" meint zwei verschiedene Fehler, und nur bei einem davon kann der Funk die Antwort noch tragen:
+
+- **Die Spracherkennung ist das Problem.** Die Anfrage kommt per Menü herein, die Antwort wie immer über SRS zurück.
+- **SRS selbst ist stumm.** Die Anfrage kommt herein, aber eine nur über SRS gesendete Antwort hört niemand — und genau in dieser Lage greift jemand zum Menü.
+
+**Was im Menü steht**, richtet sich nach dem Funkplan und nach der Lage, der gewünschte Eintrag ist also meist `F1`:
+
+- Ein Flugplatz-Radio bietet *Runway in use* und *ATIS*, ein taktisches *Bogey dope*, *Threat check*, *Picture* und *Alpha check*.
+- Am Boden in Flugplatznähe stehen die Flugplatz-Calls oben — eine BRAA-Ansage vom Vorfeld ist Lärm.
+- In der Luft stehen die taktischen Calls oben.
+- *Radio check* ist immer da und immer ganz unten. Das ist der Call für den Verdacht, dass gar nichts geht, nicht einer, an dem man vorbeiscrollen will.
+
+Zwei Calls bleiben nur gesprochen. Die Frage, **wo ein anderer Pilot ist**, braucht dessen Namen, und ein Menüeintrag trägt kein Argument. Ein **Threat Circle** wird unter dem SRS-Namen des Anrufers geführt, während ein Menüklick eine DCS-Gruppe ausweist; beides gleichzeitig zu schlüsseln ist ein Eingriff in genau den Dienst, dessen Fehlverhalten Piloten am schnellsten auffällt — das wartet.
+
+> **Das Menü ist nicht bloß der Notbehelf.** Eine F10-Anfrage weist das Flugzeug **eindeutig** aus, weil DCS meldet, welche Gruppe geklickt hat — kein Abgleich eines SRS-Namens gegen einen DCS-Namen, also fehlt genau der Schritt, der aus einer BRAA-Ansage still eine Bullseye-Ansage macht. Diese Antworten liefern BRAA vom eigenen Flugzeug aus, auch wo ein gesprochener Call das nicht täte.
+
+Menüs werden neu gebaut statt ergänzt: ein Wurzeleintrag, entfernt und neu geschrieben, sobald sich sein Inhalt ändert — ein Pilot, der zweimal den Slot wechselt, hat also nicht drei davon. Nur die tatsächlich veränderten Menüs werden neu geschrieben; das Intervall ist damit die Verzögerung, bis ein gerade gestarteter Pilot die taktischen Calls oben sieht, keine Arbeit pro Takt.
+
 ---
 
 ## 9. Betrieb als Windows-Dienst
@@ -1133,6 +1226,9 @@ Jede Zeile trägt das Kennzeichen des Teils, aus dem sie stammt. Eine Startzeile
 | `[STT]` | Was die Transkription verstanden hat — oder dass nichts Verständliches dabei war | Die mit Abstand nützlichste Zeile der Datei. |
 | `[Phrase Match]` | Eine bekannte Auslösephrase hat die Antwort bestimmt, oder keine und es wurde die Fallback-Antwort benutzt | |
 | `[Intel]` | Taktische Antworten: der Zustand beim Start, pro Anfrage Art, Auslöser und Datenquelle | Sagt auch, wenn `DcsIntelEnabled` an ist, während DCS-gRPC aus ist — das beantwortet diese Frage, bevor sie gestellt wird. |
+| `[Menu]` | Das F10-Menü: wie viele Menüs geschrieben, entfernt oder wegen der Obergrenze übersprungen wurden, und jeder Klick mit Call, Flight und der Frequenz, auf der geantwortet wurde | Schweigt, solange sich nichts ändert — eine Zeile hier heißt also, dass ein Menü neu gebaut oder benutzt wurde. |
+| `[Speech]` | Welche Engine transkribiert, bei Whisper zusätzlich die Modellprüfung samt Hinweisen | Eine Zeile beim Start. Hier nachsehen, wenn der Bot hört, aber nichts beantwortet. |
+| `[Privacy]` | Eine Zeile bei jedem Start, die nennt, was mit den aktuellen Einstellungen ins Internet geht, plus eine Zeile je Posten | Keine Posten heißt, dass nichts hinausgeht. Hier nachsehen, bevor du deiner Staffel sagst, der Server laufe offline. |
 | `[Airfield]` | Bahn in Benutzung und ATIS: Zustand beim Start, jede Anfrage, und gRPC-Fehler darunter | |
 | `[RadioCheck]` | Ein Radio Check wurde beantwortet, mit der Phrase, die gepasst hat | |
 | `[ThreatCircle]` | Ein Circle wurde aktiviert, abgebrochen oder lief ab; die Warnungen jedes Durchlaufs | |

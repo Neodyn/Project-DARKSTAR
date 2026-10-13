@@ -180,6 +180,7 @@ Everything about hearing and answering:
 
 | Card | Holds |
 |---|---|
+| Engine | Which engine turns a transmission into text. Gemini by default; picking Whisper reveals the model path, the check button and the language, plus what changes with it: transcription stays on the machine and freely worded replies are off. Hidden entirely under Gemini rather than greyed out — it is a second engine's worth of fields and nobody on the default needs to scroll past them. |
 | Gemini | API key, primary and optional fallback model, retry count and delay. |
 | Voice | The global TTS voice, with the same **List available voices** button as CH2, clickable chips that write into the field (`let ExternalAudio pick` clears it), the **Where do I get more voices?** block, a note that a per-radio voice overrides it, and the Azure/Google credentials hint on the extra-arguments field. |
 | Detection | Pre-roll seconds, Vosk model folder, global wake word and its variants, silence frames to end a recording. |
@@ -318,6 +319,17 @@ prints the sentence plus which airfield was used, the wind, and why that runway 
 > The panel states that runway headings need `evalEnabled = true` on the DCS-gRPC server — they
 > come from `Airbase.getRunways()`, reachable only through `Eval`. Without it the weather still
 > works and the runway is reported as unknown. Taxiways are not available from DCS at all.
+
+**The F10 menu** offers the same calls as a menu in the game, for the pilot the speech recognition
+cannot understand: the master switch, the menu's name, whether the answer comes back over the
+radio, on screen or both, how long the on-screen text stays up, and the cap and refresh interval.
+Switched on with DCS-gRPC off, the card says so in amber rather than appearing to work.
+
+The card spells out two things the fields cannot. First, that nothing is installed on any pilot's
+machine — the whole feature rides the DCS-gRPC connection already there, and server owners
+reasonably assume a menu means a mod. Second, that two calls stay spoken-only: asking where
+another pilot is needs a name, and a threat circle is keyed by SRS name while a click identifies a
+DCS group.
 
 **Friendly positions** turns on "where is Springfield 2-1?": the master switch, the trigger
 phrases, the three refusal replies (pilot not found, nobody named, caller's coalition unknown) and

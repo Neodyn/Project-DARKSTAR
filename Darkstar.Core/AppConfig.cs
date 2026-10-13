@@ -610,6 +610,81 @@ public sealed class AppConfig
     public string DcsAirfieldUnavailableReply { get; set; } = "Negative, no airfield data available at this time.";
 
     /// <summary>
+    /// Offer the bot's calls in the DCS F10 menu as well as over the radio. Needs
+    /// <see cref="DcsGrpcEnabled"/>; nothing is installed on any pilot's machine.
+    ///
+    /// The way through when speech recognition fails for reasons a pilot cannot fix in the air - an
+    /// accent, a noisy cockpit, a wake word that did not register. A menu entry is understood
+    /// perfectly every time.
+    /// </summary>
+    public bool F10MenuEnabled { get; set; } = false;
+
+    /// <summary>
+    /// The entry every Darkstar command hangs under in the F10 menu. One root means one removal
+    /// clears the lot, which is what keeps a slot change from leaving a second stale menu behind.
+    /// </summary>
+    public string F10MenuRootName { get; set; } = "Darkstar";
+
+    /// <summary>
+    /// How an answer to an F10 request comes back. <c>Radio</c> transmits it over SRS exactly like a
+    /// spoken call; <c>Text</c> puts it on screen for that flight only; <c>Both</c> does each.
+    ///
+    /// This exists because "the radio does not work" covers two different faults. If speech
+    /// recognition is the problem, the radio still carries the answer and <c>Radio</c> is right. If
+    /// SRS itself is silent, an answer sent only over SRS is an answer nobody hears - and that is
+    /// precisely the situation somebody reaches for the menu in.
+    /// </summary>
+    public string F10ReplyMode { get; set; } = "Both";
+
+    /// <summary>
+    /// How many flights may hold a menu at once. A full server would otherwise mean a menu per
+    /// flight, each costing gRPC calls whenever its situation changes. A group that already has one
+    /// is never pushed out by the cap.
+    /// </summary>
+    public int F10MenuMaxGroups { get; set; } = 24;
+
+    /// <summary>
+    /// Seconds between menu sweeps. Each sweep rewrites only the menus whose content actually
+    /// changed, so this is the delay before a pilot who just took off sees the tactical calls move
+    /// to the top - not a fixed cost per tick.
+    /// </summary>
+    public int F10MenuRefreshSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// How long an on-screen answer stays up, in seconds. Long enough to read a picture call twice;
+    /// a bearing and a range read once is the thing people miss.
+    /// </summary>
+    public int F10TextSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// Which engine turns a transmission into text. <c>"Gemini"</c> (the default, and what every
+    /// existing installation keeps doing) sends the audio to Google and gets the transcript and a
+    /// spoken-language reply back in one call. <c>"Whisper"</c> transcribes locally instead.
+    ///
+    /// Whisper only transcribes. With it selected, the answer comes from the mission data, the
+    /// radio check, <c>phrases.json</c> and the fallback reply - everything in the chain except the
+    /// freely generated last resort, which is the one thing that needs a language model. On a
+    /// server running the tactical replies that is very little; on one that relies on free
+    /// answers, it is the feature.
+    /// </summary>
+    public string SpeechEngine { get; set; } = "Gemini";
+
+    /// <summary>
+    /// The ggml Whisper model file, e.g. <c>models\ggml-small.en.bin</c>. Only read when
+    /// <see cref="SpeechEngine"/> is Whisper. Checked at startup by
+    /// <see cref="WhisperModelCheck"/>, which catches the half-finished download rather than
+    /// letting the native library refuse it later.
+    /// </summary>
+    public string WhisperModelPath { get; set; } = "";
+
+    /// <summary>
+    /// The language Whisper should expect, as an ISO code, or <c>"auto"</c> to let it decide.
+    /// Default <c>"en"</c> because radio phraseology is English whatever the crew speaks - and
+    /// telling it so is what stops a German-accented call being transcribed as German.
+    /// </summary>
+    public string WhisperLanguage { get; set; } = "en";
+
+    /// <summary>
     /// When true: the bot ONLY responds to phrases defined as triggers in phrases.json.
     /// Everything else gets "FallbackResponse" instead of a freely generated Gemini reply.
     /// When false: if no phrase matches, the Gemini-generated reply is used instead (free conversation).
@@ -985,9 +1060,20 @@ public sealed class AppConfig
         Logger.Log("  keep only proper nouns there, such as callsigns, aircraft types and map names.");
     }
 
-    private static void ValidateValues(AppConfig config)
+    private static void ValidateValues(AppConfig config) =>
+        ValidateValues(config, message => Logger.Log($"WARNING: config.json - {message}"));
+
+    /// <summary>
+    /// The checks themselves, with the destination of the warnings injected.
+    ///
+    /// Split out so the suite can assert WHICH warnings a configuration produces rather than that
+    /// it produced some. That matters most for the ones that are conditional: warning about a
+    /// missing Gemini key on a deliberately offline installation tells somebody who set it up
+    /// correctly that it is broken, and the next thing they do is get a key they do not need.
+    /// </summary>
+    internal static void ValidateValues(AppConfig config, Action<string> warn)
     {
-        void Warn(string message) => Logger.Log($"WARNING: config.json - {message}");
+        void Warn(string message) => warn(message);
 
         // Only check the Discord settings at all if the feature is actually turned on - an
         // empty/invalid DiscordWebhookUrl is irrelevant noise while DiscordEnabled is false.
@@ -1100,11 +1186,29 @@ public sealed class AppConfig
         if (config.PreRollSeconds < 0)
             Warn($"PreRollSeconds ({config.PreRollSeconds}) should not be negative.");
 
-        if (string.IsNullOrWhiteSpace(config.GeminiApiKey))
-            Warn("GeminiApiKey is empty - transcription/reply generation will not work.");
+        // Which engine is selected decides which half of this section applies. Warning about a
+        // missing Gemini key on a deliberately offline installation is not a harmless extra line:
+        // it tells somebody who set this up correctly that it is broken, and the next thing they
+        // do is go and get a key they do not need.
+        var usesWhisper = string.Equals(config.SpeechEngine?.Trim(), "Whisper", StringComparison.OrdinalIgnoreCase);
 
-        if (string.IsNullOrWhiteSpace(config.GeminiModel))
-            Warn("GeminiModel is empty.");
+        if (!usesWhisper && !string.Equals(config.SpeechEngine?.Trim(), "Gemini", StringComparison.OrdinalIgnoreCase))
+            Warn($"SpeechEngine is \"{config.SpeechEngine}\" - expected \"Gemini\" or \"Whisper\". Falling back to Gemini.");
+
+        if (usesWhisper)
+        {
+            var model = WhisperModelCheck.Check(config.WhisperModelPath);
+            if (!model.IsUsable)
+                Warn($"SpeechEngine is \"Whisper\", but the model is not usable: {model.Message}");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(config.GeminiApiKey))
+                Warn("GeminiApiKey is empty - transcription/reply generation will not work.");
+
+            if (string.IsNullOrWhiteSpace(config.GeminiModel))
+                Warn("GeminiModel is empty.");
+        }
 
         if (config.GeminiMaxRetries < 0)
             Warn($"GeminiMaxRetries ({config.GeminiMaxRetries}) should not be negative.");

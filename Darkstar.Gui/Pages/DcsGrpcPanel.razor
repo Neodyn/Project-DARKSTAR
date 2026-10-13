@@ -547,6 +547,91 @@
             }
         }
     </div>
+
+        <div class="card">
+            <div class="card-head">
+                <span style="font-size:12.5px;color:#E7EDEF">The F10 menu — calls without being understood</span>
+                <span class="spacer"></span>
+                <label class="switch">
+                    <input type="checkbox" @bind="Store.Config.F10MenuEnabled" />
+                    <span>Offer the calls under F10</span>
+                </label>
+            </div>
+
+            <div class="hint" style="margin-bottom:10px">
+                Speech recognition is the one part of this bot that fails for reasons a pilot cannot fix in
+                the air — an accent, a noisy cockpit, a wake word that did not register. This is the way
+                through: the same calls, picked from the DCS F10 menu. <strong>Nothing is installed on any
+                pilot's machine</strong> — the menu is built over the DCS-gRPC connection you already have.
+            </div>
+
+            @if (Store.Config.F10MenuEnabled && !Store.Config.DcsGrpcEnabled)
+            {
+                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                    DCS-gRPC is switched off on the server page, so the menu cannot be built at all.
+                </div>
+            }
+
+            <div class="row3">
+                <div class="field">
+                    <label>MENU ENTRY NAME</label>
+                    <input type="text" @bind="Store.Config.F10MenuRootName" placeholder="Darkstar" />
+                    <div class="hint">What the pilots look for under F10.</div>
+                </div>
+                <div class="field">
+                    <label>REPLY GOES OUT AS</label>
+                    <select @bind="Store.Config.F10ReplyMode">
+                        <option value="Both">Radio and on screen</option>
+                        <option value="Radio">Radio only</option>
+                        <option value="Text">On screen only</option>
+                    </select>
+                    <div class="hint">
+                        <strong>Both</strong> unless you have a reason: if SRS itself is what's broken, a
+                        reply sent only over the radio is a reply nobody hears — and that is exactly the
+                        situation somebody reaches for the menu in.
+                    </div>
+                </div>
+                <div class="field">
+                    <label>ON-SCREEN TEXT (SECONDS)</label>
+                    <input type="number" min="5" @bind="Store.Config.F10TextSeconds" />
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field" style="margin-bottom:0">
+                    <label>MOST FLIGHTS WITH A MENU</label>
+                    <input type="number" min="1" @bind="Store.Config.F10MenuMaxGroups" />
+                    <div class="hint">
+                        A flight that already has a menu is never pushed out by this — losing yours because
+                        somebody else took off is worse than never having had one.
+                    </div>
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label>REFRESH (SECONDS)</label>
+                    <input type="number" min="5" @bind="Store.Config.F10MenuRefreshSeconds" />
+                    <div class="hint">
+                        Only menus whose contents actually changed are rewritten, so this is the delay
+                        before a pilot who just took off sees the tactical calls move to the top — not a
+                        cost paid every tick.
+                    </div>
+                </div>
+            </div>
+
+            <div class="hint" style="margin-top:10px">
+                <strong>What the menu offers</strong> follows the radio plan and the situation: an airfield
+                radio shows the runway and ATIS calls, a tactical one the bogey dope and the picture, and on
+                the ground the airfield calls come first so <em>F1</em> is the one you want. The radio check
+                is always last and always present. Two calls stay spoken-only — asking where another pilot
+                is needs their name, and a threat circle is held under the caller's SRS name while a menu
+                click identifies a DCS group instead.
+            </div>
+
+            <div class="hint" style="margin-top:8px">
+                An F10 request identifies the pilot's aircraft <em>outright</em>, because DCS says which
+                group clicked. So these answers give BRAA from the pilot's own aircraft even in the cases
+                where a spoken call falls back to the bullseye.
+            </div>
+        </div>
 </div>
 }
 

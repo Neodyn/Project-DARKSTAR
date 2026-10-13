@@ -220,8 +220,12 @@ public class DcsIntelService
     /// from their own aircraft. If that lookup fails, positions are given from the bullseye
     /// instead of failing the request.
     /// </summary>
+    /// <param name="knownGroupName">
+    /// Set only for a request that did not arrive by voice: an F10 menu click carries the group DCS
+    /// attributed it to, which identifies the pilot outright and makes the name matching moot.
+    /// </param>
     public async Task<IntelResult> AnswerAsync(IntelRequestKind kind, string transcript, string rawPlayerName,
-        int senderCoalition, CancellationToken cancellationToken = default)
+        int senderCoalition, CancellationToken cancellationToken = default, string? knownGroupName = null)
     {
         if (kind == IntelRequestKind.None)
             return new IntelResult();
@@ -239,7 +243,7 @@ public class DcsIntelService
 
             // Where do we measure from? Preferably the requesting pilot's own aircraft (BRAA),
             // otherwise their coalition's bullseye (still a useful, standard reference).
-            var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, transcript, friendlyCoalition, cancellationToken);
+            var requester = await FindRequesterUnitAsync(channel, headers, deadline, rawPlayerName, transcript, friendlyCoalition, cancellationToken, knownGroupName);
             var bullseye = await GetBullseyeAsync(channel, headers, deadline, friendlyCoalition, cancellationToken);
 
             // An alpha check is about the pilot, not about the enemy, so it answers here - before
@@ -658,15 +662,43 @@ public class DcsIntelService
     /// silently turns into a bullseye call.
     /// </summary>
     internal async Task<Unit?> FindRequesterUnitAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
-        string rawPlayerName, string? transcript, Coalition friendly, CancellationToken token)
+        string rawPlayerName, string? transcript, Coalition friendly, CancellationToken token,
+        string? knownGroupName = null)
     {
-        if (string.IsNullOrWhiteSpace(rawPlayerName) && string.IsNullOrWhiteSpace(transcript)) return null;
+        if (string.IsNullOrWhiteSpace(rawPlayerName) && string.IsNullOrWhiteSpace(transcript)
+            && string.IsNullOrWhiteSpace(knownGroupName)) return null;
 
         var response = await new CoalitionService.CoalitionServiceClient(channel)
             .GetPlayerUnitsAsync(new GetPlayerUnitsRequest { Coalition = friendly }, headers, deadline, token);
 
         var units = response.Units;
         if (units.Count == 0) return null;
+
+        // An F10 request arrives with the group DCS itself attributed the click to, so there is
+        // nothing to match and nothing to get wrong. This is the one path where the tolerant name
+        // matching below is not merely unnecessary but would be a step backwards - it exists to
+        // bridge two names typed in different places, and here there is only one, from DCS.
+        //
+        // A flight is several units; the one being flown is the one with a player in it. With more
+        // than one (a two-seater, or two players in one group) the first is taken: they are within
+        // a wingspan of each other, and every answer this feeds is a bearing and a range.
+        if (!string.IsNullOrWhiteSpace(knownGroupName))
+        {
+            var fromGroup = units.FirstOrDefault(u =>
+                u.Group != null &&
+                string.Equals(u.Group.Name, knownGroupName, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(u.PlayerName));
+
+            if (fromGroup != null)
+            {
+                Logger.Debug($"[Intel] Pilot taken from the F10 group \"{knownGroupName}\" " +
+                             $"(unit \"{fromGroup.Name}\"), no name matching needed.");
+                return fromGroup;
+            }
+
+            Logger.Debug($"[Intel] F10 group \"{knownGroupName}\" has no player unit on this coalition.");
+            return null;
+        }
 
         // Tolerant matching: the SRS name and the DCS player name are typed in different places
         // and rarely agree character for character - squadron tags, "1-1" against "11", spaces.

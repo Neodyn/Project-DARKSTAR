@@ -71,6 +71,12 @@ The bot (repository root):
 | `ThreatCircleService.cs` | The standing watch and its sweep loop. |
 | `DcsAirfieldService.cs`, `AirfieldReport.cs` | Runway in use and ATIS, including the runway-query Lua. |
 | `RadioRoles.cs` | Which frequency serves which kind of request, and the handoff. |
+| `WhisperClient.cs` | Local transcription through whisper.cpp, used when `SpeechEngine` is `Whisper`. Reduces 48 kHz to the 16 kHz Whisper wants through the same anti-alias filter the wake word uses, resetting it per transmission; one decode at a time; strips Whisper's `[BLANK_AUDIO]`-style annotations before anything matches a trigger against them. |
+| `NetworkUse.cs` | What, if anything, leaves the machine for the internet with the current settings. A pure function of the config, logged at every start as a list rather than a verdict — "we run this offline" is kept or broken by four unrelated settings, and a list can be checked where a claim has to be trusted. |
+| `WhisperTranscript.cs` | Turns what Whisper emits into what a pilot said: strips `[BLANK_AUDIO]`-style annotations and Whisper's leading space. In Core rather than beside the client so the suite tests the shipped code and not a copy of the expression. |
+| `WhisperModelCheck.cs` | Checks a Whisper model file before the native library gets it. Reads the size and the ggml marker, because the failure that happens is the half-finished download, not the missing file. File system injected, so the suite tests it without a 466 MB model on disk. |
+| `DcsMenuService.cs` | The F10 menu: building it per flight over DCS-gRPC, reading the clicks back out of the event stream, and the on-screen reply. The decisions are pure and sit at the top of the file; only the connection handling is below. |
+| `CallCatalog.cs` | Every call a pilot can make, as one list, and which of them make sense right now. Deliberately knows nothing about *how* the request arrived — spoken, F10 menu, or a radio wheel later — so a second input path is a new front end rather than a second catalogue that drifts from this one. |
 | `DcsGrpcChannels.cs` | Shared `GrpcChannel` per address — a channel owns an HTTP/2 connection and is meant to be reused. |
 | `DcsGrpcTester.cs`, `DcsGrpcExplorer.cs` | The connection test and the read-only mission-data browser. |
 
