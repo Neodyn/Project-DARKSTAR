@@ -112,8 +112,8 @@ So everything the `.iss` packs with a wildcard is now checked right before the c
    above now cover the runtime, keeping the published output small):
    ```
    cd C:\BOT_SRS
-   dotnet publish Darkstar.csproj                   -c Release -r win-x64 --self-contained false -o installer\publish\bot
-   dotnet publish Darkstar.Gui\Darkstar.Gui.csproj   -c Release -r win-x64 --self-contained false -o installer\publish\gui
+   dotnet publish src\Darkstar.Bot\Darkstar.Bot.csproj  -c Release -r win-x64 --self-contained false -o installer\publish\bot
+   dotnet publish src\Darkstar.Gui\Darkstar.Gui.csproj  -c Release -r win-x64 --self-contained false -o installer\publish\gui
    ```
 2. Download a Vosk model (https://alphacephei.com/vosk/models, e.g.
    `vosk-model-small-en-us-0.15`) and unpack it so that
@@ -146,7 +146,7 @@ So everything the `.iss` packs with a wildcard is now checked right before the c
     `DisplayName` containing "SimpleRadio") and takes its `InstallLocation`; failing that it
     probes both `Program Files` folders, `%LOCALAPPDATA%\Programs` and the root,
     `Program Files` and `Games` folder of every drive from C: to Z: for the known layouts.
-    The layout and folder-name lists mirror `Darkstar.Core\SrsPaths.cs`, which does the same
+    The layout and folder-name lists mirror `src\Darkstar.Core\SrsPaths.cs`, which does the same
     at runtime behind the GUI's "Detect SRS installation" button - `srstest` asserts that the
     two lists stay in sync.
 
@@ -180,7 +180,7 @@ and that differs from `bin\Release\` in ways that matter here:
 
 Two more things publishing would include that the bot never reads, both excluded in the project files:
 
-| Property (in `Darkstar.csproj` and `Darkstar.Gui.csproj`) | Keeps out |
+| Property (in `Darkstar.Bot.csproj` and `Darkstar.Gui.csproj`) | Keeps out |
 |---|---|
 | `SatelliteResourceLanguages` = `en` | The localized resource DLLs the gRPC, protobuf and Blazor WebView packages ship in a subfolder per language (`cs\`, `de\`, `es\`, `fr\`, `ja\`, `ru\`, `zh-Hans\` …). Everything this bot says is English — radio phraseology isn't translatable — so those folders are pure freight. |
 | `AllowedReferenceRelatedFileExtensions` = `.pdb` | The XML API documentation that gets copied next to each referenced assembly by default. That file is for someone writing code against a library, not for running one. |

@@ -246,7 +246,7 @@ internal static class AirfieldTests
         Console.WriteLine();
         Console.WriteLine("Eval safety");
 
-        var source = File.ReadAllText(Root + "Darkstar.Core/DcsAirfieldService.cs");
+        var source = File.ReadAllText(Root + "src/Darkstar.Core/DcsAirfieldService.cs");
 
         // The whole safety argument rests on the Lua being a constant. If anything is ever interpolated
         // into it, that argument is gone - so assert the shape of the declaration itself.
@@ -269,10 +269,10 @@ internal static class AirfieldTests
         Check("and the weather still works without it",
             source.Contains("only the runway in use is missing"));
 
-        var appConfig = File.ReadAllText(Root + "Darkstar.Core/AppConfig.cs");
+        var appConfig = File.ReadAllText(Root + "src/Darkstar.Core/AppConfig.cs");
         Check("the feature is off by default", appConfig.Contains("DcsAirfieldEnabled { get; set; } = false"));
 
-        var bot = File.ReadAllText(Root + "BotService.cs");
+        var bot = File.ReadAllText(Root + "src/Darkstar.Bot/BotService.cs");
         Check("the bot only builds the service when it is switched on",
             bot.Contains("if (config.DcsAirfieldEnabled)") && bot.Contains("new DcsAirfieldService(config, intel)"));
         Check("tactical requests are still answered first",
@@ -318,7 +318,7 @@ internal static class AirfieldTests
         Console.WriteLine();
         Console.WriteLine("Which airfield the request is about");
 
-        var resolveSource = File.ReadAllText(Root + "Darkstar.Core/DcsAirfieldService.cs");
+        var resolveSource = File.ReadAllText(Root + "src/Darkstar.Core/DcsAirfieldService.cs");
 
         // The point of the change: a mis-transcribed airfield name must not beat knowing where the
         // pilot actually is.
@@ -372,7 +372,7 @@ internal static class AirfieldTests
             AppConfig.FindVocabularyTriggerConflicts(trapConfig, new[] { "Bogey Dope", "bogey dope" }).Count == 1);
 
         // The default vocabulary must not carry the trap it used to.
-        var vocabularySource = File.ReadAllText(Root + "Darkstar.Core/VocabularyBook.cs");
+        var vocabularySource = File.ReadAllText(Root + "src/Darkstar.Core/VocabularyBook.cs");
         var defaultsBlock = vocabularySource[vocabularySource.IndexOf("var defaults", StringComparison.Ordinal)..];
         defaultsBlock = defaultsBlock[..defaultsBlock.IndexOf("};", StringComparison.Ordinal)];
         Check("no trigger phrase is left in the default vocabulary",
@@ -382,7 +382,7 @@ internal static class AirfieldTests
         Console.WriteLine();
         Console.WriteLine("Unintelligible transmissions");
 
-        var botSource = File.ReadAllText(Root + "BotService.cs");
+        var botSource = File.ReadAllText(Root + "src/Darkstar.Bot/BotService.cs");
         Check("an empty transcript is answered with a repeat request, not guessed at",
             botSource.Contains("nothing intelligible in the transmission"));
         Check("and it happens before the tactical classifier runs",
@@ -402,10 +402,10 @@ internal static class AirfieldTests
         Check("the vocabulary conflict is warned about at startup",
             botSource.Contains("WarnAboutVocabularyTriggerConflicts"));
 
-        var intelSource = File.ReadAllText(Root + "Darkstar.Core/DcsIntelService.cs");
+        var intelSource = File.ReadAllText(Root + "src/Darkstar.Core/DcsIntelService.cs");
         Check("no bare Contains matching is left in the intel classifier",
             !intelSource.Contains("lowerText.Contains"));
-        var airfieldSource = File.ReadAllText(Root + "Darkstar.Core/DcsAirfieldService.cs");
+        var airfieldSource = File.ReadAllText(Root + "src/Darkstar.Core/DcsAirfieldService.cs");
         Check("nor in the airfield classifier", !airfieldSource.Contains("lowerText.Contains"));
 
         // ============================================================================================
@@ -485,7 +485,7 @@ internal static class AirfieldTests
         Console.WriteLine();
         Console.WriteLine("Wiring");
 
-        var botRoles = File.ReadAllText(Root + "BotService.cs");
+        var botRoles = File.ReadAllText(Root + "src/Darkstar.Bot/BotService.cs");
         Check("tactical requests are gated on the radio", botRoles.Contains("_ => session.AnswersTactical"));
         Check("airfield requests too", botRoles.Contains("airfields != null && session.AnswersAirfield"));
         Check("the roles are resolved once, not per transmission",

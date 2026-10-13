@@ -21,8 +21,8 @@
 ;   1. Publish both projects framework-dependent (NOT self-contained - the dependency installers
 ;      above now cover the runtime, so the published output stays small and this installer
 ;      handles what's actually needed on the target machine):
-;        dotnet publish Darkstar.csproj                   -c Release -r win-x64 --self-contained false -o installer\publish\bot
-;        dotnet publish Darkstar.Gui\Darkstar.Gui.csproj   -c Release -r win-x64 --self-contained false -o installer\publish\gui
+;        dotnet publish src\Darkstar.Bot\Darkstar.Bot.csproj  -c Release -r win-x64 --self-contained false -o installer\publish\bot
+;        dotnet publish src\Darkstar.Gui\Darkstar.Gui.csproj  -c Release -r win-x64 --self-contained false -o installer\publish\gui
 ;   2. Download a Vosk model (e.g. vosk-model-small-en-us-0.15) and unpack it into:
 ;        installer\vosk-model\   (so that installer\vosk-model\am\final.mdl etc. exist directly under it)
 ;   3. Download the three dependency installers once and keep them next to this .iss file (all
@@ -536,7 +536,7 @@ end;
 // another drive. Rather than hard-coding one path into config.json and letting the user find
 // out at the first failed transmission, the installer looks the real one up.
 //
-// Kept in sync with Darkstar.Core\SrsPaths.cs, which does the same probing at runtime (that's
+// Kept in sync with src\Darkstar.Core\SrsPaths.cs, which does the same probing at runtime (that's
 // what the config editor's "Detect SRS installation" button on CH1 calls).
 
 // Probes the known layouts below one folder. The folder may be the SRS install directory

@@ -15,14 +15,25 @@ Thanks for your interest in contributing! This is a small hobby project, so the 
 
 See the [README](../README.md#project-structure) for the folder layout. The three projects:
 
-- **`Darkstar`** (root) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
-- **`Darkstar.Core`** — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
-- **`Darkstar.Gui`** — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry. Two rules the test suite enforces: a panel's **channel number never changes** (the documentation is full of "on CH2 Radios"), and CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel` — a mismatch there shows a blank page and fails nowhere.
-- **`Darkstar.Tests`** — the test suite. References `Darkstar.Core` only; see below.
+- **`Darkstar.Bot`** (`src/Darkstar.Bot/`, builds `Darkstar.exe`) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
+- **`Darkstar.Core`** (`src/Darkstar.Core/`) — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
+- **`Darkstar.Gui`** (`src/Darkstar.Gui/`) — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry. Two rules the test suite enforces: a panel's **channel number never changes** (the documentation is full of "on CH2 Radios"), and CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel` — a mismatch there shows a blank page and fails nowhere.
+- **`Darkstar.Tests`** (`src/Darkstar.Tests/`) — the test suite. References `Darkstar.Core` only; see below.
 
 ### Where things live
 
-The bot (repository root):
+Every project sits in its own folder under `src/`. The repository root holds the solution, the
+licence, the two front pages and the folders, and no code at all — a test asserts that, because a
+stray `.cs` in the root is how the old arrangement crept back once before.
+
+```
+Darkstar.sln   README.md   README.de.md   LICENSE
+src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/
+docs/    the manuals, the configuration reference, images/, kneeboard/
+installer/   Setup.iss and what it needs
+```
+
+The bot (`src/Darkstar.Bot/`):
 
 | File | What it does |
 |---|---|
@@ -91,7 +102,7 @@ The bot (repository root):
 ## Tests
 
 ```powershell
-dotnet run --project Darkstar.Tests
+dotnet run --project src/Darkstar.Tests
 ```
 
 One command, a readable transcript, exit code 0 when every assertion held. No SRS server, no DCS, no Gemini key and no speech model are needed — which is the point: a test you can only run with a mission loaded is a test nobody runs.
@@ -139,7 +150,7 @@ Run `setup-dev-environment.ps1` from the repo root — it checks/installs the .N
 1. Open `Darkstar.sln` in Visual Studio 2022 (don't open an individual `.csproj` directly — see the note in `setup-dev-environment.ps1`'s parameter docs about why the exact folder layout matters).
 2. Set `Darkstar` (and/or `Darkstar.Gui`) as the startup project.
 3. Build and test locally against a real or test SRS server before opening a PR.
-4. **Adding a project?** `Darkstar.csproj` is in the repository root, so anything you add lands underneath it. It excludes every `.cs` file in any subfolder (`<Compile Remove="*\**\*.cs" />`) precisely so that a new project does not get compiled into the bot — which fails with duplicate assembly attributes and "only one compilation unit can have top-level statements", errors that say nothing about the real cause. Don't weaken that exclusion; if the bot ever needs a subfolder of its own sources, add a matching `<Compile Include>` for it.
+4. **Adding a project?** Put it in its own folder under `src/`, beside the others, and never above another project. The bot used to sit in the repository root with everything else underneath it, which made the SDK compile all of them into the bot — duplicate assembly attributes, "only one compilation unit can have top-level statements", errors that say nothing about the real cause. That needed a blanket `<Compile Remove="*\**\*.cs" />`, which is now gone because nothing nests. A test checks the property generally: any project with another beneath it must exclude subfolder sources.
 5. If you touch a `.razor` file in `Darkstar.Gui`, keep the explicit `@namespace` directive at the top of the file — it's a required workaround for a known Blazor Hybrid + WPF namespace-derivation bug ([dotnet/maui#5861](https://github.com/dotnet/maui/issues/5861)), not leftover cruft.
 6. If you add a new `AppConfig` field, also add a validation check in `ValidateValues` and document it in [configuration.md](configuration.md) **and both manuals**. This is checked rather than trusted: the test suite reflects over `AppConfig` and `RadioConfig` and fails when a setting is missing from `manual-en.md`, `manual-de.md` or `configuration.md`. It does the same for the `--test-hotword` options, for the source-file map above, and for every internal cross-reference in the documentation — a renamed heading leaves its links dead, which is easy to do and invisible afterwards.
 7. **A `.csproj` is XML, and XML forbids `--` inside a comment.** A comment mentioning a command-line switch written with two hyphens makes the file malformed: MSBuild on the command line swallows it and builds happily, while **Visual Studio refuses to load the project**. Write it as "the version switch" or in backticks outside the comment. The test suite parses every `.csproj`, `.xaml` and `.config` in the tree for exactly this reason — nothing else did, because the offline build harness compiles the *sources* through stand-in project files and never reads the real ones.

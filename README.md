@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
+    <img src="docs/images/darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
 </p>
 
 # D.A.R.K.S.T.A.R.
@@ -70,12 +70,13 @@ Step by step, with everything that can go wrong: **[manual, chapter 3](docs/manu
 ## Project structure
 
 ```
-Darkstar.csproj, *.cs        The bot: SRS connection, audio, wake word, replies
-  └── Darkstar.Core/         Shared library: config, phrases, logging, DCS-gRPC, service management
-  └── Darkstar.Gui/          Config editor (Blazor Hybrid over WPF)
-  └── Darkstar.Tests/        The test suite - dotnet run --project Darkstar.Tests
+src/
+  ├── Darkstar.Bot/          The bot: SRS connection, audio, wake word, replies (builds Darkstar.exe)
+  ├── Darkstar.Core/         Shared library: config, phrases, logging, DCS-gRPC, service management
+  ├── Darkstar.Gui/          Config editor (Blazor Hybrid over WPF)
+  └── Darkstar.Tests/        The test suite - dotnet run --project src/Darkstar.Tests
 installer/                   Inno Setup script for the distributable Setup.exe
-docs/                        All documentation
+docs/                        All documentation, with images/ and the kneeboard/
 .github/workflows/           Builds and tests every push
 build-installer.ps1          Builds the Setup.exe (Release, dependencies, speech model, one command)
 setup-dev-environment.ps1    Sets up a development machine
@@ -84,14 +85,14 @@ setup-dev-environment.ps1    Sets up a development machine
 ### Running the tests
 
 ```powershell
-dotnet run --project Darkstar.Tests
+dotnet run --project src/Darkstar.Tests
 ```
 
 Prints a readable transcript and exits 0 when everything held. It needs no SRS server, no DCS, no
 Gemini key and no speech model — the assertions are about arithmetic, spoken sentences, and whether
 the code and the documentation still agree with each other.
 
-`Darkstar.csproj` sits in the repository root on purpose — its project references point at `Darkstar.Core\` relative to itself, so moving it into a subfolder breaks the solution.
+Every project sits in its own folder under `src/`, and none above another — a project placed above another gets the other's sources compiled into it, which fails with errors that name nothing relevant. The root holds no code at all, and a test asserts that.
 
 ## License
 

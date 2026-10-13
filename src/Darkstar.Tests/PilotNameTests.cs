@@ -185,17 +185,17 @@ internal static class PilotNameTests
         Console.WriteLine("Wiring");
 
 
-        var intel = File.ReadAllText(Root + "Darkstar.Core/DcsIntelService.cs");
+        var intel = File.ReadAllText(Root + "src/Darkstar.Core/DcsIntelService.cs");
         Check("the intel service uses the shared matcher", intel.Contains("PilotNames.FindMatch"));
         Check("and no longer compares names by hand", !intel.Contains("units.FirstOrDefault(u => Same("));
         Check("a failed match is logged instead of passing silently",
             intel.Contains("could not be matched to a unit"));
 
-        var bot = File.ReadAllText(Root + "BotService.cs");
+        var bot = File.ReadAllText(Root + "src/Darkstar.Bot/BotService.cs");
         Check("the display callsign comes from the shared helper", bot.Contains("PilotNames.DisplayCallsign"));
         Check("so does the speech form", bot.Contains("PilotNames.ForSpeech"));
 
-        var circles = File.ReadAllText(Root + "Darkstar.Core/ThreatCircleService.cs");
+        var circles = File.ReadAllText(Root + "src/Darkstar.Core/ThreatCircleService.cs");
         Check("threat circles are keyed canonically, so cancelling still finds them",
             circles.Contains("PilotNames.CanonicalKey(rawPlayerName)"));
 
@@ -423,7 +423,7 @@ internal static class PilotNameTests
 
         var DocRoot = Root;
 
-        var loggerSource = File.ReadAllText(DocRoot + "Darkstar.Core/Logger.cs");
+        var loggerSource = File.ReadAllText(DocRoot + "src/Darkstar.Core/Logger.cs");
         Check("the log is forced to disk, not just flushed to the OS cache",
             loggerSource.Contains("flushToDisk: true"));
         Check("and shared generously enough for tail tools",
@@ -431,43 +431,43 @@ internal static class PilotNameTests
         Check("the forced flush is throttled rather than per line",
             loggerSource.Contains("DiskFlushInterval"));
 
-        var storeSource = File.ReadAllText(DocRoot + "Darkstar.Gui/ConfigStore.cs");
+        var storeSource = File.ReadAllText(DocRoot + "src/Darkstar.Gui/ConfigStore.cs");
         Check("the config editor no longer picks the log by modification time",
             !storeSource.Contains("OrderByDescending(f => f.LastWriteTimeUtc)"));
         Check("it uses the shared helper instead", storeSource.Contains("LogFiles.PickNewest"));
 
-        var panelSource = File.ReadAllText(DocRoot + "Darkstar.Gui/Pages/LoggingPanel.razor");
+        var panelSource = File.ReadAllText(DocRoot + "src/Darkstar.Gui/Pages/LoggingPanel.razor");
         Check("the log panel refreshes itself", panelSource.Contains("System.Timers.Timer") && panelSource.Contains("IDisposable"));
         Check("and names the file it is showing", panelSource.Contains("LOG FILE BEING SHOWN"));
 
         Console.WriteLine();
         Console.WriteLine("Performance and stability pass");
 
-        var srsSource = File.ReadAllText(DocRoot + "SrsConnection.cs");
+        var srsSource = File.ReadAllText(DocRoot + "src/Darkstar.Bot/SrsConnection.cs");
         Check("the per-packet logging checks the level before building the string",
             srsSource.Contains("if (Logger.IsDebugEnabled)"));
         Check("and the decoder is picked per sender",
             srsSource.Contains("OpusCodec.Decode(packet.OriginalClientGuid"));
 
-        var opusSource = File.ReadAllText(DocRoot + "OpusCodec.cs");
+        var opusSource = File.ReadAllText(DocRoot + "src/Darkstar.Bot/OpusCodec.cs");
         Check("there is no single shared decoder any more",
             !opusSource.Contains("static readonly IOpusDecoder Decoder"));
         Check("decoders are kept per client and capped",
             opusSource.Contains("ConcurrentDictionary<string, IOpusDecoder>") && opusSource.Contains("MaxDecoders"));
 
-        var channelSource = File.ReadAllText(DocRoot + "Darkstar.Core/DcsGrpcChannels.cs");
+        var channelSource = File.ReadAllText(DocRoot + "src/Darkstar.Core/DcsGrpcChannels.cs");
         Check("gRPC channels are shared per address", channelSource.Contains("ConcurrentDictionary<string, GrpcChannel>"));
-        foreach (var svc in new[] { "Darkstar.Core/DcsIntelService.cs", "Darkstar.Core/DcsAirfieldService.cs" })
+        foreach (var svc in new[] { "src/Darkstar.Core/DcsIntelService.cs", "src/Darkstar.Core/DcsAirfieldService.cs" })
             Check($"{Path.GetFileName(svc)} no longer opens a channel per request",
                 !File.ReadAllText(DocRoot + svc).Contains("GrpcChannel.ForAddress"));
 
-        var botSource2 = File.ReadAllText(DocRoot + "BotService.cs");
+        var botSource2 = File.ReadAllText(DocRoot + "src/Darkstar.Bot/BotService.cs");
         Check("the async-void audio handler cannot take the process down",
             botSource2.Contains("audio handling failed"));
         Check("and the shared channels are closed on shutdown",
             botSource2.Contains("DcsGrpcChannels.DisposeAll()"));
 
-        var filterSource = File.ReadAllText(DocRoot + "Darkstar.Core/AudioFrontEnd.cs");
+        var filterSource = File.ReadAllText(DocRoot + "src/Darkstar.Core/AudioFrontEnd.cs");
         Check("the filter reuses its scratch buffer instead of allocating per frame",
             filterSource.Contains("private float[] _scratch"));
 

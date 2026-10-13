@@ -24,11 +24,10 @@
     Path to the solution root. Expected layout (matches the relative <ProjectReference> paths
     inside the .csproj files, so it must be exact):
         <ProjectRoot>\Darkstar.sln
-        <ProjectRoot>\Darkstar.csproj        (bot project - lives directly in the root, NOT in
-                                               its own "Darkstar\" subfolder)
-        <ProjectRoot>\Program.cs, BotService.cs, ... (bot source files, also directly in the root)
-        <ProjectRoot>\Darkstar.Core\Darkstar.Core.csproj
-        <ProjectRoot>\Darkstar.Gui\Darkstar.Gui.csproj
+        <ProjectRoot>\src\Darkstar.Bot\Darkstar.Bot.csproj   (the bot, with its own .cs files)
+        <ProjectRoot>\src\Darkstar.Core\Darkstar.Core.csproj
+        <ProjectRoot>\src\Darkstar.Gui\Darkstar.Gui.csproj
+        <ProjectRoot>\src\Darkstar.Tests\Darkstar.Tests.csproj
     Defaults to K:\Darkstar\BOT_SRS.
 
 .PARAMETER VoskModelSize
@@ -335,7 +334,7 @@ if ($solutionFile) {
     Write-Ok "Found solution: $solutionFile"
 } else {
     Write-Fail "No Darkstar.sln / Darkstar.slnx found under $ProjectRoot"
-    Write-Warn2 "Check -ProjectRoot points at the right folder (containing Darkstar.csproj, Darkstar.Core\, Darkstar.Gui\)."
+    Write-Warn2 "Check -ProjectRoot points at the right folder (containing Darkstar.sln and src\)."
     $summary.Add("[BLOCKED] Solution file not found under $ProjectRoot - skipped restore/build.")
 }
 
@@ -347,9 +346,10 @@ Write-Step "Project structure"
 # "Load failed" / "Unable to find project ..." error only once Visual Studio opens the solution.
 # Checking the exact expected paths here gives a clear error immediately instead.
 $expectedFiles = [ordered]@{
-    "Darkstar.csproj (bot project, must be directly in the root)"        = Join-Path $ProjectRoot "Darkstar.csproj"
-    "Darkstar.Core\Darkstar.Core.csproj"                                 = Join-Path $ProjectRoot "Darkstar.Core\Darkstar.Core.csproj"
-    "Darkstar.Gui\Darkstar.Gui.csproj"                                   = Join-Path $ProjectRoot "Darkstar.Gui\Darkstar.Gui.csproj"
+    "src\Darkstar.Bot\Darkstar.Bot.csproj (the bot)"     = Join-Path $ProjectRoot "src\Darkstar.Bot\Darkstar.Bot.csproj"
+    "src\Darkstar.Core\Darkstar.Core.csproj"             = Join-Path $ProjectRoot "src\Darkstar.Core\Darkstar.Core.csproj"
+    "src\Darkstar.Gui\Darkstar.Gui.csproj"               = Join-Path $ProjectRoot "src\Darkstar.Gui\Darkstar.Gui.csproj"
+    "src\Darkstar.Tests\Darkstar.Tests.csproj"           = Join-Path $ProjectRoot "src\Darkstar.Tests\Darkstar.Tests.csproj"
 }
 
 $structureOk = $true
@@ -367,8 +367,8 @@ if ($structureOk) {
     Write-Ok "Project layout matches what the .csproj ProjectReference paths expect."
 } else {
     Write-Warn2 "One or more project files are missing at the expected relative path."
-    Write-Warn2 "Most common cause: Darkstar.csproj was placed in its own subfolder (e.g. 'Darkstar\Darkstar.csproj')"
-    Write-Warn2 "instead of directly in the solution root - move it (and its .cs files) up one level."
+    Write-Warn2 "Most common cause: the archive was extracted a level too deep, so everything sits under"
+    Write-Warn2 "a second folder - point -ProjectRoot at the folder that directly contains Darkstar.sln and src\."
     $summary.Add("[BLOCKED] Project structure under $ProjectRoot doesn't match expected layout (see above) - restore/build skipped.")
 }
 

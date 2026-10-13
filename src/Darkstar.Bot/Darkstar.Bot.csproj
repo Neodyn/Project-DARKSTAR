@@ -46,28 +46,18 @@
   </PropertyGroup>
 
   <!--
-    IMPORTANT: SDK-style projects compile every .cs file under the project folder by default, and
-    this .csproj sits in the repository root - so Darkstar.Core, Darkstar.Gui and Darkstar.Tests all
-    live *underneath* it and would be compiled into the bot as well.
+    This project used to sit in the repository root, with every other project underneath it, and
+    needed <Compile Remove="*\**\*.cs" /> to stop the SDK compiling all of them into the bot.
+    Forgetting that produced errors pointing nowhere near the cause - a duplicate
+    AssemblyTitleAttribute from another project's obj\ folder, or "only one compilation unit can
+    have top-level statements" from a second Program.cs.
 
-    This one line excludes every .cs file in any subfolder, which is exactly right here because all
-    of the bot's own sources sit directly in the root. It deliberately replaces the older list of one
-    Remove per sibling project: that list had to be extended by hand whenever a project was added,
-    and forgetting it produces errors that point nowhere near the cause -
-
-      "Duplicate 'System.Reflection.AssemblyTitleAttribute' attribute"   (from the other project's
-                                                                         generated obj\ files)
-      "Only one compilation unit can have top-level statements"          (two Program.cs files)
-
-    If the bot ever does grow a subfolder of its own sources, add a matching
-    <Compile Include="Thatfolder\**\*.cs" /> rather than weakening this exclusion.
+    Each project now has its own folder under src\, so nothing nests and the exclusion is gone.
+    Keep it that way: a project placed above another brings the whole problem back.
   -->
-  <ItemGroup>
-    <Compile Remove="*\**\*.cs" />
-  </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="Darkstar.Core\Darkstar.Core.csproj" />
+    <ProjectReference Include="..\Darkstar.Core\Darkstar.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

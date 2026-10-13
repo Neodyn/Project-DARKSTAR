@@ -122,8 +122,8 @@ $voskModelUrls = @{
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) { $ProjectRoot = (Get-Location).Path }
 $ProjectRoot   = (Resolve-Path -LiteralPath $ProjectRoot).Path
 
-$botProject    = Join-Path $ProjectRoot "Darkstar.csproj"
-$guiProject    = Join-Path $ProjectRoot "Darkstar.Gui\Darkstar.Gui.csproj"
+$botProject    = Join-Path $ProjectRoot "src\Darkstar.Bot\Darkstar.Bot.csproj"
+$guiProject    = Join-Path $ProjectRoot "src\Darkstar.Gui\Darkstar.Gui.csproj"
 $installerDir  = Join-Path $ProjectRoot "installer"
 $issFile       = Join-Path $installerDir "Setup.iss"
 $publishBot    = Join-Path $installerDir "publish\bot"
@@ -179,8 +179,8 @@ if ($DryRun) { Write-Warn2 "DRY RUN - nothing will be built, downloaded or compi
 Write-Step "Project structure"
 
 $requiredPaths = [ordered]@{
-    "Darkstar.csproj (bot, must sit directly in the root)" = $botProject
-    "Darkstar.Gui\Darkstar.Gui.csproj"                     = $guiProject
+    "src\Darkstar.Bot\Darkstar.Bot.csproj (the bot)" = $botProject
+    "src\Darkstar.Gui\Darkstar.Gui.csproj (the editor)" = $guiProject
     "installer\Setup.iss"                                  = $issFile
 }
 
@@ -316,10 +316,12 @@ if ($Clean) {
     # rebuild from scratch, and a stale obj\ is exactly what hides a restore or asset problem
     # that would otherwise show up now rather than on somebody else's machine.
     # Every project in the solution, found rather than listed - a hard-coded list is what made the
-    # bot's own compile exclusion go stale when Darkstar.Tests was added.
-    $projectDirs = @($ProjectRoot) + (Get-ChildItem -LiteralPath $ProjectRoot -Directory |
-        Where-Object { Get-ChildItem -LiteralPath $_.FullName -Filter *.csproj -File } |
-        ForEach-Object { $_.FullName })
+    # bot's own compile exclusion go stale when Darkstar.Tests was added. Searched recursively so
+    # it keeps working wherever the projects sit: they used to be in the root and one level down,
+    # they are now all under src\, and the next rearrangement should not need this line edited.
+    $projectDirs = Get-ChildItem -LiteralPath $ProjectRoot -Filter *.csproj -File -Recurse |
+        ForEach-Object { $_.DirectoryName } |
+        Sort-Object -Unique
 
     foreach ($projectDir in $projectDirs) {
         foreach ($name in @("obj", "bin")) {

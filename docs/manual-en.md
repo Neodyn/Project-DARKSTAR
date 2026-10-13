@@ -185,7 +185,7 @@ For working on the code rather than just using it. The setup script installs the
 
 ```powershell
 .\setup-dev-environment.ps1 -ProjectRoot "C:\path\to\repo" -VoskModelSize Standard
-dotnet run --project Darkstar.csproj
+dotnet run --project src/Darkstar.Bot
 ```
 
 Its parameters and the project layout are described in [contributing.md](contributing.md).

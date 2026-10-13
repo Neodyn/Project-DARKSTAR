@@ -237,7 +237,7 @@ internal static class HousekeepingTests
         Check("there is a reply for a caller who cannot be found",
             !string.IsNullOrWhiteSpace(config.DcsIntelNoPositionReply), config.DcsIntelNoPositionReply);
 
-        var intelSource = System.IO.File.ReadAllText(Root + "Darkstar.Core/DcsIntelService.cs");
+        var intelSource = System.IO.File.ReadAllText(Root + "src/Darkstar.Core/DcsIntelService.cs");
 
         var alphaAt = intelSource.IndexOf("kind == IntelRequestKind.AlphaCheck", StringComparison.Ordinal);
         var contactsAt = intelSource.IndexOf("GetHostileContactsAsync(channel", StringComparison.Ordinal);
@@ -295,7 +295,7 @@ internal static class HousekeepingTests
         Console.WriteLine();
         Console.WriteLine("Radio check, the wiring");
 
-        var bot = System.IO.File.ReadAllText(Root + "BotService.cs");
+        var bot = System.IO.File.ReadAllText(Root + "src/Darkstar.Bot/BotService.cs");
 
         var radioAt = bot.IndexOf("RadioCheck.Matches(config, text)", StringComparison.Ordinal);
         var tacticalAt = bot.IndexOf("intel.Classify(text, out var matchedTrigger)", StringComparison.Ordinal);
@@ -315,7 +315,7 @@ internal static class HousekeepingTests
         Check("an entry in phrases.json still wins, so an upgrade does not change a customised reply",
             bot.Contains("PhraseBook.TryMatch(text, phrases) == null"));
 
-        var phraseBook = System.IO.File.ReadAllText(Root + "Darkstar.Core/PhraseBook.cs");
+        var phraseBook = System.IO.File.ReadAllText(Root + "src/Darkstar.Core/PhraseBook.cs");
         Check("and the default phrases no longer claim the trigger",
             !phraseBook.Contains("Trigger = \"radio check\""));
 
@@ -341,7 +341,7 @@ internal static class HousekeepingTests
         Check("the live log is protected by keeping the newest few",
             bot.Contains("alwaysKeepNewest: 3") || bot.Contains(", 3, \"log"), "logs keep 3");
 
-        var appConfigSource = System.IO.File.ReadAllText(Root + "Darkstar.Core/AppConfig.cs");
+        var appConfigSource = System.IO.File.ReadAllText(Root + "src/Darkstar.Core/AppConfig.cs");
         Check("the limits are configurable rather than hard-coded",
             appConfigSource.Contains("RecordingRetentionDays") && appConfigSource.Contains("LogRetentionMaxMb"));
 
@@ -431,7 +431,7 @@ internal static class HousekeepingTests
         Check("a spectator is not", !FriendlyPosition.CoalitionIsKnown(0));
         Check("nor is anything else", !FriendlyPosition.CoalitionIsKnown(3) && !FriendlyPosition.CoalitionIsKnown(-1));
 
-        var intelSourceFriendly = System.IO.File.ReadAllText(Root + "Darkstar.Core/DcsIntelService.cs");
+        var intelSourceFriendly = System.IO.File.ReadAllText(Root + "src/Darkstar.Core/DcsIntelService.cs");
         var friendlyMethod = intelSourceFriendly[intelSourceFriendly.IndexOf("AnswerFriendlyPositionAsync(GrpcChannel", StringComparison.Ordinal)..];
         friendlyMethod = friendlyMethod[..friendlyMethod.IndexOf("/// <summary>", StringComparison.Ordinal)];
 
@@ -735,7 +735,7 @@ internal static class HousekeepingTests
         Check("the startup log names the accepted variants, since they are what makes a radio react to something else",
             bot.Contains("(also: {string.Join"));
 
-        var runner = System.IO.File.ReadAllText(Root + "HotwordTestRunner.cs");
+        var runner = System.IO.File.ReadAllText(Root + "src/Darkstar.Bot/HotwordTestRunner.cs");
         Check("the test runner can propose variants", runner.Contains("--suggest-variants"));
         Check("it only looks at recordings that were supposed to trigger and didn't",
             runner.Contains("r.Expected == true && !r.Detected"));
@@ -746,7 +746,7 @@ internal static class HousekeepingTests
         Check("and it never fails the build over having found misses - that is the point of the run",
             runner.Contains("Always 0: this mode exists to look at the misses"));
 
-        var detector = System.IO.File.ReadAllText(Root + "VoskHotwordDetector.cs");
+        var detector = System.IO.File.ReadAllText(Root + "src/Darkstar.Bot/VoskHotwordDetector.cs");
         Check("the detector matches the whole accepted set", detector.Contains("HotwordVariants.BuildRegex"));
         Check("and remembers which spelling fired", detector.Contains("LastMatchedPhrase = match.Value"));
 
@@ -831,7 +831,7 @@ internal static class HousekeepingTests
         Check("a radio starts with no voice of its own, so nothing changes for existing configurations",
             new RadioConfig().Voice == "");
 
-        var sender = System.IO.File.ReadAllText(Root + "ExternalAudioSender.cs");
+        var sender = System.IO.File.ReadAllText(Root + "src/Darkstar.Bot/ExternalAudioSender.cs");
         Check("the voice is passed per transmission, not fixed when the sender is built",
             sender.Contains("string? voice = null"));
         Check("an empty per-call voice falls back to the global one",
@@ -983,7 +983,7 @@ internal static class HousekeepingTests
         // Setup.iss packs the publish folders wholesale, so these two properties are the only thing
         // standing between a NuGet package's extras and somebody's disk. They are easy to lose in a
         // merge and nothing else would notice.
-        foreach (var project in new[] { "Darkstar.csproj", "Darkstar.Gui/Darkstar.Gui.csproj" })
+        foreach (var project in new[] { "src/Darkstar.Bot/Darkstar.Bot.csproj", "src/Darkstar.Gui/Darkstar.Gui.csproj" })
         {
             var text = System.IO.File.ReadAllText(Root + project);
             Check($"{project} ships one language only",
@@ -1033,7 +1033,7 @@ internal static class HousekeepingTests
         Check("a build nobody stamped is recognisable as such",
             !VersionInfo.IsRelease || VersionInfo.Version != VersionInfo.DevelopmentVersion);
 
-        var program = ReadSource("Program.cs");
+        var program = ReadSource("src/Darkstar.Bot/Program.cs");
         Check("the bot writes its version as the first line of every log",
             program.Contains("Logger.Log($\"D.A.R.K.S.T.A.R. {VersionInfo.Display}", StringComparison.Ordinal));
         Check("and answers --version without starting anything",
@@ -1041,10 +1041,10 @@ internal static class HousekeepingTests
             program.IndexOf("--version", StringComparison.Ordinal) <
             program.IndexOf("Host.CreateApplicationBuilder", StringComparison.Ordinal));
         Check("the config editor shows it in the title bar",
-            ReadSource("Darkstar.Gui/Pages/Main.razor").Contains("@VersionInfo.Display", StringComparison.Ordinal));
+            ReadSource("src/Darkstar.Gui/Pages/Main.razor").Contains("@VersionInfo.Display", StringComparison.Ordinal));
 
-        foreach (var project in new[] { "Darkstar.csproj", "Darkstar.Gui/Darkstar.Gui.csproj",
-                                        "Darkstar.Core/Darkstar.Core.csproj" })
+        foreach (var project in new[] { "src/Darkstar.Bot/Darkstar.Bot.csproj", "src/Darkstar.Gui/Darkstar.Gui.csproj",
+                                        "src/Darkstar.Core/Darkstar.Core.csproj" })
             Check($"{System.IO.Path.GetFileName(project)} defaults to a version that is visibly not a release",
                 ReadSource(project).Contains("<InformationalVersion>0.0.0-dev</InformationalVersion>", StringComparison.Ordinal));
 
@@ -1325,7 +1325,7 @@ internal static class HousekeepingTests
             roundTrip.Count == 2 && roundTrip.All(r => r.Callsign is "Overlord" or "Texaco"),
             string.Join(", ", roundTrip.Select(r => r.Callsign)));
 
-        var panel = ReadSource("Darkstar.Gui/Pages/RadiosPanel.razor");
+        var panel = ReadSource("src/Darkstar.Gui/Pages/RadiosPanel.razor");
         Check("the panel offers the removal next to the generation",
             panel.Contains("RemoveGeneratedTowers", StringComparison.Ordinal));
         Check("and says nothing is saved until the operator says so",
@@ -1343,10 +1343,10 @@ internal static class HousekeepingTests
         // covered by both applications setting the culture once at startup, which is cheaper than
         // auditing forty interpolations and cannot be forgotten in a new one.
         Check("the bot sets the culture before anything else runs",
-            ReadSource("Program.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
+            ReadSource("src/Darkstar.Bot/Program.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
                 StringComparison.Ordinal));
         Check("and so does the config editor",
-            ReadSource("Darkstar.Gui/App.xaml.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
+            ReadSource("src/Darkstar.Gui/App.xaml.cs").Contains("CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;",
                 StringComparison.Ordinal));
 
         Eq("a frequency on an F10 marker", FrequencyAnnouncer.Mhz(133_000_000), "133.000");
@@ -1401,7 +1401,7 @@ internal static class HousekeepingTests
         Check("the id range is far from what a mission would number its own marks",
             FrequencyAnnouncer.MarkerIdBase > 100_000, FrequencyAnnouncer.MarkerIdBase.ToString());
 
-        var announcer = ReadSource("Darkstar.Core/FrequencyAnnouncer.cs");
+        var announcer = ReadSource("src/Darkstar.Core/FrequencyAnnouncer.cs");
         Check("the whole id range is cleared first, so a smaller mission leaves no orphans",
             announcer.Contains("RemoveMarkAsync", StringComparison.Ordinal) &&
             announcer.Contains("for (var i = 0; i < MaxMarkers; i++)", StringComparison.Ordinal));
@@ -1590,7 +1590,7 @@ internal static class HousekeepingTests
         Check("the gap cannot be configured down to nothing",
             bot.Contains("Math.Max(5, config.TuneInGreetingGapSeconds)", StringComparison.Ordinal));
 
-        var srsSource = ReadSource("SrsConnection.cs");
+        var srsSource = ReadSource("src/Darkstar.Bot/SrsConnection.cs");
         var ownGuidAt = srsSource.IndexOf("string.Equals(guid, _clientGuid", StringComparison.Ordinal);
         var raiseAt = srsSource.IndexOf("OnClientRadiosChanged?.Invoke", StringComparison.Ordinal);
         Check("the bot's own client is filtered out before the event, so it cannot greet itself",
@@ -1609,10 +1609,10 @@ internal static class HousekeepingTests
         // The sidebar is the only way into a panel - there is no address bar and no menu. A panel
         // that is in the project but not in the navigation is invisible, and nothing else notices:
         // it compiles, it works, and no user can get to it.
-        var main = ReadSource("Darkstar.Gui/Pages/Main.razor");
+        var main = ReadSource("src/Darkstar.Gui/Pages/Main.razor");
 
         var panels = System.IO.Directory
-            .GetFiles(Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*Panel.razor")
+            .GetFiles(Root + System.IO.Path.Combine("src", "Darkstar.Gui", "Pages"), "*Panel.razor")
             .Select(System.IO.Path.GetFileNameWithoutExtension)
             .Cast<string>()
             .OrderBy(name => name, StringComparer.Ordinal)
@@ -1656,7 +1656,7 @@ internal static class HousekeepingTests
         // in none, so the only way to switch it off was a text editor. Worse, CH2 pointed at CH8 for
         // it, where it had never been. Documentation cannot catch that; this can.
         var panelMarkup = string.Join("\n", System.IO.Directory
-            .GetFiles(Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*.razor")
+            .GetFiles(Root + System.IO.Path.Combine("src", "Darkstar.Gui", "Pages"), "*.razor")
             .Select(System.IO.File.ReadAllText));
 
         var unreachableSettings = typeof(AppConfig).GetProperties()
@@ -1682,7 +1682,7 @@ internal static class HousekeepingTests
         // The other half of that failure: a card telling somebody to go to a channel the setting is
         // not on. Panels name channels in their own prose, and nothing links the two.
         var panelFiles = System.IO.Directory.GetFiles(
-            Root + System.IO.Path.Combine("Darkstar.Gui", "Pages"), "*.razor");
+            Root + System.IO.Path.Combine("src", "Darkstar.Gui", "Pages"), "*.razor");
 
         var channelOf = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -1711,7 +1711,7 @@ internal static class HousekeepingTests
         // CH8 is one component shown in three pieces. The sidebar names a section, the panel decides
         // what to render from it - and a section named in one place and not the other fails silently:
         // an entry that shows a blank page, or a block of settings nothing can reach any more.
-        var grpc = ReadSource("Darkstar.Gui/Pages/DcsGrpcPanel.razor");
+        var grpc = ReadSource("src/Darkstar.Gui/Pages/DcsGrpcPanel.razor");
 
         var declared = System.Text.RegularExpressions.Regex
             .Matches(grpc, @"public const string (Section\w+) = ""(\w+)"";")
@@ -1766,7 +1766,7 @@ internal static class HousekeepingTests
 
         // Four class names used in one file and defined in another - a rename in either one alone is
         // invisible until somebody looks at the window, which on this project means the user.
-        var css = ReadSource("Darkstar.Gui/wwwroot/css/app.css");
+        var css = ReadSource("src/Darkstar.Gui/wwwroot/css/app.css");
         foreach (var cssClass in new[] { "navitem", "ch", "navlabel", "navflag", "sub", "heading" })
             Check($".{cssClass} is styled", css.Contains($".{cssClass} ", StringComparison.Ordinal) ||
                                             css.Contains($".{cssClass}:", StringComparison.Ordinal) ||
@@ -1873,9 +1873,13 @@ internal static class HousekeepingTests
 
         Section("No project swallows another project's sources");
 
-        // The failure this guards against: Darkstar.csproj sits in the repository root, so every
-        // other project lives underneath it and the SDK's default glob compiles them all into the
-        // bot. The symptoms point nowhere near the cause - "Duplicate
+        // The failure this guards against: a project that sits above another compiles the other
+        // one's sources into itself, because the SDK globs every .cs under the project folder. That
+        // is how the repository used to be - the bot in the root, everything else beneath it - and
+        // it needed a blanket exclusion to stay buildable. Every project now has its own folder
+        // under src\, so nothing nests and the exclusion is gone; this check is what notices if a
+        // project is ever placed above another again. The symptoms point nowhere near the cause -
+        // "Duplicate
         // System.Reflection.AssemblyTitleAttribute" from the other project's generated obj\ files,
         // and "Only one compilation unit can have top-level statements" from two Program.cs files.
         //
@@ -1921,13 +1925,21 @@ internal static class HousekeepingTests
                     : "nested: " + string.Join(", ", nested));
         }
 
-        // The bot's own sources all sit in the root, which is what makes the blanket exclusion safe.
-        // If that ever stops being true, the exclusion silently drops the new folder.
-        var botSources = System.IO.Directory
+        // The root holds no code at all any more - every project lives under src\. Asserted rather
+        // than assumed, because a stray .cs in the root is exactly how the old arrangement crept
+        // back once before: one file, then a second, and then a project glob that swallows them.
+        var strayRootSources = System.IO.Directory
             .GetFiles(Root, "*.cs", System.IO.SearchOption.TopDirectoryOnly)
+            .Select(System.IO.Path.GetFileName)
+            .ToList();
+        Check("no source file sits loose in the repository root", strayRootSources.Count == 0,
+            string.Join(", ", strayRootSources));
+
+        var botSources = System.IO.Directory
+            .GetFiles(System.IO.Path.Combine(Root, "src", "Darkstar.Bot"), "*.cs")
             .Length;
-        Check("the bot still keeps all its own sources in the root", botSources >= 10,
-            $"{botSources} file(s) directly in the repository root");
+        Check("the bot's own sources live in src/Darkstar.Bot", botSources >= 10,
+            $"{botSources} file(s)");
 
         var cleanScript = System.IO.File.ReadAllText(Root + "build-installer.ps1");
         Check("-Clean discovers the project folders rather than listing them",
@@ -1999,7 +2011,7 @@ internal static class HousekeepingTests
         Console.WriteLine("Every command-line option is documented");
 
         // Taken from the parser itself, so an option added there without a mention in the manual is caught.
-        var runnerSource = System.IO.File.ReadAllText(Root + "HotwordTestRunner.cs");
+        var runnerSource = System.IO.File.ReadAllText(Root + "src/Darkstar.Bot/HotwordTestRunner.cs");
         var options = System.Text.RegularExpressions.Regex
             .Matches(runnerSource, @"case ""(--[a-z-]+)"":")
             .Select(m => m.Groups[1].Value)
@@ -2022,8 +2034,8 @@ internal static class HousekeepingTests
 
         var contributing = System.IO.File.ReadAllText(Root + "docs/contributing.md");
 
-        var sourceFiles = System.IO.Directory.GetFiles(Root, "*.cs")
-            .Concat(System.IO.Directory.GetFiles(Root + "Darkstar.Core", "*.cs"))
+        var sourceFiles = System.IO.Directory.GetFiles(System.IO.Path.Combine(Root, "src", "Darkstar.Bot"), "*.cs")
+            .Concat(System.IO.Directory.GetFiles(Root + "src/Darkstar.Core", "*.cs"))
             .Select(System.IO.Path.GetFileName)
             .Where(name => name != null)
             .Cast<string>()
@@ -2157,7 +2169,7 @@ internal static class HousekeepingTests
         // kneeboard page: DCS scales it, and the text stops being readable in the cockpit.
         foreach (var file in new[] { "EN-1", "EN-2", "EN-3", "DE-1", "DE-2", "DE-3" })
         {
-            var path = Root + System.IO.Path.Combine("docs", "kneeboard", $"DARKSTAR-Kneeboard-{file}.png");
+            var path = Root + System.IO.Path.Combine("docs", "kneeboard", "out", $"DARKSTAR-Kneeboard-{file}.png");
 
             if (!System.IO.File.Exists(path))
             {
@@ -2184,8 +2196,8 @@ internal static class HousekeepingTests
         // needs it most - and tags get added casually, one Logger.Log at a time.
         var logTags = new List<string>();
 
-        foreach (var file in System.IO.Directory.GetFiles(Root, "*.cs")
-                     .Concat(System.IO.Directory.GetFiles(Root + "Darkstar.Core", "*.cs")))
+        foreach (var file in System.IO.Directory.GetFiles(System.IO.Path.Combine(Root, "src", "Darkstar.Bot"), "*.cs")
+                     .Concat(System.IO.Directory.GetFiles(Root + "src/Darkstar.Core", "*.cs")))
         {
             foreach (System.Text.RegularExpressions.Match tag in System.Text.RegularExpressions.Regex
                          .Matches(System.IO.File.ReadAllText(file), @"Logger\.Log\(\s*\$?""\[([A-Za-z0-9 ._-]+)\]"))
@@ -2444,19 +2456,73 @@ internal static class HousekeepingTests
             brokenLinks.Count == 0 ? "" : string.Join("; ", brokenLinks.Take(5)));
 
         Console.WriteLine();
+        Console.WriteLine("Every file a document points at is actually there");
+
+        // The check above follows links between documents. This one follows links to FILES - images
+        // above all, which is the half nobody notices: a missing heading anchor is visible the
+        // moment you click it, a missing image is a broken box at the top of the front page that
+        // the author never sees because it is cached in their browser. Both READMEs pointed at a
+        // banner that was not in the repository at all, and had done for a while.
+        var missingTargets = new List<string>();
+
+        // Two shapes that look broken from here and are not: a link out of the repository, which is
+        // how GitHub's own Releases page is reached from a README, and the Blazor framework scripts,
+        // which the build generates into wwwroot.
+        static bool IsExternal(string target) =>
+            target.StartsWith("http", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase) ||
+            target.StartsWith("#", StringComparison.Ordinal) ||
+            target.StartsWith("../../", StringComparison.Ordinal) ||
+            target.Contains("_framework/", StringComparison.Ordinal);
+
+        foreach (var path in markdown)
+        {
+            var folder = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!;
+            var text = System.IO.File.ReadAllText(path);
+
+            // Markdown links and HTML <img src>, because the banner on both front pages is the
+            // second kind and would otherwise go unchecked.
+            var targets = System.Text.RegularExpressions.Regex
+                .Matches(text, @"\[[^\]]*\]\(([^)\s]+)\)|<img[^>]+src=""([^""]+)""")
+                .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
+
+            foreach (var target in targets)
+            {
+                if (string.IsNullOrWhiteSpace(target) || IsExternal(target)) continue;
+
+                var filePart = target.Split('#')[0];
+                if (filePart.Length == 0) continue;
+
+                var resolved = System.IO.Path.GetFullPath(System.IO.Path.Combine(folder, filePart));
+                if (!System.IO.File.Exists(resolved) && !System.IO.Directory.Exists(resolved))
+                    missingTargets.Add($"{System.IO.Path.GetFileName(path)} -> {target}");
+            }
+        }
+
+        // The detail says what to do rather than only what is wrong, because the one file this is
+        // expected to catch first is somebody's own artwork that was never committed and therefore
+        // cannot be fixed by anybody reading this on another machine.
+        Check("every linked file and image exists", missingTargets.Count == 0,
+            missingTargets.Count == 0
+                ? ""
+                : string.Join("; ", missingTargets.Take(5)) +
+                  "  (if this names docs/images/darkstar2.jpg: the banner used to sit in the " +
+                  "repository root - move your copy into docs/images/)");
+
+        Console.WriteLine();
         Console.WriteLine("Where more SAPI5 voices come from is documented, and in both languages");
 
         // This one exists because the honest answer is awkward and therefore easy to quietly drop:
         // there is no download link for a SAPI5 voice. The three routes that do work each have a
         // catch, and the catch is the useful part - a route named without its warning sends somebody
         // into a registry edit or a third-party engine with no idea what they are taking on.
-        var voiceSources = ReadSource("Darkstar.Gui/Pages/VoiceSourcesCard.razor");
+        var voiceSources = ReadSource("src/Darkstar.Gui/Pages/VoiceSourcesCard.razor");
 
         // The component is the single source for both panels. If one stops using it, the two drift
         // apart silently - which is precisely what a shared component was supposed to prevent.
         foreach (var voicePanel in new[] { "RadiosPanel", "SpeechPanel" })
             Check($"CH{(voicePanel == "RadiosPanel" ? 2 : 3)} shows the voice-sources block",
-                ReadSource($"Darkstar.Gui/Pages/{voicePanel}.razor").Contains("<VoiceSourcesCard", StringComparison.Ordinal));
+                ReadSource($"src/Darkstar.Gui/Pages/{voicePanel}.razor").Contains("<VoiceSourcesCard", StringComparison.Ordinal));
 
         // Each route is identified by the thing you cannot paraphrase away. For three of them that
         // is a literal that survives translation - a registry path, a project name - so the same
@@ -2496,7 +2562,7 @@ internal static class HousekeepingTests
         // A link in this editor used to render navy on a near-black panel, because nothing styled one -
         // the voice-sources block is the first panel to contain a real link.
         Check("links in the editor have a colour of their own",
-            ReadSource("Darkstar.Gui/wwwroot/css/app.css")
+            ReadSource("src/Darkstar.Gui/wwwroot/css/app.css")
                 .Contains("a { color:", StringComparison.Ordinal));
 
         Console.WriteLine();

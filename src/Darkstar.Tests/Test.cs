@@ -114,7 +114,7 @@ internal static class Test
 
         var found = new List<string>();
 
-        foreach (var file in Directory.GetFiles(Root + "Darkstar.Tests", "*.cs").OrderBy(f => f))
+        foreach (var file in Directory.GetFiles(Path.Combine(Root, "src", "Darkstar.Tests"), "*.cs").OrderBy(f => f))
         {
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)

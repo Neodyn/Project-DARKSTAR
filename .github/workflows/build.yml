@@ -33,7 +33,7 @@ jobs:
       # The tests read source files and documentation from the repository, and find it by walking up
       # from the assembly to Darkstar.sln - so the working directory here doesn't matter.
       - name: Test
-        run: dotnet run --project Darkstar.Tests --configuration Release --no-build
+        run: dotnet run --project src/Darkstar.Tests --configuration Release --no-build
 
   # A second job on purpose: the bot alone has to build without the GUI's WPF dependencies, because
   # that is what a headless server installs. If a console-only change quietly starts depending on
@@ -46,7 +46,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Publish the bot exactly as the installer does
-        run: dotnet publish Darkstar.csproj -c Release -r win-x64 --self-contained false -o publish-check
+        run: dotnet publish src/Darkstar.Bot/Darkstar.Bot.csproj -c Release -r win-x64 --self-contained false -o publish-check
       - name: Check the installer would find what it packs
         shell: pwsh
         run: |
@@ -65,7 +65,7 @@ jobs:
           }
           if ($languages) {
             Write-Host "::error::Localized resource folders survived: $($languages.Name -join ', ')"
-            Write-Host "Check SatelliteResourceLanguages in Darkstar.csproj."
+            Write-Host "Check SatelliteResourceLanguages in Darkstar.Bot.csproj."
             exit 1
           }
           Write-Host "Publish output is clean ($((Get-ChildItem publish-check -Recurse -File).Count) files)."

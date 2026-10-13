@@ -3,13 +3,13 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar", "Darkstar.csproj", "{A1A1A1A1-0001-4000-8000-000000000001}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Bot", "src\Darkstar.Bot\Darkstar.Bot.csproj", "{A1A1A1A1-0001-4000-8000-000000000001}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Core", "Darkstar.Core\Darkstar.Core.csproj", "{A1A1A1A1-0002-4000-8000-000000000002}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Core", "src\Darkstar.Core\Darkstar.Core.csproj", "{A1A1A1A1-0002-4000-8000-000000000002}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Gui", "Darkstar.Gui\Darkstar.Gui.csproj", "{A1A1A1A1-0003-4000-8000-000000000003}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Gui", "src\Darkstar.Gui\Darkstar.Gui.csproj", "{A1A1A1A1-0003-4000-8000-000000000003}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Tests", "Darkstar.Tests\Darkstar.Tests.csproj", "{A1A1A1A1-0004-4000-8000-000000000004}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Darkstar.Tests", "src\Darkstar.Tests\Darkstar.Tests.csproj", "{A1A1A1A1-0004-4000-8000-000000000004}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

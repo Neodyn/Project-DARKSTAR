@@ -78,7 +78,7 @@ reached is a different problem, reported on the panel itself.
    fixed drive for the layouts SRS is known to use.
 
 It reports what it found, says so when the configured path was already correct, and leaves the
-field untouched when there is nothing to find. The probing lives in `Darkstar.Core\SrsPaths.cs`,
+field untouched when there is nothing to find. The probing lives in `src\Darkstar.Core\SrsPaths.cs`,
 which the installer mirrors in Pascal script.
 
 ## CH2 — Radios

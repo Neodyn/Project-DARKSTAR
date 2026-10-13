@@ -299,7 +299,7 @@ internal static class WhisperModelTests
 
         Section("The engine is wired so that only the last rung of the reply chain changes");
 
-        var bot = ReadSource("BotService.cs");
+        var bot = ReadSource("src/Darkstar.Bot/BotService.cs");
 
         // Whisper transcribes and nothing more, so the free reply disappears - but ONLY that. If
         // the branch were placed higher, selecting Whisper would silently switch off the mission
@@ -327,7 +327,7 @@ internal static class WhisperModelTests
 
         Section("The local engine does not leak one transmission into the next");
 
-        var client = ReadSource("WhisperClient.cs");
+        var client = ReadSource("src/Darkstar.Bot/WhisperClient.cs");
 
         // The resampler carries its delay line across calls by design - right for a continuous
         // stream, wrong for separate recordings. Without the reset the tail of the previous

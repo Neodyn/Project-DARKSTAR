@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
+    <img src="docs/images/darkstar2.jpg" width="480" alt="D.A.R.K.S.T.A.R.">
 </p>
 
 # D.A.R.K.S.T.A.R.
@@ -70,23 +70,24 @@ Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](
 ## Projektaufbau
 
 ```
-Darkstar.csproj, *.cs        Der Bot: SRS-Verbindung, Audio, Hotword, Antworten
-  └── Darkstar.Core/         Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
-  └── Darkstar.Gui/          Konfigurationseditor (Blazor Hybrid über WPF)
-  └── Darkstar.Tests/        Die Testsuite — dotnet run --project Darkstar.Tests
+src/
+  ├── Darkstar.Bot/          Der Bot: SRS-Verbindung, Audio, Hotword, Antworten (ergibt Darkstar.exe)
+  ├── Darkstar.Core/         Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
+  ├── Darkstar.Gui/          Konfigurationseditor (Blazor Hybrid über WPF)
+  └── Darkstar.Tests/        Die Testsuite — dotnet run --project src/Darkstar.Tests
 installer/                   Inno-Setup-Skript für die auslieferbare Setup.exe
-docs/                        Die gesamte Dokumentation
+docs/                        Die gesamte Dokumentation, mit images/ und kneeboard/
 .github/workflows/           Baut und testet jeden Push
 build-installer.ps1          Baut die Setup.exe (Release, Abhängigkeiten, Sprachmodell, ein Befehl)
 setup-dev-environment.ps1    Richtet einen Entwicklungsrechner ein
 ```
 
-`Darkstar.csproj` liegt bewusst direkt im Wurzelverzeichnis — seine Projektverweise zeigen relativ zu sich selbst auf `Darkstar.Core\`. In einem Unterordner lässt sich die Solution nicht mehr laden.
+Jedes Projekt liegt in einem eigenen Ordner unter `src/`, keines über einem anderen — ein Projekt oberhalb eines anderen kompiliert dessen Quellen mit, und zwar mit Fehlermeldungen, die nichts mit der Ursache zu tun haben. Im Wurzelverzeichnis liegt kein Code, ein Test sichert das ab.
 
 ### Tests ausführen
 
 ```powershell
-dotnet run --project Darkstar.Tests
+dotnet run --project src/Darkstar.Tests
 ```
 
 Gibt ein lesbares Protokoll aus und endet mit 0, wenn alles gehalten hat. Dafür braucht es keinen SRS-Server, kein DCS, keinen Gemini-Key und kein Sprachmodell — geprüft werden Rechenwege, gesprochene Sätze, und ob Code und Dokumentation noch übereinstimmen.

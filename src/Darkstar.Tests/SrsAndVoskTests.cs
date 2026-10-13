@@ -168,7 +168,7 @@ internal static class SrsAndVoskTests
                 SrsPaths.DefaultExternalAudioExePath ==
                 @"C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe");
 
-            var appConfig = ReadSource("Darkstar.Core/AppConfig.cs");
+            var appConfig = ReadSource("src/Darkstar.Core/AppConfig.cs");
             Check("AppConfig no longer hard-codes the old Server path",
                 !appConfig.Contains(@"DCS-SimpleRadio-Standalone\Server\DCS-SR-ExternalAudio.exe"));
 
@@ -266,13 +266,13 @@ internal static class SrsAndVoskTests
             Console.WriteLine();
             Console.WriteLine("Startup behaviour");
 
-            var botService = ReadSource("BotService.cs");
+            var botService = ReadSource("src/Darkstar.Bot/BotService.cs");
             Check("a bad model stops the bot instead of falling back to the volume detector",
                 botService.Contains("catch (VoskModelLoadException ex)") && botService.Contains("FailStartup"));
             Check("ExecuteAsync no longer lets exceptions escape into the runtime",
                 botService.Contains("await RunAsync(stoppingToken)") && botService.Contains("catch (Exception ex)"));
 
-            var detector = ReadSource("VoskHotwordDetector.cs");
+            var detector = ReadSource("src/Darkstar.Bot/VoskHotwordDetector.cs");
             Check("the model is checked before the native call",
                 detector.IndexOf("VoskModelCheck.Check", StringComparison.Ordinal) <
                 detector.IndexOf("new Model(", StringComparison.Ordinal));
@@ -281,7 +281,7 @@ internal static class SrsAndVoskTests
             Check("a missing libvosk.dll is reported as such",
                 detector.Contains("DllNotFoundException") && detector.Contains("vc_redist"));
 
-            var program = ReadSource("Program.cs");
+            var program = ReadSource("src/Darkstar.Bot/Program.cs");
             Check("unhandled exceptions are logged to file",
                 program.Contains("UnhandledException") && program.Contains("UnobservedTaskException"));
 
@@ -333,7 +333,7 @@ internal static class SrsAndVoskTests
             Console.WriteLine();
             Console.WriteLine("Wake word audio path - wiring");
 
-            var appCfg = ReadSource("Darkstar.Core/AppConfig.cs");
+            var appCfg = ReadSource("src/Darkstar.Core/AppConfig.cs");
             Check("the low-pass filter is the default, not opt-in",
                 appCfg.Contains("HotwordAudioFilter { get; set; } = HotwordAudioFilter.LowPass"));
             Check("automatic gain is opt-in",
@@ -341,7 +341,7 @@ internal static class SrsAndVoskTests
             Check("saving recordings is opt-in",
                 appCfg.Contains("SaveRecordings { get; set; } = false"));
 
-            var det = ReadSource("VoskHotwordDetector.cs");
+            var det = ReadSource("src/Darkstar.Bot/VoskHotwordDetector.cs");
             Check("the detector no longer carries its own downsampler",
                 !det.Contains("Downsample48kTo16k"));
             Check("the filter instance belongs to the detector, i.e. one per radio",
@@ -349,7 +349,7 @@ internal static class SrsAndVoskTests
             Check("automatic gain works on a copy, so recordings stay untouched",
                 det.Contains("pcm16Mono48k.Clone()"));
 
-            var bot = ReadSource("BotService.cs");
+            var bot = ReadSource("src/Darkstar.Bot/BotService.cs");
             // Checked as two separate tokens rather than one string: the constructor call spans several
             // lines now that it also passes the accepted wake-word variants, and a test that breaks on
             // line wrapping tells you nothing about the behaviour.
@@ -365,12 +365,12 @@ internal static class SrsAndVoskTests
             Check("a failed recording write can't disturb the radio work",
                 bot.Contains("[Recording] Could not save a recording"));
 
-            var prog = ReadSource("Program.cs");
+            var prog = ReadSource("src/Darkstar.Bot/Program.cs");
             Check("--test-hotword runs before the host starts (never touches SRS)",
                 prog.IndexOf("HotwordTestRunner.IsRequested", StringComparison.Ordinal) <
                 prog.IndexOf("Host.CreateApplicationBuilder", StringComparison.Ordinal));
 
-            var runner = ReadSource("HotwordTestRunner.cs");
+            var runner = ReadSource("src/Darkstar.Bot/HotwordTestRunner.cs");
             Check("the runner feeds audio in the same 20 ms frames as the live path",
                 runner.Contains("FrameSamples = 960"));
             Check("it can compare both audio paths on the same files",
@@ -378,7 +378,7 @@ internal static class SrsAndVoskTests
             Check("expectations come from the file names the bot itself writes",
                 runner.Contains("_hit_") && runner.Contains("_missed_"));
 
-            var speech = ReadSource("Darkstar.Gui/Pages/SpeechPanel.razor");
+            var speech = ReadSource("src/Darkstar.Gui/Pages/SpeechPanel.razor");
             Check("all three settings are reachable from the GUI",
                 speech.Contains("HotwordAudioFilter") && speech.Contains("HotwordAutoGain") && speech.Contains("SaveRecordings"));
         }

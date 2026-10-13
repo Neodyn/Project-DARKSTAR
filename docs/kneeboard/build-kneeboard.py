@@ -13,9 +13,9 @@ measure how tall the content actually wanted to be. Anything over the limit fail
 the number of pixels it overflowed by.
 
 Output next to this file, per language:
-    DARKSTAR-Kneeboard-EN-1.png  -2.png  -3.png   -> Saved Games\\DCS\\Kneeboard\\
-    DARKSTAR-Kneeboard-DE-1.png  -2.png  -3.png      (pick one language - DCS shows every file
-    DARKSTAR-Kneeboard-EN.pdf / -DE.pdf               in that folder, in name order)
+    out\\DARKSTAR-Kneeboard-EN-1.png  -2.png  -3.png   -> Saved Games\\DCS\\Kneeboard\\
+    out\\DARKSTAR-Kneeboard-DE-1.png  -2.png  -3.png      (pick one language - DCS shows every file
+    out\\DARKSTAR-Kneeboard-EN.pdf / -DE.pdf               in that folder, in name order)
 
 The calls themselves are English in both: that is what the bot listens for. Only the explanations
 around them are translated.
@@ -30,6 +30,12 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# The renders live apart from their sources. Thirteen files in one folder made it a guess which
+# of them somebody is meant to edit - the .html is the source, the .png and .pdf are output and
+# are overwritten on every run.
+OUT = os.path.join(HERE, "out")
+os.makedirs(OUT, exist_ok=True)
 
 # language code -> source page. Both are rendered on every run, so the two can never drift into
 # "the English one is current and the German one is from last month".
@@ -159,7 +165,7 @@ def render_language(browser, language, source, offset, scratch):
 
         # 2. The real file, at the size DCS wants: rendered in a window tall enough that the page
         #    gets its full height, then cropped to exactly 1536x2048.
-        out = os.path.join(HERE, f"DARKSTAR-Kneeboard-{language}-{page}.png")
+        out = os.path.join(OUT, f"DARKSTAR-Kneeboard-{language}-{page}.png")
         shoot(browser, source, f"#p{page}", out, CSS_WIDTH, CSS_HEIGHT + offset)
         crop_to_page(out)
         produced.append(out)
@@ -171,7 +177,7 @@ def render_language(browser, language, source, offset, scratch):
             overflowing.append((page, over))
 
     if not overflowing:
-        pdf = os.path.join(HERE, f"DARKSTAR-Kneeboard-{language}.pdf")
+        pdf = os.path.join(OUT, f"DARKSTAR-Kneeboard-{language}.pdf")
         try:
             from PIL import Image
             Image.init()   # registers the JPEG writer the PDF encoder reaches for; some builds don't

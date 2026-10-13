@@ -8,11 +8,14 @@ betreibt — zum Austeilen, in Discord anpinnen oder im Cockpit aufs Kneeboard l
 
 | Datei | Was es ist |
 |---|---|
-| `DARKSTAR-Kneeboard-DE-1.png` … `-3.png` | Die Kneeboard-Seiten, 1536 × 2048 — die Größe, die DCS verwendet. |
-| `DARKSTAR-Kneeboard-DE.pdf` | Dieselben drei Seiten zum Drucken oder Posten. |
-| `DARKSTAR-Kneeboard-EN-*` | Der englische Satz. Gleiche Seiten, gleiche Calls. |
+| `out/DARKSTAR-Kneeboard-DE-1.png` … `-3.png` | Die Kneeboard-Seiten, 1536 × 2048 — die Größe, die DCS verwendet. |
+| `out/DARKSTAR-Kneeboard-DE.pdf` | Dieselben drei Seiten zum Drucken oder Posten. |
+| `out/DARKSTAR-Kneeboard-EN-*` | Der englische Satz. Gleiche Seiten, gleiche Calls. |
 | `darkstar-kneeboard-de.html` / `-en.html` | **Die Quellen.** Hier ändern, dann neu rendern. |
-| `build-kneeboard.py` | Rendert beide Sprachen. |
+| `build-kneeboard.py` | Rendert beide Sprachen nach `out/`. |
+
+Alles unter `out/` wird erzeugt und bei jedem Lauf überschrieben — bearbeite die `.html` daneben,
+nicht die Seiten selbst.
 
 **Die Calls sind in beiden Fassungen Englisch**, denn darauf hört der Bot und so antwortet er.
 Übersetzt ist nur, was drumherum erklärt — wer die deutschen Seiten liest, sagt trotzdem

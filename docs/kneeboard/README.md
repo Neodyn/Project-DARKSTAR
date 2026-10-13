@@ -8,11 +8,14 @@ Discord, or put it on their kneeboard in the cockpit.
 
 | File | What it is |
 |---|---|
-| `DARKSTAR-Kneeboard-EN-1.png` … `-3.png` | The kneeboard pages, 1536 × 2048 — the size DCS uses. |
-| `DARKSTAR-Kneeboard-EN.pdf` | The same three pages, to print or post. |
-| `DARKSTAR-Kneeboard-DE-*` | The German set. Same pages, same calls. |
+| `out/DARKSTAR-Kneeboard-EN-1.png` … `-3.png` | The kneeboard pages, 1536 × 2048 — the size DCS uses. |
+| `out/DARKSTAR-Kneeboard-EN.pdf` | The same three pages, to print or post. |
+| `out/DARKSTAR-Kneeboard-DE-*` | The German set. Same pages, same calls. |
 | `darkstar-kneeboard-en.html` / `-de.html` | **The sources.** Edit these, then re-render. |
-| `build-kneeboard.py` | Renders both languages. |
+| `build-kneeboard.py` | Renders both languages into `out/`. |
+
+Everything under `out/` is generated and overwritten on every run — edit the `.html` beside it, not
+the pages themselves.
 
 **The calls are English in both versions**, because that is what the bot listens for and what it
 says back. Only the explanations around them are translated — a pilot reading the German pages
