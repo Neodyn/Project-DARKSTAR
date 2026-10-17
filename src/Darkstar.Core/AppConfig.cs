@@ -1009,6 +1009,17 @@ public sealed class AppConfig
     }
 
     /// <summary>
+    /// This configuration as text, for comparing one against another.
+    ///
+    /// Two files holding the same settings can differ as text - different indentation, properties
+    /// in a different order, one of them missing a field an update added. Serializing both from a
+    /// loaded <see cref="AppConfig"/> with the same options removes all three differences, so what
+    /// is left to differ is a value somebody changed. Used by <see cref="ConfigProfiles"/> to say
+    /// whether a profile is still the one in effect.
+    /// </summary>
+    public string ToComparableJson() => JsonSerializer.Serialize(this, JsonOptions);
+
+    /// <summary>
     /// Reads a config.json without any of the side effects LoadOrCreateDefault has - no file is
     /// created, no missing fields are merged in, nothing is logged, nothing is backed up. For
     /// tools that only want to look at the settings, such as the --test-hotword runner.
@@ -1066,7 +1077,7 @@ public sealed class AppConfig
         }
 
         MergeMissingFields(configPath, text, config);
-        ValidateValues(config);
+        ValidateValues(config, configPath);
 
         return config;
     }
@@ -1168,8 +1179,15 @@ public sealed class AppConfig
     /// it just makes misconfiguration visible in the log instead of failing silently later
     /// (e.g. a bad SrsPort just leading to "connection refused" with no obvious cause).
     /// </summary>
-    private static void ValidateValues(AppConfig config) =>
-        ValidateValues(config, message => Logger.Log($"WARNING: config.json - {message}"));
+    /// <remarks>
+    /// The warnings carry the file's full path rather than the bare name "config.json". It costs
+    /// a line's width, and it buys the one thing the bare name cannot say: which copy. An
+    /// operator reading "config.json - GeminiApiKey is empty" next to a config.json that plainly
+    /// has a key will doubt the bot, the JSON and the key before doubting the file - whereas the
+    /// path makes a second copy obvious at a glance.
+    /// </remarks>
+    private static void ValidateValues(AppConfig config, string configPath) =>
+        ValidateValues(config, message => Logger.Log($"WARNING: {Path.GetFullPath(configPath)} - {message}"));
 
     /// <summary>
     /// The checks themselves, with the destination of the warnings injected.

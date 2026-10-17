@@ -1673,18 +1673,20 @@ internal static class HousekeepingTests
         // The channel numbers are the one thing in this editor that may not drift: ~90 places in the
         // documentation say "on CH2 Radios" or "the test button on CH8", and so does everybody who
         // has used it before. Panels may be regrouped and reordered; a number belongs to a panel.
+        // Two digits, matched greedily, or CH10 would be read as CH1 and the tenth channel would
+        // look both present and duplicated.
         var navNumbers = System.Text.RegularExpressions.Regex
-            .Matches(main, @"CH([1-9])")
+            .Matches(main, @"CH([1-9][0-9]?)")
             .Select(m => int.Parse(m.Groups[1].Value))
             .Distinct()
             .OrderBy(n => n)
             .ToList();
 
-        Check("all nine channels are in the sidebar", navNumbers.SequenceEqual(Enumerable.Range(1, 9)),
+        Check("all ten channels are in the sidebar", navNumbers.SequenceEqual(Enumerable.Range(1, 10)),
             string.Join(",", navNumbers));
 
         var duplicated = System.Text.RegularExpressions.Regex
-            .Matches(main, @"new NavEntry\(""[^""]*"", ""(CH[1-9])""")
+            .Matches(main, @"new NavEntry\(""[^""]*"", ""(CH[1-9][0-9]?)""")
             .Select(m => m.Groups[1].Value)
             .GroupBy(n => n)
             .Where(g => g.Count() > 1)
@@ -1845,13 +1847,13 @@ internal static class HousekeepingTests
         var documented = System.Text.RegularExpressions.Regex
             // Any heading level: the channels are the document's top level now, and which level
             // that is is a layout decision rather than something to assert.
-            .Matches(guiDoc, @"^#{2,} CH([1-9])", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Matches(guiDoc, @"^#{2,} CH([1-9][0-9]?)", System.Text.RegularExpressions.RegexOptions.Multiline)
             .Select(m => int.Parse(m.Groups[1].Value))
             .Distinct()
             .OrderBy(n => n)
             .ToList();
 
-        Check("gui.md describes exactly the nine channels the sidebar offers",
+        Check("gui.md describes exactly the channels the sidebar offers",
             documented.SequenceEqual(navNumbers),
             $"documented [{string.Join(",", documented)}], in the sidebar [{string.Join(",", navNumbers)}]");
 
@@ -2473,12 +2475,18 @@ internal static class HousekeepingTests
         // A renamed heading leaves the links to it silently dead, and a translated manual makes that twice
         // as likely - the German chapter 8.4 is called something else, so a link copied across languages
         // looks right and isn't. Cheap to check, invisible otherwise.
+        // One hyphen per whitespace character, NOT per run of them - which is what GitHub does,
+        // and the difference is invisible until a heading contains punctuation with spaces around
+        // it. "CH10 — Profiles" loses the dash and keeps both spaces, so the anchor GitHub
+        // generates is "ch10--profiles" with two hyphens. Collapsing the run here produced
+        // "ch10-profiles", and a link written to match THAT passed this check and was dead on
+        // GitHub - the one outcome this whole section exists to prevent.
         static string Slug(string heading)
         {
             var text = heading.Trim().ToLowerInvariant();
             text = System.Text.RegularExpressions.Regex.Replace(text, @"[`*_]", "");
             text = System.Text.RegularExpressions.Regex.Replace(text, @"[^\w\s-]", "");
-            return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", "-");
+            return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s", "-");
         }
 
         var markdown = System.IO.Directory.GetFiles(Root, "*.md")

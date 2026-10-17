@@ -83,6 +83,14 @@ Console.WriteLine("======== What the bot knows about its own listening ========"
 SpeechQualityTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== Where the settings came from ========");
+StartupPathTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== Config profiles ========");
+ConfigProfileTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== Housekeeping, requests, documentation ========");
 await HousekeepingTests.RunAsync();
 

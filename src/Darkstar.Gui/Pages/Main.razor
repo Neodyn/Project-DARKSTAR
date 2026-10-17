@@ -45,9 +45,9 @@
             <div class="field" style="max-width:480px">
                 <label>CONFIG FOLDER</label>
                 <input type="text" @bind="Store.ConfigFolder" />
-                <div class="hint">Folder containing config.json / phrases.json / vocabulary.json. Auto-detected based on where an existing config.json was found nearby; change it if the bot lives elsewhere.</div>
+                <div class="hint">Folder containing config.json / phrases.json / vocabulary.json. Auto-detected based on where an existing config.json was found nearby; change it if the bot lives elsewhere. A folder loaded from here is remembered for the next start, and CH10 Profiles can change it again later.</div>
             </div>
-            <button class="link-action" @onclick="Reload"><span>Load</span></button>
+            <button class="link-action" @onclick="() => Store.UseFolder(Store.ConfigFolder)"><span>Load</span></button>
         }
         else
         {
@@ -79,6 +79,9 @@
                     break;
                 case "service":
                     <ServicePanel />
+                    break;
+                case "profiles":
+                    <ProfilesPanel />
                     break;
             }
         }
@@ -153,6 +156,7 @@
             {
                 new NavEntry("connection", "CH1", "CONNECTION"),
                 new NavEntry("service", "CH9", "SERVICE"),
+                new NavEntry("profiles", "CH10", "PROFILES"),
             }),
             new NavGroup("RADIO & SPEECH", new[]
             {

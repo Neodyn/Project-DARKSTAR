@@ -39,7 +39,7 @@ by the question you are answering rather than by their number:
 
 | Group | Channels |
 |---|---|
-| **SERVER** | CH1 Connection, CH9 Service |
+| **SERVER** | CH1 Connection, CH9 Service, CH10 Profiles |
 | **RADIO & SPEECH** | CH2 Radios, CH3 Speech, CH4 Phrases, CH5 Vocabulary |
 | **MISSION DATA — CH8** | Server & test, Replies, Mission explorer |
 | **MONITORING** | CH6 Discord, CH7 Logging |
@@ -422,6 +422,65 @@ elevated commands is shown in a details box when something goes wrong.
 Internally this goes through PowerShell (`Get-Service` / `New-Service` / `Start-Service`) rather
 than parsing `sc.exe` output, because `sc.exe` localizes its field labels — screen-scraping it
 would break on a German Windows.
+
+## CH10 — Profiles
+
+Two things live here: which folder the bot's settings are in, and several named `config.json` files
+kept side by side.
+
+### The config folder
+
+The field at the top is the folder the bot reads `config.json`, `phrases.json` and
+`vocabulary.json` from — the one its `Darkstar.exe` sits in. Until this panel existed the editor
+found that folder by searching near its own location on every start, and could only be corrected
+before loading. The search is right on a normal installation and wrong in exactly the case that
+brings somebody here: two copies of `config.json` on the machine, with the bot reading one and the
+editor editing the other.
+
+**Use this folder and load** switches to it and remembers it, so the next launch starts there — the
+panel shows `remembered` once it does, and **Forget it** goes back to searching. A folder that no
+longer exists is refused rather than created: a typo would otherwise produce an empty folder with a
+fresh default `config.json`, and the editor would look like it had worked while the bot went on
+reading the folder it always did. A remembered folder that has gone away (an unplugged drive) falls
+back to the search.
+
+The bot names the folder it actually used in the first lines of its own log — *Settings read from:
+…* — so the two can be compared directly. See the first entry in the manual's
+[troubleshooting table](manual-en.md#11-troubleshooting).
+
+### Profiles
+
+A profile is a whole `config.json`, saved under its own name in a `Profiles` subfolder of the
+config folder. Activating one copies it over the `config.json` the bot reads.
+
+| Action | What it does |
+|---|---|
+| **Save as profile** | Writes the settings **currently in the editor** — including changes not yet saved to `config.json` — to `Profiles\<name>.json`. Trying something out and keeping it without touching the live settings is the usual reason to be here. An existing name asks before replacing. |
+| **activate** | Copies that profile over `config.json`, backing up the config that was there, and reloads the editor from it. The bot has to be restarted for it to take effect. |
+| **delete** | Asks once, then deletes, leaving a copy in `Profiles\Backup\`. |
+
+Deliberate limits, each for a reason:
+
+- **The bot knows nothing about profiles.** It reads `config.json` and only that, exactly as
+  before. All the copying happens in the editor, so there is no second way to point a running
+  service at the wrong file.
+- **`phrases.json` and `vocabulary.json` are shared**, not part of a profile. Swapping the fixed
+  phrases along with a frequency plan is the kind of surprise that gets found mid-mission.
+- **A profile that cannot be parsed is refused** before anything is copied, with `config.json`
+  left untouched — overwriting working settings with a broken file leaves a bot that will not
+  start, which is the opposite of what a profile is for.
+- **A name becomes a file name**, so `..\config`, the characters Windows forbids, and the device
+  names (`CON`, `COM1`, …) are refused with a message saying which rule was hit, rather than
+  silently cleaned up.
+
+The header line shows which profile was activated last, and whether `config.json` still holds what
+that profile holds — *Active: Training* against *Active: Training — config.json has been edited
+since*. That comparison is made on the settings rather than on the file text, so re-indenting a
+file, or a `config.json` that predates a setting an update added, does not read as a change.
+
+The editor's own two memories — the chosen folder and the active profile — are kept in
+`%LOCALAPPDATA%\Darkstar\editor.json`, not in `config.json`. Keeping them in `config.json` would
+carry them into every profile, and activating a profile could then change where the editor looks.
 
 ## Known build requirements
 

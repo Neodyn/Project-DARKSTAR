@@ -318,6 +318,11 @@ public sealed class BotService : BackgroundService
         var phraseBookPath = Path.Combine(baseDir, "phrases.json");
         var vocabularyPath = Path.Combine(baseDir, "vocabulary.json");
 
+        // Which files, exactly - before any of them is read, so the folder is already named when
+        // a warning about an empty setting follows. See StartupPaths for why this earns its lines.
+        foreach (var line in StartupPaths.Describe(baseDir, StartupPaths.Inspect(baseDir)))
+            Logger.Log(line);
+
         var config = AppConfig.LoadOrCreateDefault(configPath);
         if (config == null)
         {

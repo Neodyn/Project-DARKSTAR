@@ -1,0 +1,202 @@
+@namespace Darkstar.Gui.Pages
+@implements IDisposable
+@inject ConfigStore Store
+
+<h1>PROFILES</h1>
+
+<div class="field">
+    <label>CONFIG FOLDER</label>
+    <input type="text" @bind="_folder" />
+    <div class="hint">
+        The folder the bot reads <code>config.json</code>, <code>phrases.json</code> and
+        <code>vocabulary.json</code> from — the one its <code>Darkstar.exe</code> sits in. The bot
+        names this folder in the first lines of its log (<em>Settings read from: …</em>); if that
+        path is not this one, the two of you are editing different files.
+    </div>
+</div>
+
+<div style="display:flex;align-items:center;gap:16px;margin:-4px 0 16px">
+    <button class="link-action" style="margin:0" @onclick="ApplyFolder"><span>Use this folder and load</span></button>
+
+    @if (Store.FolderWasChosen)
+    {
+        <span class="badge">remembered</span>
+        <button class="link-action" style="margin:0" @onclick="Store.ForgetChosenFolder"><span>Forget it</span></button>
+    }
+    else
+    {
+        <span style="font-size:11px;color:#5A6A70">Found automatically — using it once remembers it for the next start.</span>
+    }
+</div>
+
+<div class="field">
+    <label>PROFILES FOLDER</label>
+    <input type="text" value="@ConfigProfiles.FolderFor(Store.ConfigFolder)" readonly />
+    <div class="hint">
+        A profile is a whole <code>config.json</code> kept here under its own name. Activating one
+        copies it over the <code>config.json</code> the bot reads, keeping a backup of the one that
+        was there — the bot itself knows nothing about profiles, which is why nothing can point a
+        running service at the wrong file.
+        <strong>@("phrases.json") and @("vocabulary.json") are shared</strong> and are not part of a
+        profile.
+    </div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
+    <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">SAVED PROFILES</span>
+    @if (Store.ActiveProfile != null)
+    {
+        <span style="font-size:11px;color:@(Store.ActiveProfileStillMatches ? "#5FBF7A" : "#F2A93B")">
+            @(Store.ActiveProfileStillMatches
+                ? $"Active: {Store.ActiveProfile}"
+                : $"Active: {Store.ActiveProfile} — config.json has been edited since")
+        </span>
+    }
+</div>
+
+@{
+    var profiles = Store.Profiles();
+}
+
+@if (profiles.Count == 0)
+{
+    <div class="card" style="color:#5A6A70;font-size:12px">
+        No profiles yet. Set the bot up the way you want it, then save it below under a name.
+    </div>
+}
+else
+{
+    <table class="phrase-table">
+        @foreach (var profile in profiles)
+        {
+            <tr>
+                <td style="width:40%">
+                    <span style="color:#E7EDEF">@profile.Name</span>
+                    @if (string.Equals(profile.Name, Store.ActiveProfile, StringComparison.OrdinalIgnoreCase))
+                    {
+                        <span class="badge" style="margin-left:8px">active</span>
+                    }
+                </td>
+                <td style="color:#5A6A70">
+                    @StartupPaths.Size(profile.Bytes), @StartupPaths.When(profile.LastWriteLocal)
+                </td>
+                <td style="width:190px;text-align:right">
+                    @if (_confirmDelete == profile.Name)
+                    {
+                        <span style="color:#F2A93B;font-size:11px">Delete it?</span>
+                        <button class="icon-btn" style="color:#E2543A" @onclick="() => Delete(profile.Name)">yes</button>
+                        <button class="icon-btn" @onclick="() => _confirmDelete = null">no</button>
+                    }
+                    else
+                    {
+                        <button class="icon-btn" style="color:#4FD1C5" @onclick="() => Activate(profile.Name)">activate</button>
+                        <button class="icon-btn" @onclick="() => _confirmDelete = profile.Name">delete</button>
+                    }
+                </td>
+            </tr>
+        }
+    </table>
+}
+
+<div class="card">
+    <div class="card-head">
+        <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">SAVE THE SETTINGS ON SCREEN AS A PROFILE</span>
+    </div>
+
+    <div class="row2">
+        <div class="field" style="margin:0">
+            <label>NAME</label>
+            <input type="text" @bind="_newName" @bind:event="oninput" placeholder="Training server" />
+        </div>
+        <div style="display:flex;align-items:flex-end">
+            @if (_confirmOverwrite)
+            {
+                <span style="font-size:11px;color:#F2A93B;margin-right:12px">
+                    "@ConfigProfiles.Normalize(_newName)" exists. Replace it?
+                </span>
+                <button class="link-action" style="margin:0;color:#E2543A" @onclick="() => Save(force: true)"><span>Replace</span></button>
+                <button class="link-action" style="margin:0 0 0 12px" @onclick="() => _confirmOverwrite = false"><span>Cancel</span></button>
+            }
+            else
+            {
+                <button class="link-action" style="margin:0" @onclick="() => Save(force: false)"><span>Save as profile</span></button>
+            }
+        </div>
+    </div>
+
+    <div class="hint" style="margin-top:8px">
+        Saves what is currently in this editor, including changes you have not written to
+        <code>config.json</code> yet — trying something out and keeping it as a profile without
+        touching the live settings is the usual reason to be here.
+        @if (ConfigProfiles.NameProblem(_newName) is { } problem && _newName.Length > 0)
+        {
+            <div style="color:#F2A93B;margin-top:6px">@problem</div>
+        }
+    </div>
+</div>
+
+@code {
+    private string _folder = "";
+    private string _newName = "";
+
+    /// <summary>
+    /// Which row is asking "delete it?", and whether the save button is asking about an
+    /// overwrite. Both are two-step rather than a dialog: this editor has no JavaScript interop,
+    /// and a profile is the only copy of a setup somebody arranged by hand.
+    /// </summary>
+    private string? _confirmDelete;
+
+    private bool _confirmOverwrite;
+
+    protected override void OnInitialized()
+    {
+        Store.OnChange += StateHasChanged;
+        _folder = Store.ConfigFolder;
+    }
+
+    private void ApplyFolder()
+    {
+        _confirmDelete = null;
+        _confirmOverwrite = false;
+        Store.UseFolder(_folder);
+
+        // Whatever the store settled on - the typed path, or the old one if it was refused.
+        _folder = Store.ConfigFolder;
+    }
+
+    private void Save(bool force)
+    {
+        if (ConfigProfiles.NameProblem(_newName) != null)
+        {
+            // Let the store do the complaining, so the message lands in the footer like every
+            // other one rather than only in the hint under the field.
+            Store.SaveProfile(_newName);
+            return;
+        }
+
+        if (!force && ConfigProfiles.Exists(Store.ConfigFolder, _newName))
+        {
+            _confirmOverwrite = true;
+            return;
+        }
+
+        Store.SaveProfile(_newName);
+        _confirmOverwrite = false;
+        _newName = "";
+    }
+
+    private void Activate(string name)
+    {
+        _confirmDelete = null;
+        Store.ActivateProfile(name);
+        _folder = Store.ConfigFolder;
+    }
+
+    private void Delete(string name)
+    {
+        _confirmDelete = null;
+        Store.DeleteProfile(name);
+    }
+
+    public void Dispose() => Store.OnChange -= StateHasChanged;
+}

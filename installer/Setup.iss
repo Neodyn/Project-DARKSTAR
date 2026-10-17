@@ -366,8 +366,8 @@ begin
   if (CurPageID = wpSelectDir) and (DetectedInstallDir <> '') then
     WizardForm.SelectDirLabel.Caption :=
       '{#MyAppName} is already installed in the folder below. Keep it to update that installation -' + #13#10 +
-      'your config.json, phrases.json and vocabulary.json are kept. A different folder means a' + #13#10 +
-      'second copy, which the Windows Service would not be running.';
+      'your config.json, phrases.json, vocabulary.json and saved profiles are kept. A different' + #13#10 +
+      'folder means a second copy, which the Windows Service would not be running.';
 end;
 
 // Runs a PowerShell one-liner hidden and waits for it. PowerShell rather than sc.exe because
@@ -470,7 +470,7 @@ begin
       Comparison := 'Updating version ' + PreviousVersion + ' to ' + '{#MyAppVersion}';
 
     Header := Comparison + NewLine +
-      Space + 'config.json, phrases.json and vocabulary.json are kept.' + NewLine;
+      Space + 'config.json, phrases.json, vocabulary.json and Profiles\ are kept.' + NewLine;
 
     if DarkstarServiceInstalled() then
       Header := Header + Space + 'The Windows Service is stopped and started again automatically.' + NewLine;

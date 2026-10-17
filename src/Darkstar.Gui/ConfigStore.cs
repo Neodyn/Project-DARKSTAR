@@ -12,12 +12,74 @@ namespace Darkstar.Gui;
 public sealed class ConfigStore
 {
     /// <summary>
-    /// Folder containing config.json/phrases.json/vocabulary.json. Defaults to wherever the
-    /// bot's own config.json is actually found (see ResolveDefaultConfigFolder) so the GUI and
-    /// the bot service see the same files out of the box, with no manual setup - change it via
-    /// the Connection page if the bot lives somewhere unusual.
+    /// What the editor remembers between launches: the chosen config folder and the last
+    /// activated profile. Loaded once, written whenever one of them changes.
     /// </summary>
-    public string ConfigFolder { get; set; } = ResolveDefaultConfigFolder();
+    private readonly EditorSettings _settings = EditorSettings.Load(EditorSettings.DefaultPath());
+
+    /// <summary>
+    /// Folder containing config.json/phrases.json/vocabulary.json. A folder the operator has
+    /// chosen before wins; otherwise it is found by searching near the editor's own location
+    /// (see ResolveDefaultConfigFolder), so the GUI and the bot service see the same files out of
+    /// the box with no manual setup. Change it on CH10 Profiles if the bot lives elsewhere.
+    ///
+    /// Settable directly for the "not loaded" screen's text box; UseFolder is what remembers it.
+    /// </summary>
+    public string ConfigFolder { get; set; } = "";
+
+    /// <summary>
+    /// Points the editor at another folder, remembers it for the next launch, and loads from it.
+    ///
+    /// Remembering matters more than it looks: the search below is right on a normal installation
+    /// and wrong exactly when there are two copies of config.json on the machine, which is the
+    /// situation that sends somebody to the editor in the first place.
+    /// </summary>
+    public void UseFolder(string folder)
+    {
+        var trimmed = (folder ?? "").Trim().Trim('"');
+
+        if (trimmed.Length == 0)
+        {
+            SetStatus("Give a folder first.", isError: true);
+            NotifyStateChanged();
+            return;
+        }
+
+        if (!Directory.Exists(trimmed))
+        {
+            // Not created here on purpose. A typo in a path would otherwise produce an empty
+            // folder with a default config.json in it, and the editor would look like it had
+            // worked while the bot went on reading the folder it always did.
+            SetStatus($"There is no folder {trimmed}.", isError: true);
+            NotifyStateChanged();
+            return;
+        }
+
+        ConfigFolder = trimmed;
+        Remember(s => s.ConfigFolder = trimmed);
+        Load();
+    }
+
+    /// <summary>Whether the folder in use is one somebody chose, rather than one that was found.</summary>
+    public bool FolderWasChosen =>
+        !string.IsNullOrWhiteSpace(_settings.ConfigFolder)
+        && string.Equals(_settings.ConfigFolder, ConfigFolder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Forgets the chosen folder, so the next launch searches for one again.</summary>
+    public void ForgetChosenFolder()
+    {
+        Remember(s => s.ConfigFolder = null);
+        SetStatus("The folder is no longer remembered - the editor will search for one on the next start.", isError: false);
+        NotifyStateChanged();
+    }
+
+    private void Remember(Action<EditorSettings> change)
+    {
+        change(_settings);
+
+        if (!_settings.Save(EditorSettings.DefaultPath()))
+            SetStatus("Could not write the editor's own settings - this choice will not survive a restart.", isError: true);
+    }
 
     /// <summary>
     /// The GUI (Darkstar.Gui) and the bot service (Darkstar) are separate executables with
@@ -60,6 +122,17 @@ public sealed class ConfigStore
         // Nothing found anywhere nearby - fall back to the GUI's own folder. A fresh
         // config.json will be created there on first Load(), same as the bot would do.
         return here;
+    }
+
+    public ConfigStore()
+    {
+        // A folder somebody chose beats one that was found, and it is only honoured while it is
+        // still there - a remembered path to a drive that is no longer plugged in should fall
+        // back to the search rather than leave the editor pointing at nothing.
+        ConfigFolder = !string.IsNullOrWhiteSpace(_settings.ConfigFolder)
+                       && Directory.Exists(_settings.ConfigFolder)
+            ? _settings.ConfigFolder
+            : ResolveDefaultConfigFolder();
     }
 
     public AppConfig Config { get; private set; } = new();
@@ -175,6 +248,109 @@ public sealed class ConfigStore
         SavePhrases();
         SaveVocabulary();
         SetStatus("All changes saved.", isError: false);
+        NotifyStateChanged();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Profiles (CH10)
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>The profile activated last, as a label. Null when none ever was.</summary>
+    public string? ActiveProfile => _settings.ActiveProfile;
+
+    /// <summary>
+    /// Whether the live config.json still holds what the active profile holds. False while
+    /// there is no active profile, so the editor can distinguish "Training, unchanged" from
+    /// "Training, edited since" rather than claiming a profile is in effect either way.
+    /// </summary>
+    public bool ActiveProfileStillMatches =>
+        ActiveProfile != null && ConfigProfiles.MatchesLiveConfig(ConfigFolder, ActiveProfile);
+
+    public List<ConfigProfile> Profiles()
+    {
+        try
+        {
+            return ConfigProfiles.List(ConfigFolder);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not read the Profiles folder: {ex.Message}", isError: true);
+            return new List<ConfigProfile>();
+        }
+    }
+
+    /// <summary>
+    /// Writes the settings currently in the editor to a profile of that name.
+    ///
+    /// Saves what is on screen, not what is in config.json - unsaved edits are usually the whole
+    /// reason for making a profile, and the alternative (save, then profile the saved file) means
+    /// overwriting the live config to record a variant of it.
+    /// </summary>
+    public void SaveProfile(string? name)
+    {
+        var problem = ConfigProfiles.NameProblem(name);
+        if (problem != null)
+        {
+            SetStatus(problem, isError: true);
+            NotifyStateChanged();
+            return;
+        }
+
+        try
+        {
+            ConfigProfiles.Save(ConfigFolder, name, Config);
+            SetStatus($"Profile \"{ConfigProfiles.Normalize(name)}\" saved from the settings on screen.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not save the profile: {ex.Message}", isError: true);
+        }
+
+        NotifyStateChanged();
+    }
+
+    /// <summary>
+    /// Copies a profile over config.json and reloads the editor from it, so what is on screen is
+    /// what the bot will now read.
+    /// </summary>
+    public void ActivateProfile(string? name)
+    {
+        try
+        {
+            ConfigProfiles.Activate(ConfigFolder, name);
+            Remember(s => s.ActiveProfile = ConfigProfiles.Normalize(name));
+
+            Load();
+
+            // Load() sets its own "Loaded from ..." message; this is the one worth keeping.
+            if (IsLoaded)
+                SetStatus($"Profile \"{ConfigProfiles.Normalize(name)}\" is now config.json. " +
+                          "Restart the bot for it to take effect.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not activate the profile: {ex.Message}", isError: true);
+        }
+
+        NotifyStateChanged();
+    }
+
+    public void DeleteProfile(string? name)
+    {
+        try
+        {
+            ConfigProfiles.Delete(ConfigFolder, name);
+
+            if (string.Equals(ActiveProfile, ConfigProfiles.Normalize(name), StringComparison.OrdinalIgnoreCase))
+                Remember(s => s.ActiveProfile = null);
+
+            SetStatus($"Profile \"{ConfigProfiles.Normalize(name)}\" deleted; a copy is in Profiles\\Backup.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not delete the profile: {ex.Message}", isError: true);
+        }
+
         NotifyStateChanged();
     }
 

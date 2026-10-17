@@ -1285,6 +1285,7 @@ Everything lives next to the bot's executable:
 | `recordings\` | Only with `SaveRecordings` on. One WAV per transmission, roughly 100 KB per second of speech. |
 | `Backup\` | Automatic timestamped copies made before any automatic change. |
 | `grpc-dumps\` | JSON results saved from the mission data explorer. |
+| `Profiles\` | Saved `config.json` variants, one file per profile. Written and read by the config editor's CH10 only — the bot never looks in here. See [the editor's guide](gui.md#ch10--profiles). |
 
 **Neither folder grows forever.** At start and once an hour the bot deletes its own old files: recordings after `RecordingRetentionDays` (7) or once `recordings\` passes `RecordingRetentionMaxMb` (500), logs after `LogRetentionDays` (30) or `LogRetentionMaxMb` (200). Age first, then size: what survives the age limit is trimmed oldest-first until the folder fits. The three newest log files are never deleted whatever the limits say, so a 1 MB budget set by mistake cannot delete the log being written to. Set a limit to `0` to switch it off. Every deletion is logged with its reason:
 
@@ -1297,6 +1298,10 @@ Nothing else is ever touched — only `*.wav` in `recordings\` and `*.log` in `l
 The log is the first place to look when something is off. A healthy startup looks roughly like this:
 
 ```
+Settings read from: K:\Darkstar\BOT_SRS
+  config.json      7.8 kB, last changed 2026-10-17 11:04:02
+  phrases.json     412 bytes, last changed 2026-09-02 19:33:10
+  vocabulary.json  96 bytes, last changed 2026-09-02 19:33:10
 N fixed reply phrase(s) loaded from phrases.json.
 Wake word detection active (Vosk, offline), 2 radio(s):
   251.000 MHz (AM): wake word "Overlord", callsign "Overlord"
@@ -1388,6 +1393,7 @@ A reconnect does **not** produce a burst of tune-in greetings: the bot still kno
 
 | Symptom | Likely cause and fix |
 |---|---|
+| **A setting is plainly filled in, but the log says it is empty** | The bot is reading a different `config.json`. It resolves the file against its own `.exe` folder — a Windows Service would otherwise look in `C:\Windows\System32` — and says so at startup: `Settings read from: …`, followed by each file's size and when it was last changed. If that is not the file you edited, edit the one named there. A second copy turns up easily: a `bin\Debug\net8.0` build beside the repository, an old installation beside a new one, or a config the editor found by searching upward (it shows its own folder as *Loaded from …*). A `last changed` date from weeks ago when you saved a minute ago means the same thing. Every validation warning carries the full path for this reason. |
 | **Bot stops right after starting, log says "the wake word model could not be loaded"** | The folder in `VoskModelPath` is missing or doesn't hold a Vosk model. The log names the folder and what to do; a model folder contains `am\`, `conf\`, `graph\` and `ivector\`. After a `-slim` install the model has to be downloaded separately. |
 | **Bot doesn't appear in the SRS client list** | Wrong `SrsHost`/`SrsPort`, server not running, or firewall. Check the log for the connection line. |
 | **Bot answers the wrong request when it didn't understand you** | A trigger phrase is sitting in `vocabulary.json` — see [5.3](#53-vocabularyjson). The bot warns about this at startup and the config editor marks it in red. The `[STT]` line in the log shows what was actually transcribed, and the `[Intel]` line below it names the trigger that fired. |

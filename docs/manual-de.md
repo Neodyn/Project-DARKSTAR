@@ -1287,6 +1287,7 @@ Alles liegt neben der EXE des Bots:
 | `recordings\` | Nur mit aktivem `SaveRecordings`. Eine WAV pro Aussendung, etwa 100 KB pro Sekunde Sprache. |
 | `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung. |
 | `grpc-dumps\` | Gespeicherte JSON-Ergebnisse aus dem Missionsdaten-Explorer. |
+| `Profiles\` | Gespeicherte `config.json`-Varianten, eine Datei je Profil. Wird nur von CH10 des Konfigurationseditors geschrieben und gelesen — der Bot sieht hier nie hinein. Siehe [die Anleitung zum Editor](gui.md#ch10--profiles). |
 
 **Keiner der beiden Ordner wächst unbegrenzt.** Beim Start und einmal pro Stunde löscht der Bot seine eigenen alten Dateien: Aufnahmen nach `RecordingRetentionDays` (7) oder sobald `recordings\` über `RecordingRetentionMaxMb` (500) liegt, Logs nach `LogRetentionDays` (30) bzw. `LogRetentionMaxMb` (200). Erst das Alter, dann die Größe: Was das Alterslimit überlebt, wird von den ältesten Dateien her gekürzt, bis der Ordner passt. Die drei neuesten Logdateien werden nie gelöscht, egal was die Limits sagen — ein versehentlich gesetztes 1-MB-Budget kann also nicht das Log löschen, in das gerade geschrieben wird. Ein Limit auf `0` schaltet es ab. Jede Löschung steht mit Begründung im Log:
 
@@ -1299,6 +1300,10 @@ Angetastet wird sonst nichts — nur `*.wav` in `recordings\` und `*.log` in `lo
 Das Log ist die erste Anlaufstelle, wenn etwas klemmt. Ein gesunder Start sieht ungefähr so aus:
 
 ```
+Settings read from: K:\Darkstar\BOT_SRS
+  config.json      7.8 kB, last changed 2026-10-17 11:04:02
+  phrases.json     412 bytes, last changed 2026-09-02 19:33:10
+  vocabulary.json  96 bytes, last changed 2026-09-02 19:33:10
 N fixed reply phrase(s) loaded from phrases.json.
 Wake word detection active (Vosk, offline), 2 radio(s):
   251.000 MHz (AM): wake word "Overlord", callsign "Overlord"
@@ -1391,6 +1396,7 @@ Ein Reconnect löst **keine** Welle von Begrüßungen aus: der Bot weiß weiterh
 
 | Symptom | Wahrscheinliche Ursache und Abhilfe |
 |---|---|
+| **Eine Einstellung ist sichtbar gefüllt, das Log nennt sie trotzdem leer** | Der Bot liest eine andere `config.json`. Er sucht die Datei im Ordner seiner eigenen `.exe` — ein Windows-Dienst würde sonst in `C:\Windows\System32` nachsehen — und sagt beim Start, welche: `Settings read from: …`, darunter je Datei Größe und Zeitpunkt der letzten Änderung. Steht dort nicht die Datei, die du bearbeitet hast, dann bearbeite die dort genannte. Eine zweite Kopie entsteht leicht: ein `bin\Debug\net8.0`-Build neben dem Repository, eine alte Installation neben einer neuen, oder eine Config, die der Editor durch Suche nach oben gefunden hat (er zeigt seinen Ordner als *Loaded from …*). Ein `last changed` von vor Wochen, obwohl du gerade gespeichert hast, bedeutet dasselbe. Darum trägt jede Prüfwarnung den vollen Pfad. |
 | **Bot beendet sich gleich nach dem Start, im Log steht „the wake word model could not be loaded"** | Der Ordner in `VoskModelPath` fehlt oder enthält kein Vosk-Modell. Das Log nennt den Ordner und was zu tun ist; ein Modellordner enthält `am\`, `conf\`, `graph\` und `ivector\`. Nach einer `-slim`-Installation muss das Modell separat geladen werden. |
 | **Bot erscheint nicht in der SRS-Clientliste** | Falscher `SrsHost`/`SrsPort`, Server läuft nicht, oder Firewall. Verbindungszeile im Log prüfen. |
 | **Bot beantwortet die falsche Anfrage, wenn er dich nicht verstanden hat** | Eine Auslösephrase steht in `vocabulary.json` — siehe [5.3](#53-vocabularyjson). Der Bot warnt beim Start davor, der Konfigurationseditor markiert es rot. Die `[STT]`-Zeile im Log zeigt, was tatsächlich transkribiert wurde, die `[Intel]`-Zeile darunter nennt die Auslösephrase, die gegriffen hat. |
