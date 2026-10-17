@@ -54,9 +54,15 @@ internal static class CallCatalogTests
 
         // The radio check is the one call whose entire purpose is working when nothing else does,
         // so it survives a radio with every feature switched off - and on such a radio it is the
-        // only thing in the menu.
+        // only thing in the MENU. "Say again" survives too, because repeating the last reply needs
+        // no feature at all, but it is a spoken call and never a menu entry.
+        var menuWithNothingOn = offeredWithNothingOn.Where(CallCatalog.MenuOffers).ToList();
         Check("a radio with no roles still offers the radio check",
-            offeredWithNothingOn.Count == 1 && offeredWithNothingOn[0].Kind == CallKind.RadioCheck,
+            menuWithNothingOn.Count == 1 && menuWithNothingOn[0].Kind == CallKind.RadioCheck,
+            string.Join(", ", menuWithNothingOn.Select(c => c.Id)));
+
+        Check("and \"say again\" works on it too, as a spoken call",
+            offeredWithNothingOn.Any(c => c.Kind == CallKind.SayAgain),
             string.Join(", ", offeredWithNothingOn.Select(c => c.Id)));
 
         var tacticalOnly = new CallContext { TacticalAvailable = true };
@@ -66,8 +72,10 @@ internal static class CallCatalogTests
         var airfieldOnly = new CallContext { AirfieldAvailable = true };
         Check("an airfield radio offers no tactical calls",
             CallCatalog.Available(airfieldOnly).All(c => c.Capability != RadioCapability.Tactical));
-        Check("an airfield radio offers the runway and the ATIS",
-            CallCatalog.Available(airfieldOnly).Count(c => c.Capability == RadioCapability.Airfield) == 2);
+        Check("an airfield radio offers the runway, the ATIS and the divert",
+            CallCatalog.Available(airfieldOnly).Count(c => c.Capability == RadioCapability.Airfield) == 3,
+            string.Join(", ", CallCatalog.Available(airfieldOnly)
+                .Where(c => c.Capability == RadioCapability.Airfield).Select(c => c.Id)));
 
         // A friendly position needs a pilot's name, and a menu entry carries no argument. It has to
         // stay out rather than appear and then ask "which aircraft?" over a shared frequency.
@@ -162,6 +170,25 @@ internal static class CallCatalogTests
         Check("with nothing to prioritise, the declared order is kept",
             string.Join(",", CallCatalog.Available(allQuiet).Select(c => c.Id)) == string.Join(",", declared),
             string.Join(",", CallCatalog.Available(allQuiet).Select(c => c.Id)));
+
+        Section("Calls that carry a number, or per-pilot bookkeeping, stay spoken");
+
+        // A declare carries a point and a spike carries a bearing; neither fits in a menu entry.
+        // Check in, check out and say again are kept per pilot under their SRS name, while an F10
+        // click identifies a DCS group - the same reason the threat circle is spoken-only.
+        foreach (var kind in new[] { CallKind.Declare, CallKind.Spike, CallKind.CheckIn,
+                                     CallKind.CheckOut, CallKind.SayAgain })
+        {
+            var call = CallCatalog.All.First(c => c.Kind == kind);
+            Check($"{call.Id} is not a menu entry", !CallCatalog.MenuOffers(call));
+            Check($"{call.Id} is still in the catalogue with an example to say",
+                !string.IsNullOrWhiteSpace(call.SpokenExample));
+        }
+
+        // The divert needs nothing said out loud, so it does belong in the menu - it is the one
+        // of the new calls a pilot can click.
+        Check("the divert is a menu entry",
+            CallCatalog.MenuOffers(CallCatalog.All.First(c => c.Kind == CallKind.Divert)));
 
         Section("The call id survives the round trip through DCS");
 

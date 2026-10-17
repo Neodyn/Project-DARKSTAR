@@ -285,7 +285,20 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reports the caller's *own* position from the bullseye. Answered before the contact query, so it still works when the sensor source is unusable. |
-| `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check when the caller cannot be matched to a unit. |
+| `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check, declare from own position, spike or divert when the caller cannot be matched to a unit. |
+
+### Declare and spike
+
+Both ask about one named piece of sky rather than about whatever is nearest, so both are answered before the range filter and before the "clean" shortcut — a declare at bullseye 030 for 45 can be a hundred miles from the pilot, and `DcsIntelMaxRangeNm` would quietly empty the answer.
+
+| Field | Default | Description |
+|---|---|---|
+| `DcsIntelDeclareTriggers` | `["declare"]` | *"Declare bullseye zero three zero for four five."* Answers **hostile**, **friendly**, **furball** or **clean** for what sits within 5 NM of that point. Say "bullseye" and the point is measured from the bullseye; leave it out and it is measured from the caller's own aircraft. Spoken digits are understood, including "for" as the joiner ("zero three zero **for** four five") and ranges said as words ("forty five"). |
+| `DcsIntelDeclareNoPointReply` | `"Say declare with bullseye bearing and range."` | When no bearing and range could be read out of the transmission. A "say again" beats a confident verdict about a guessed point. |
+| `DcsIntelSpikeTriggers` | `["spike", "spiked", "nails"]` | *"Spike two seven zero."* Names the nearest contact within 15° either side of that bearing, measured from the caller's aircraft — and says **buddy spike** when the nearest thing out there is one of ours. Nothing on that bearing is answered as *"clean on bearing … , no contact known"*, which is not the same claim as "nothing is there". |
+| `DcsIntelSpikeNoBearingReply` | `"Say your spike bearing."` | When the transmission carried no bearing. |
+
+**What a furball depends on.** The verdict needs our own side as well as the enemy's, which is a second contact query with the other coalition. If that query cannot be read — an AWACS-only contact source has no detection table for friendlies — the reply adds *"unable to check friendlies"* rather than reporting "hostile" about a point that may have friendlies sitting on it.
 
 ### Standard replies
 
@@ -361,6 +374,34 @@ The reply is built by `BuildFriendlyPosition`, measuring from the caller's aircr
 | `DcsAirfieldUnknownReply` | `"Say the airfield you want conditions for."` | When no airfield was named and the pilot couldn't be located. |
 | `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | When the airfield data couldn't be read at all. |
 
+### Divert
+
+*"Vector to nearest."* Bearing, range and field elevation to somewhere to land. Answered before the weather query, so it still works when the conditions are the thing that is broken — which is when somebody is asking.
+
+| Field | Default | Description |
+|---|---|---|
+| `DcsAirfieldVectorTriggers` | `["vector to nearest", "nearest airfield", "closest airfield", "divert", "vector home"]` | Checked **before** the ATIS and runway triggers: a pilot asking where to land does not want the weather, and a divert call often mentions a runway. |
+| `DcsAirfieldVectorCount` | `2` | How many airfields to offer. One is an answer; two gives a choice when the nearest field is behind the pilot. Naming a field in the request answers that one alone. |
+| `DcsAirfieldNoVectorReply` | `"Negative, no airfield in range."` | When the nearest field is beyond `DcsAirfieldMaxDistanceNm`. A field the pilot named by name is answered regardless of distance — they asked for it. |
+
+**No TACAN and no tower frequency.** DCS-gRPC does not expose either, and the bot does not invent them: a made-up channel sends a pilot who is already in trouble to tune a dead radio. Bearing, range and elevation are real data and are all that is given. The field elevation is spoken for the nearest option only — a pilot choosing between two fields wants the two bearings, and the second elevation is noise at that point.
+
+### Check in, check out, say again
+
+Three calls about the pilot rather than about the enemy. None of them touch DCS, which is why they are answered before the tactical service is even consulted — a pilot asking for a repeat most often does so when something else is already broken. All three are spoken calls and never F10 entries: they are kept per pilot under their SRS name, while an F10 click identifies a DCS group. The menu makes a repeat largely moot anyway — a pilot who missed a reply can click the same entry again.
+
+| Field | Default | Description |
+|---|---|---|
+| `DcsIntelSayAgainTriggers` | `["say again", "repeat last", "repeat that"]` | Repeats the last thing **this** pilot was told — any reply, not only a tactical one, because the calls most often missed are the long ones and the longest is the ATIS. Answered on every radio. Repeating does not clear the slot: a pilot who missed it once may miss the repeat. |
+| `DcsIntelNothingToRepeatReply` | `"Negative, nothing to repeat."` | When nothing is on file for that pilot. |
+| `DcsIntelCheckInTriggers` | `["check in", "checking in", "on station"]` | Coming on station. Answered on a radio that provides a tactical service. |
+| `DcsIntelCheckOutTriggers` | `["check out", "checking out", "off station", "returning to base"]` | Going off station. Also drops any threat circle running for that pilot on that radio, rather than leaving a watch sweeping for an aircraft whose pilot has said goodbye. |
+| `DcsIntelCheckInReply` | `"{pilot}, radar contact, cleared into the area."` | `{pilot}` is replaced by the caller's name. With no name known, the placeholder and the comma after it are both removed. |
+| `DcsIntelCheckOutReply` | `"{pilot}, radar service terminated, good day."` | |
+| `DcsIntelCheckInGatesCalls` | `false` | When `true`, the bot's **unprompted** calls — the threat circle warning, which is the only one — go only to pilots who have checked in. Off by default: a pilot who never learns the phrase would otherwise lose a warning they used to get, and lose it silently. Asking for a threat circle counts as checking in, so the request cannot be accepted and then ignored. |
+
+At most 200 pilots are kept on file. A server running for weeks cycles through names all evening, and the oldest entry goes when the cap is reached — whoever has not spoken for longest is the one least likely to ask for a repeat next.
+
 ### The F10 menu
 
 The same calls, picked from the DCS F10 menu instead of spoken. For the pilot whose accent, cockpit noise or missed wake word means the radio route does not work — and nothing is installed on their machine: the menu is built over the DCS-gRPC connection the tactical replies already use.
@@ -370,6 +411,8 @@ The same calls, picked from the DCS F10 menu instead of spoken. For the pilot wh
 | `F10MenuEnabled` | `false` | Master switch. Needs `DcsGrpcEnabled`; with it off the bot says so at startup and builds nothing. |
 | `F10MenuRootName` | `"Darkstar"` | The entry everything hangs under. One root means one removal clears the lot, which is what stops a slot change leaving a second stale menu behind. |
 | `F10ReplyMode` | `"Both"` | `Radio` transmits over SRS like a spoken call, `Text` puts it on screen for that flight, `Both` does each. |
+| `F10EchoEnabled` | `true` | Reads the call back in a second voice before the answer: *"Overlord, Punch 1-1, bogey dope."* A click is silent on the frequency, so without it the other pilots hear an answer to a question nobody asked — which on a shared frequency reads as a call to somebody else. Only applies when the reply goes over the radio at all; with `F10ReplyMode` set to `Text` there is nothing to clarify. On by default, and since the menu itself is off by default no existing setup changes by upgrading. |
+| `F10EchoVoice` | `""` | Which voice speaks the pilot's half. Empty picks one: a voice of a different gender from the radio's where the machine has one, otherwise simply a different one. A name typed here is used as given, including deliberately the same voice on both sides. With only one voice installed the read-back switches itself off and logs why — both halves in one voice sounds like the controller answering themselves. |
 | `F10TextSeconds` | `20` | How long an on-screen answer stays up. |
 | `F10MenuMaxGroups` | `24` | How many flights may hold a menu at once. A flight that already has one is never pushed out by the cap. |
 | `F10MenuRefreshSeconds` | `20` | Seconds between sweeps. |

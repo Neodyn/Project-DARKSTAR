@@ -262,10 +262,80 @@ public sealed class AppConfig
     };
 
     /// <summary>
+    /// Phrases that ask what sits at a named point: "declare bullseye zero three zero for four
+    /// five". The answer is hostile, friendly, furball, neutral or clean.
+    /// </summary>
+    public List<string> DcsIntelDeclareTriggers { get; set; } = new()
+    {
+        "declare"
+    };
+
+    /// <summary>
+    /// Phrases that report a radar warning on a bearing: "spike two seven zero". The answer names
+    /// what is out there, including "buddy spike" when it is one of our own.
+    /// </summary>
+    public List<string> DcsIntelSpikeTriggers { get; set; } = new()
+    {
+        "spike", "spiked", "nails"
+    };
+
+    /// <summary>
+    /// Phrases that ask for a steer to the nearest airfield: "vector to nearest", "divert".
+    /// Answered with bearing, range and the field's elevation - never a TACAN channel or a tower
+    /// frequency, because DCS-gRPC does not expose those and inventing them is worse than
+    /// leaving them out.
+    /// </summary>
+    public List<string> DcsAirfieldVectorTriggers { get; set; } = new()
+    {
+        "vector to nearest", "nearest airfield", "closest airfield", "divert", "vector home"
+    };
+
+    /// <summary>
     /// Phrases that force positions to be given from the bullseye even when the bot could give
     /// BRAA from the pilot's own aircraft (e.g. "bogey dope bullseye").
     /// </summary>
     public List<string> DcsIntelBullseyeTriggers { get; set; } = new() { "bullseye" };
+
+    /// <summary>How many airfields a divert call offers. One is the answer; three gives a choice.</summary>
+    public int DcsAirfieldVectorCount { get; set; } = 2;
+
+    /// <summary>
+    /// Phrases a pilot uses to come on station, and to leave it. Checking in is a courtesy on a
+    /// real net; here it also decides who gets spoken to unprompted, if
+    /// <see cref="DcsIntelCheckInGatesCalls"/> is on.
+    /// </summary>
+    public List<string> DcsIntelCheckInTriggers { get; set; } = new()
+    {
+        "check in", "checking in", "on station"
+    };
+
+    /// <summary>Phrases a pilot uses to go off station.</summary>
+    public List<string> DcsIntelCheckOutTriggers { get; set; } = new()
+    {
+        "check out", "checking out", "off station", "returning to base"
+    };
+
+    /// <summary>
+    /// When true, the bot only makes unprompted calls - threat circle warnings - to pilots who
+    /// have checked in. Off by default: a pilot who never learns the phrase would otherwise lose
+    /// a warning they used to get, and silently.
+    /// </summary>
+    public bool DcsIntelCheckInGatesCalls { get; set; } = false;
+
+    /// <summary>Phrases that ask for the last reply again.</summary>
+    public List<string> DcsIntelSayAgainTriggers { get; set; } = new()
+    {
+        "say again", "repeat last", "repeat that"
+    };
+
+    /// <summary>What a pilot hears when they check in.</summary>
+    public string DcsIntelCheckInReply { get; set; } = "{pilot}, radar contact, cleared into the area.";
+
+    /// <summary>What a pilot hears when they check out.</summary>
+    public string DcsIntelCheckOutReply { get; set; } = "{pilot}, radar service terminated, good day.";
+
+    /// <summary>What a pilot hears when there is nothing to repeat.</summary>
+    public string DcsIntelNothingToRepeatReply { get; set; } = "Negative, nothing to repeat.";
 
     /// <summary>
     /// Lets a pilot request a standing threat watch ("Overlord, threat circle forty miles"): the
@@ -527,6 +597,15 @@ public sealed class AppConfig
     /// <summary>Reply when no hostile aircraft match the filters.</summary>
     public string DcsIntelNoContactsReply { get; set; } = "Picture clean.";
 
+    /// <summary>Reply when a declare arrives without a point the bot can read.</summary>
+    public string DcsIntelDeclareNoPointReply { get; set; } = "Say declare with bullseye bearing and range.";
+
+    /// <summary>Reply when a spike arrives without a bearing.</summary>
+    public string DcsIntelSpikeNoBearingReply { get; set; } = "Say your spike bearing.";
+
+    /// <summary>Reply when a divert call finds no airfield within range.</summary>
+    public string DcsAirfieldNoVectorReply { get; set; } = "Negative, no airfield in range.";
+
     /// <summary>
     /// What the bot says when it could not make out the transmission at all - no speech in the
     /// audio, or nothing the transcriber could turn into words.
@@ -655,6 +734,29 @@ public sealed class AppConfig
     /// a bearing and a range read once is the thing people miss.
     /// </summary>
     public int F10TextSeconds { get; set; } = 20;
+
+    /// <summary>
+    /// Whether a menu click is read back in a second voice before the answer goes out.
+    ///
+    /// A spoken request is already audible to everybody on the frequency. A click is not, so
+    /// without this the other pilots hear an answer to a question they never heard - which on a
+    /// shared frequency reads as a call to somebody else. On by default, because the F10 menu is
+    /// itself off by default: nobody's existing setup changes by upgrading.
+    ///
+    /// Only applies when the answer goes out over the radio at all - with
+    /// <see cref="F10ReplyMode"/> set to <c>Text</c> there is nothing for a read-back to clarify.
+    /// </summary>
+    public bool F10EchoEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The voice that speaks the pilot's half. Empty picks one automatically: a voice of a
+    /// different gender from the radio's where the machine has one, otherwise simply a different
+    /// voice. With only one voice installed the read-back switches itself off and says so once -
+    /// both halves in the same voice would be worse than none.
+    /// </summary>
+    public string F10EchoVoice { get; set; } = "";
+
+
 
     /// <summary>
     /// Which engine turns a transmission into text. <c>"Gemini"</c> (the default, and what every
@@ -894,12 +996,6 @@ public sealed class AppConfig
     }
 
     /// <summary>
-    /// Checks whether configPath exists. If not: creates a default configuration there and
-    /// returns null (signal to Program.cs to exit). If the file exists: loads, validates, and
-    /// returns it. Any problem found (broken JSON, unknown leftover fields, out-of-range values)
-    /// is written to the log (console + logs/ file) so it's never silently swallowed.
-    /// </summary>
-    /// <summary>
     /// Writes this config back to configPath, backing up the previous version first (see
     /// BackupUtils). Used by the GUI editor when the user saves changes - the bot service itself
     /// never calls this directly (it only ever reads config.json, except for the automatic
@@ -926,6 +1022,12 @@ public sealed class AppConfig
         return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(configPath), JsonOptions);
     }
 
+    /// <summary>
+    /// Checks whether configPath exists. If not: creates a default configuration there and
+    /// returns null (signal to Program.cs to exit). If the file exists: loads, validates, and
+    /// returns it. Any problem found (broken JSON, unknown leftover fields, out-of-range values)
+    /// is written to the log (console + logs/ file) so it's never silently swallowed.
+    /// </summary>
     public static AppConfig? LoadOrCreateDefault(string configPath)
     {
         if (!File.Exists(configPath))
@@ -1008,12 +1110,6 @@ public sealed class AppConfig
     }
 
     /// <summary>
-    /// Sanity-checks the loaded values and logs a warning for anything that looks wrong (out of
-    /// range, missing required paths, etc.). This never changes the config or stops the bot -
-    /// it just makes misconfiguration visible in the log instead of failing silently later
-    /// (e.g. a bad SrsPort just leading to "connection refused" with no obvious cause).
-    /// </summary>
-    /// <summary>
     /// Every trigger phrase that also sits in vocabulary.json. That combination is a trap: the
     /// transcriber is told to snap anything that merely SOUNDS like a vocabulary term onto its
     /// exact spelling - which is the whole point of the hints - and it does that to unintelligible
@@ -1035,6 +1131,12 @@ public sealed class AppConfig
         Add(config.DcsIntelBogeyDopeTriggers);
         Add(config.DcsIntelPictureTriggers);
         Add(config.DcsIntelThreatTriggers);
+        Add(config.DcsIntelDeclareTriggers);
+        Add(config.DcsIntelSpikeTriggers);
+        Add(config.DcsAirfieldVectorTriggers);
+        Add(config.DcsIntelCheckInTriggers);
+        Add(config.DcsIntelCheckOutTriggers);
+        Add(config.DcsIntelSayAgainTriggers);
         Add(config.DcsIntelBullseyeTriggers);
         Add(config.DcsIntelThreatCircleTriggers);
         Add(config.DcsIntelThreatCircleCancelTriggers);
@@ -1060,6 +1162,12 @@ public sealed class AppConfig
         Logger.Log("  keep only proper nouns there, such as callsigns, aircraft types and map names.");
     }
 
+    /// <summary>
+    /// Sanity-checks the loaded values and logs a warning for anything that looks wrong (out of
+    /// range, missing required paths, etc.). This never changes the config or stops the bot -
+    /// it just makes misconfiguration visible in the log instead of failing silently later
+    /// (e.g. a bad SrsPort just leading to "connection refused" with no obvious cause).
+    /// </summary>
     private static void ValidateValues(AppConfig config) =>
         ValidateValues(config, message => Logger.Log($"WARNING: config.json - {message}"));
 

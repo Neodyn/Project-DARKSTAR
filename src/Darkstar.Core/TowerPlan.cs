@@ -124,11 +124,6 @@ public static class TowerPlan
     }
 
     /// <summary>
-    /// "Batumi Tower". Uses the prettier name DCS supplies where there is one, and strips the
-    /// hyphenated second half of names like "Senaki-Kolkhi" - a callsign is spoken on every reply,
-    /// and the short form is what a controller would actually say.
-    /// </summary>
-    /// <summary>
     /// A frequency in MHz the way it is written everywhere else in this project: "133.000", with a
     /// dot, whatever the operator's Windows is set to. These notes are shown in the config editor
     /// next to the frequency fields and are copied into radio entries from there, so a comma would
@@ -137,6 +132,11 @@ public static class TowerPlan
     private static string Mhz(double megahertz) =>
         megahertz.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// "Batumi Tower". Uses the prettier name DCS supplies where there is one, and strips the
+    /// hyphenated second half of names like "Senaki-Kolkhi" - a callsign is spoken on every reply,
+    /// and the short form is what a controller would actually say.
+    /// </summary>
     public static string CallsignFor(Airfield airfield, string? suffix)
     {
         var name = string.IsNullOrWhiteSpace(airfield.DisplayName) ? airfield.Name : airfield.DisplayName;

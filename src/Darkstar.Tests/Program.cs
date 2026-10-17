@@ -67,6 +67,22 @@ Console.WriteLine("======== The call catalogue and the F10 menu ========");
 CallCatalogTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== Declare, spike, formations, fill-ins ========");
+TacticalCallTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== Check in, say again, divert ========");
+RosterAndDivertTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The pilot read-back on a menu click ========");
+PilotEchoTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== What the bot knows about its own listening ========");
+SpeechQualityTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== Housekeeping, requests, documentation ========");
 await HousekeepingTests.RunAsync();
 

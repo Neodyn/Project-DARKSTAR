@@ -41,9 +41,13 @@ public static class PhraseBook
     /// </remarks>
     public static List<PhraseEntry> DefaultPhrases() => new()
     {
-        new() { Trigger = "say again", Response = "Copy, say again your last transmission." },
         new() { Trigger = "status", Response = "All systems nominal." },
-        new() { Trigger = "check in", Response = "Copy your check-in." },
+        // No "say again" or "check in" entry either, and for the same reason as the radio check:
+        // the bot now does both properly - a real repeat of that pilot's last reply, and a roster
+        // entry that decides whether unprompted calls reach them. The canned sentences were
+        // stand-ins for a feature that did not exist, and "Copy, say again your last
+        // transmission" in answer to "say again" is the one reply that cannot be what was wanted.
+        // An entry added here still takes priority, for anyone who wants their own wording.
         new() { Trigger = "request weather", Response = "Weather is clear, visibility unrestricted." },
         new() { Trigger = "request rtb", Response = "Copy, cleared to RTB." },
         new() { Trigger = "requesting rtb", Response = "Copy, cleared to RTB." },

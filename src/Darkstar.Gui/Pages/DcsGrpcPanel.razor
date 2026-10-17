@@ -201,6 +201,104 @@
 
     <div class="row2">
         <div class="field">
+            <label>DECLARE TRIGGERS</label>
+            <input type="text" @bind="DeclareTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                "Overlord, declare bullseye zero three zero for four five." Says what sits at that
+                point: <em>hostile</em>, <em>friendly</em>, <em>furball</em> or <em>clean</em>. Say
+                "bullseye" and the point is measured from the bullseye; leave it out and it is
+                measured from your own aircraft.
+            </div>
+        </div>
+        <div class="field">
+            <label>SPIKE TRIGGERS</label>
+            <input type="text" @bind="SpikeTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                "Overlord, spike two seven zero." Names the nearest contact within
+                @($"{TacticalCalls.SpikeConeDegrees:0}")° of that bearing, and says
+                <em>buddy spike</em> when it turns out to be one of ours.
+            </div>
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <label>REPLY WHEN A DECLARE HAS NO POINT</label>
+            <input type="text" @bind="Store.Config.DcsIntelDeclareNoPointReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                Used when no bearing and range could be read out of the transmission. Better than a
+                verdict about a point the bot had to guess.
+            </div>
+        </div>
+        <div class="field">
+            <label>REPLY WHEN A SPIKE HAS NO BEARING</label>
+            <input type="text" @bind="Store.Config.DcsIntelSpikeNoBearingReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <label>CHECK IN TRIGGERS</label>
+            <input type="text" @bind="CheckInTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                "Overlord, Punch 1-1 checking in." A courtesy on a real net — and here the switch
+                for the bot's unprompted calls, if the box below is ticked.
+            </div>
+        </div>
+        <div class="field">
+            <label>CHECK OUT TRIGGERS</label>
+            <input type="text" @bind="CheckOutTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                Going off station also drops any threat circle running for that pilot on that radio.
+            </div>
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <label>CHECK IN REPLY</label>
+            <input type="text" @bind="Store.Config.DcsIntelCheckInReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint"><code>{pilot}</code> is replaced by the caller's name.</div>
+        </div>
+        <div class="field">
+            <label>CHECK OUT REPLY</label>
+            <input type="text" @bind="Store.Config.DcsIntelCheckOutReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <div class="check">
+                <input type="checkbox" id="checkInGate" @bind="Store.Config.DcsIntelCheckInGatesCalls"
+                       disabled="@(!Store.Config.DcsIntelEnabled)" />
+                <label for="checkInGate">ONLY CALL PILOTS WHO HAVE CHECKED IN</label>
+            </div>
+            <div class="hint">
+                Applies to the bot's one unprompted transmission, the threat circle warning. Off by
+                default: a pilot who never learns the phrase would otherwise lose a warning they
+                used to get, and lose it silently. Asking for a threat circle counts as checking in.
+            </div>
+        </div>
+        <div class="field">
+            <label>SAY AGAIN TRIGGERS</label>
+            <input type="text" @bind="SayAgainTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
+            <div class="hint">
+                Repeats the last thing this pilot was told — any reply, not only a tactical one.
+                Answered on every radio, and without touching DCS at all.
+            </div>
+        </div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
+            <label>REPLY WHEN THERE IS NOTHING TO REPEAT</label>
+            <input type="text" @bind="Store.Config.DcsIntelNothingToRepeatReply" disabled="@(!Store.Config.DcsIntelEnabled)" />
+        </div>
+        <div class="field"></div>
+    </div>
+
+    <div class="row2">
+        <div class="field">
             <label>ALPHA CHECK TRIGGERS</label>
             <input type="text" @bind="AlphaCheckTriggers" disabled="@(!Store.Config.DcsIntelEnabled)" />
             <div class="hint">
@@ -462,8 +560,42 @@
                 <div class="field">
                     <label>ATIS TRIGGERS</label>
                     <input type="text" @bind="AirfieldAtisTriggers" />
-                    <div class="hint">Checked first — the fuller answer wins.</div>
+                    <div class="hint">The fuller answer wins over the runway triggers.</div>
                 </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>DIVERT TRIGGERS</label>
+                    <input type="text" @bind="AirfieldVectorTriggers" />
+                    <div class="hint">
+                        "Overlord, vector to nearest." Answers with bearing, range and field
+                        elevation — checked before the ATIS triggers, because a pilot asking where
+                        to land does not want the weather. No TACAN channel and no tower frequency:
+                        DCS-gRPC does not expose them, and a made-up one sends a pilot who is
+                        already in trouble to tune a dead radio.
+                    </div>
+                </div>
+                <div class="field">
+                    <label>HOW MANY AIRFIELDS TO OFFER</label>
+                    <input type="number" step="1" min="1" max="5" @bind="Store.Config.DcsAirfieldVectorCount" />
+                    <div class="hint">
+                        One is an answer; two gives a choice when the nearest field is behind you.
+                        The field elevation is only given for the nearest.
+                    </div>
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <label>REPLY WHEN NO AIRFIELD IS IN RANGE</label>
+                    <input type="text" @bind="Store.Config.DcsAirfieldNoVectorReply" />
+                    <div class="hint">
+                        Bounded by the maximum distance below. A field the pilot named by its own
+                        name is answered regardless of how far away it is.
+                    </div>
+                </div>
+                <div class="field"></div>
             </div>
 
             <div class="field" style="max-width:460px">
@@ -594,6 +726,32 @@
                 <div class="field">
                     <label>ON-SCREEN TEXT (SECONDS)</label>
                     <input type="number" min="5" @bind="Store.Config.F10TextSeconds" />
+                </div>
+            </div>
+
+            <div class="row2">
+                <div class="field">
+                    <div class="check">
+                        <input type="checkbox" id="f10Echo" @bind="Store.Config.F10EchoEnabled" />
+                        <label for="f10Echo">READ THE CALL BACK IN A PILOT VOICE</label>
+                    </div>
+                    <div class="hint">
+                        A click is silent on the frequency, so without this the other pilots hear an
+                        answer to a question nobody asked. With it, the call goes out first in a second
+                        voice — <em>"Overlord, Punch 1-1, bogey dope."</em> — and the answer follows.
+                        Only when the reply goes over the radio at all.
+                    </div>
+                </div>
+                <div class="field">
+                    <label>PILOT VOICE</label>
+                    <input type="text" list="tts-voices" @bind="Store.Config.F10EchoVoice"
+                           placeholder="automatic" disabled="@(!Store.Config.F10EchoEnabled)" />
+                    <div class="hint">
+                        Empty picks one: a voice of a different gender from the radio's where this
+                        machine has one, otherwise simply a different one. With only one voice installed
+                        the read-back switches itself off and says so in the log — both halves in the
+                        same voice sounds like the controller answering themselves.
+                    </div>
                 </div>
             </div>
 
@@ -800,6 +958,13 @@ else
         </div>
     </div>
 
+    <datalist id="tts-voices">
+        @foreach (var voice in Store.TtsVoiceList)
+        {
+            <option value="@voice.Name">@voice.Describe()</option>
+        }
+    </datalist>
+
     <datalist id="grpc-names">
         @foreach (var n in _knownNames)
         {
@@ -904,6 +1069,36 @@ else
         set => Store.Config.DcsIntelThreatTriggers = SplitTriggers(value);
     }
 
+    private string DeclareTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelDeclareTriggers);
+        set => Store.Config.DcsIntelDeclareTriggers = SplitTriggers(value);
+    }
+
+    private string SpikeTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelSpikeTriggers);
+        set => Store.Config.DcsIntelSpikeTriggers = SplitTriggers(value);
+    }
+
+    private string CheckInTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelCheckInTriggers);
+        set => Store.Config.DcsIntelCheckInTriggers = SplitTriggers(value);
+    }
+
+    private string CheckOutTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelCheckOutTriggers);
+        set => Store.Config.DcsIntelCheckOutTriggers = SplitTriggers(value);
+    }
+
+    private string SayAgainTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsIntelSayAgainTriggers);
+        set => Store.Config.DcsIntelSayAgainTriggers = SplitTriggers(value);
+    }
+
     private bool ThreatCircleDisabled => !Store.Config.DcsIntelEnabled || !Store.Config.DcsIntelThreatCircleEnabled;
 
     private bool FriendlyDisabled => !Store.Config.DcsIntelEnabled || !Store.Config.DcsIntelFriendlyPositionEnabled;
@@ -936,6 +1131,12 @@ else
     {
         get => string.Join(", ", Store.Config.DcsAirfieldAtisTriggers);
         set => Store.Config.DcsAirfieldAtisTriggers = SplitTriggers(value);
+    }
+
+    private string AirfieldVectorTriggers
+    {
+        get => string.Join(", ", Store.Config.DcsAirfieldVectorTriggers);
+        set => Store.Config.DcsAirfieldVectorTriggers = SplitTriggers(value);
     }
 
     private static List<string> SplitTriggers(string value) =>

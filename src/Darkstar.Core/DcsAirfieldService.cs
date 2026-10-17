@@ -129,6 +129,11 @@ public sealed class DcsAirfieldService
         if (!_config.DcsAirfieldEnabled || string.IsNullOrWhiteSpace(transcript))
             return AirfieldRequestKind.None;
 
+        // Divert first. A pilot asking for a vector wants somewhere to land, not the weather, and
+        // "vector to nearest" would otherwise lose to any ATIS trigger that mentions a runway.
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsAirfieldVectorTriggers);
+        if (matchedTrigger != null) return AirfieldRequestKind.Divert;
+
         matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsAirfieldAtisTriggers);
         if (matchedTrigger != null) return AirfieldRequestKind.Atis;
 
@@ -147,8 +152,15 @@ public sealed class DcsAirfieldService
     /// Builds the spoken answer. The airfield comes from the transcript when the pilot named one,
     /// otherwise from whichever airfield is nearest their aircraft.
     /// </summary>
+    /// <param name="knownGroupName">
+    /// Set only for a request that did not arrive by voice: an F10 menu click carries the group
+    /// DCS itself attributed it to, which identifies the pilot without any name matching. Without
+    /// it, a menu request has no SRS name and no transcript, and the pilot cannot be located at
+    /// all - which used to make every airfield entry in the menu answer "say the airfield".
+    /// </param>
     public async Task<AirfieldResult> AnswerAsync(AirfieldRequestKind kind, string transcript,
-        string rawPlayerName, int senderCoalition, CancellationToken cancellationToken = default)
+        string rawPlayerName, int senderCoalition, CancellationToken cancellationToken = default,
+        string? knownGroupName = null)
     {
         if (kind == AirfieldRequestKind.None)
             return new AirfieldResult();
@@ -167,9 +179,16 @@ public sealed class DcsAirfieldService
             if (airfields.Count == 0)
                 return Unhandled(_config.DcsAirfieldUnavailableReply, "no airfields returned by the mission");
 
+            // A divert call answers here, before the weather. It needs the pilot's position and
+            // the airfield list and nothing else, so it still works when the conditions query is
+            // the thing that is broken - which is exactly when somebody is asking.
+            if (kind == AirfieldRequestKind.Divert)
+                return await AnswerDivertAsync(channel, headers, deadline, transcript,
+                    rawPlayerName, friendly, airfields, cancellationToken, knownGroupName);
+
             // Named in the transmission, or else the one the pilot is closest to.
             var (airfield, how) = await ResolveAirfieldAsync(channel, headers, deadline, transcript,
-                rawPlayerName, friendly, airfields, cancellationToken);
+                rawPlayerName, friendly, airfields, cancellationToken, knownGroupName);
 
             if (airfield == null)
                 return Unhandled(_config.DcsAirfieldUnknownReply, how);
@@ -212,6 +231,132 @@ public sealed class DcsAirfieldService
 
     private static AirfieldResult Unhandled(string reply, string diagnostics) =>
         new() { Reply = reply, Handled = true, Diagnostics = diagnostics };
+
+    // ---------------------------------------------------------------------------------------
+    // Divert: somewhere to land, as a bearing and a range
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// One airfield as a divert option, already measured from the pilot.
+    /// </summary>
+    /// <param name="Name">What the pilot hears.</param>
+    /// <param name="BearingDegrees">Magnetic bearing from the aircraft to the field.</param>
+    /// <param name="RangeNm">Range in nautical miles.</param>
+    /// <param name="ElevationFeet">Field elevation, rounded to the nearest hundred feet.</param>
+    public sealed record DivertOption(string Name, int BearingDegrees, double RangeNm, int ElevationFeet);
+
+    /// <summary>
+    /// Finds the nearest airfields to the pilot and says where they are.
+    ///
+    /// A named airfield is honoured here too - "vector to Kutaisi" is a fair request - but the
+    /// default is nearest first, because the call is normally made with something broken.
+    /// </summary>
+    private async Task<AirfieldResult> AnswerDivertAsync(GrpcChannel channel, Metadata headers,
+        DateTime deadline, string transcript, string rawPlayerName, Coalition friendly,
+        List<Airfield> airfields, CancellationToken token, string? knownGroupName = null)
+    {
+        var unit = await _intel.FindRequesterUnitAsync(channel, headers, deadline,
+            rawPlayerName, transcript, friendly, token, knownGroupName);
+
+        // Without the pilot's own position there is no bearing to give. The bullseye would not
+        // help: a steer from a point the pilot is not at is not a steer.
+        if (unit?.Position == null)
+            return Unhandled(_config.DcsIntelNoPositionReply,
+                "divert: the requesting pilot could not be matched to a unit");
+
+        var lat = unit.Position.Lat;
+        var lon = unit.Position.Lon;
+
+        var declination = _config.DcsIntelMagneticBearings
+            ? await _intel.GetDeclinationAsync(channel, headers, deadline, lat, lon, token)
+            : 0.0;
+
+        var named = MatchAirfieldByName(transcript, airfields, rawPlayerName);
+
+        var ordered = airfields
+            .Select(a => new
+            {
+                Airfield = a,
+                DistanceNm = DcsIntelService.DistanceNm(lat, lon, a.Lat, a.Lon)
+            })
+            .OrderBy(a => a.DistanceNm)
+            .ToList();
+
+        // A named field is the answer on its own; otherwise the nearest few, so the pilot has a
+        // choice when the closest one is behind them.
+        var chosen = named != null
+            ? ordered.Where(a => a.Airfield == named).ToList()
+            : ordered.Take(Math.Max(1, _config.DcsAirfieldVectorCount)).ToList();
+
+        if (chosen.Count == 0)
+            return Unhandled(_config.DcsAirfieldNoVectorReply, "divert: no airfield to offer");
+
+        // Only the nearest is held to the range limit. A pilot who named a field a long way off
+        // asked for it, and refusing the request because it is far away answers a question nobody
+        // asked.
+        if (named == null && chosen[0].DistanceNm > _config.DcsAirfieldMaxDistanceNm)
+            return Unhandled(_config.DcsAirfieldNoVectorReply,
+                $"divert: nearest airfield {chosen[0].Airfield.SpokenName} is {chosen[0].DistanceNm:0} NM away, " +
+                $"beyond the {_config.DcsAirfieldMaxDistanceNm:0} NM limit");
+
+        var options = chosen
+            .Select(a => new DivertOption(
+                a.Airfield.SpokenName,
+                DcsIntelService.MagneticBearing(lat, lon, a.Airfield.Lat, a.Airfield.Lon, declination),
+                a.DistanceNm,
+                (int)Math.Round(a.Airfield.ElevationMeters * 3.28084 / 100.0) * 100))
+            .ToList();
+
+        return new AirfieldResult
+        {
+            Reply = BuildDivert(options, _config),
+            Handled = true,
+            Diagnostics = $"divert from unit '{unit.Name}': " +
+                          string.Join("; ", options.Select(o => $"{o.Name} {o.BearingDegrees:000} at {o.RangeNm:0} NM")) +
+                          (named != null ? " (named in the request)" : " (nearest first)"),
+        };
+    }
+
+    /// <summary>
+    /// The divert call as the pilot hears it. Pure, so the wording can be checked without a
+    /// mission running.
+    ///
+    /// The elevation is on the nearest field only. A pilot picking between two of them wants the
+    /// two bearings; the field they choose is where the elevation starts to matter, and a second
+    /// one in the same breath is noise.
+    /// </summary>
+    internal static string BuildDivert(IReadOnlyList<DivertOption> options, AppConfig config)
+    {
+        if (options.Count == 0) return config.DcsAirfieldNoVectorReply;
+
+        var separator = config.DcsIntelSlowSpeech ? ", " : " ";
+        var parts = new List<string>();
+
+        for (var i = 0; i < options.Count; i++)
+        {
+            var o = options[i];
+            var range = (int)Math.Round(o.RangeNm);
+            var spokenRange = config.DcsIntelSlowSpeech
+                ? DcsIntelService.SpeakCount(range)
+                : range.ToString();
+
+            var sentence = $"{o.Name}, bearing {DcsIntelService.SpeakBearing(o.BearingDegrees, separator)}, " +
+                           $"{spokenRange} miles";
+
+            // Field elevation matters on an approach and is one of the few things DCS does give
+            // us for every airfield. Only on the first option - see the remarks above. Left as
+            // figures rather than words: every engine reads "1500" correctly, and SpeakCount
+            // spells out only what is under a thousand, which would make the wording depend on
+            // how high the field happens to be.
+            if (i == 0 && o.ElevationFeet > 0)
+                sentence += $", field elevation {o.ElevationFeet} feet";
+
+            parts.Add(sentence + ".");
+        }
+
+        var lead = options.Count > 1 ? "Divert options: " : "Divert: ";
+        return lead + string.Join(" ", parts);
+    }
 
     // ---------------------------------------------------------------------------------------
     // Airfields and their runways
@@ -427,13 +572,13 @@ public sealed class DcsAirfieldService
     /// </summary>
     private async Task<(Airfield?, string)> ResolveAirfieldAsync(GrpcChannel channel, Metadata headers,
         DateTime deadline, string transcript, string rawPlayerName, Coalition friendly,
-        List<Airfield> airfields, CancellationToken token)
+        List<Airfield> airfields, CancellationToken token, string? knownGroupName = null)
     {
         // The transcript is passed along as a second way to identify the pilot: saying "active
         // runway for Punch 1-1" names them, which works even when their SRS name and their DCS
         // name don't match.
         var unit = await _intel.FindRequesterUnitAsync(channel, headers, deadline,
-            rawPlayerName, transcript, friendly, token);
+            rawPlayerName, transcript, friendly, token, knownGroupName);
 
         Airfield? nearest = null;
         var nearestDistance = double.MaxValue;

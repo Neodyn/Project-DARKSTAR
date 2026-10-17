@@ -129,4 +129,52 @@ internal static class Test
 
         return found;
     }
+
+    /// <summary>Every C# and Razor file this project owns, with the build output left out.</summary>
+    public static List<string> OwnSourceFiles() =>
+        Directory.EnumerateFiles(Path.Combine(Root, "src"), "*.*", SearchOption.AllDirectories)
+            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                        || f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// Doc comments that have come loose from the member they describe: a <c>&lt;/summary&gt;</c>
+    /// followed on the very next line by another <c>&lt;summary&gt;</c>.
+    ///
+    /// Contiguous <c>///</c> lines are one comment block, so two summaries in a row means the
+    /// first one is describing nothing - its member was moved, renamed or replaced and the text
+    /// stayed behind. The compiler says nothing, and the result is a file where a method is
+    /// documented as doing something another method does.
+    ///
+    /// This has happened eight times in this project, which is why it is a test and not a habit.
+    /// Reported as "file:line"; empty is the healthy case.
+    /// </summary>
+    public static List<string> FindOrphanedDocComments()
+    {
+        var found = new List<string>();
+
+        foreach (var file in OwnSourceFiles())
+        {
+            var lines = File.ReadAllLines(file);
+
+            for (var i = 0; i < lines.Length - 1; i++)
+            {
+                var current = lines[i].Trim();
+                var next = lines[i + 1].Trim();
+
+                var closesASummary =
+                    current == "/// </summary>" ||
+                    (current.StartsWith("/// <summary>", StringComparison.Ordinal)
+                     && current.EndsWith("</summary>", StringComparison.Ordinal));
+
+                if (closesASummary && next.StartsWith("/// <summary>", StringComparison.Ordinal))
+                    found.Add($"{Path.GetFileName(file)}:{i + 1}");
+            }
+        }
+
+        return found;
+    }
 }

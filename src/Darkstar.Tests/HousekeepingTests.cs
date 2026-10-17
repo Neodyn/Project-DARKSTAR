@@ -842,7 +842,21 @@ internal static class HousekeepingTests
         Check("the radio's voice is resolved once at startup, like its wake word and callsign",
             bot.Contains("string.IsNullOrWhiteSpace(radioConfig.Voice) ? config.VoiceName : radioConfig.Voice.Trim()"));
         Check("and travels with the radio that answers",
-            bot.Contains("session.Modulation, session.Voice"));
+            bot.Contains("string.IsNullOrWhiteSpace(voiceOverride) ? session.Voice : voiceOverride"));
+
+        // One transmission is not the controller speaking: the pilot read-back after a menu
+        // click. It is the only thing allowed to override the radio's voice, and the override is
+        // worth pinning down - a second caller passing one would be a radio answering in a voice
+        // nobody configured, which sounds like a bug in the voice settings rather than here.
+        var overrideCallers = System.Text.RegularExpressions.Regex
+            .Matches(bot, @"voiceOverride:\s*(?<what>[A-Za-z0-9_.]+)")
+            .Select(m => m.Groups["what"].Value)
+            .Distinct()
+            .ToList();
+
+        Check("and only the pilot read-back overrides it",
+            overrideCallers.Count == 1 && overrideCallers[0] == "session.EchoVoice",
+            string.Join(", ", overrideCallers));
         Check("the startup log names it, because a wrong voice name is otherwise silent",
             bot.Contains("voice \\\"{effectiveVoice}\\\""));
 
@@ -1391,6 +1405,36 @@ internal static class HousekeepingTests
         Check("and points at the markers, which hold the detail",
             startup.Contains("F10", StringComparison.Ordinal));
 
+        Section("An F10 request identifies the pilot by the group that clicked");
+
+        // A menu request carries no SRS name and no transcript, so the group DCS attributed the
+        // click to is the only thing that identifies the pilot - and it cannot be wrong the way a
+        // matched name can. Miss it out and the lookup has nothing at all to work with: every
+        // airfield entry in the menu answered "say the airfield you want conditions for", which
+        // looks like a configuration problem rather than a missing argument.
+        //
+        // Checked in the source because the alternative is a live mission: both calls below cross
+        // a gRPC boundary, and the defect is a parameter that was never passed, not a value that
+        // came out wrong.
+        var botSource = ReadSource("src/Darkstar.Bot/BotService.cs");
+        var menuCalls = System.Text.RegularExpressions.Regex.Matches(
+            botSource, @"await (?:airfields|intel)\.AnswerAsync\([^;]*?\);",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        var menuCallsWithoutGroup = menuCalls
+            .Select(m => m.Value)
+            .Where(call => call.Contains("config.Coalition", StringComparison.Ordinal)
+                           && !call.Contains("knownGroupName:", StringComparison.Ordinal))
+            .ToList();
+
+        Check("every menu-driven request passes the clicking group along",
+            menuCallsWithoutGroup.Count == 0,
+            string.Join(" || ", menuCallsWithoutGroup.Select(c => c.Replace("\n", " ").Trim())));
+
+        Check("and the airfield service accepts one to pass it to",
+            ReadSource("src/Darkstar.Core/DcsAirfieldService.cs")
+                .Contains("string? knownGroupName = null", StringComparison.Ordinal));
+
         Section("Markers replace rather than stack");
 
         // A server that restarts the bot three times an evening must not end up with three
@@ -1669,6 +1713,29 @@ internal static class HousekeepingTests
             unreachableSettings.Count == 0,
             unreachableSettings.Count == 0 ? "" : "only in config.json: " + string.Join(", ", unreachableSettings));
 
+        // And that something actually reads them. A setting whose consumer has been removed still
+        // passes every other check here - it is still declared, still bound in the GUI, still
+        // documented - and does nothing at all. That is how a half-removed feature survives as a
+        // switch people turn on and then wonder about.
+        //
+        // A plain name search over everything but AppConfig.cs, which is enough: a property read
+        // anywhere spells its own name, and the alternative - a reflection walk - would miss the
+        // GUI bindings this is partly there to cover.
+        var elsewhere = string.Join("\n", Test.OwnSourceFiles()
+            .Where(f => !f.EndsWith("AppConfig.cs", StringComparison.OrdinalIgnoreCase))
+            .Select(System.IO.File.ReadAllText));
+
+        var neverRead = typeof(AppConfig).GetProperties()
+            .Where(p => p.CanRead && p.CanWrite)
+            .Select(p => p.Name)
+            .Where(name => !System.Text.RegularExpressions.Regex.IsMatch(
+                elsewhere, $@"\b{System.Text.RegularExpressions.Regex.Escape(name)}\b"))
+            .ToList();
+
+        Check("and every one of them is read somewhere outside AppConfig.cs",
+            neverRead.Count == 0,
+            neverRead.Count == 0 ? "" : "declared but never used: " + string.Join(", ", neverRead));
+
         // A radio's own settings are bound through the loop variable rather than through Store.Config.
         var unreachablePerRadio = typeof(RadioConfig).GetProperties()
             .Where(p => p.CanRead && p.CanWrite)
@@ -1934,6 +2001,17 @@ internal static class HousekeepingTests
             .ToList();
         Check("no source file sits loose in the repository root", strayRootSources.Count == 0,
             string.Join(", ", strayRootSources));
+
+        // Doc comments that came loose from what they describe: two summaries in a row, which
+        // means the first one is documenting nothing. Its member was moved, renamed or replaced
+        // and the prose stayed behind, so a method ends up described as doing what another one
+        // does. The compiler never mentions it.
+        //
+        // A test rather than care: this had happened eight times across the project by the time
+        // anybody looked, including twice in files written the same week.
+        var orphanedDocs = Test.FindOrphanedDocComments();
+        Check("no doc comment has come loose from its member", orphanedDocs.Count == 0,
+            string.Join(", ", orphanedDocs));
 
         var botSources = System.IO.Directory
             .GetFiles(System.IO.Path.Combine(Root, "src", "Darkstar.Bot"), "*.cs")

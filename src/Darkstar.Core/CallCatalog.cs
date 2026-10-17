@@ -23,8 +23,14 @@ public enum CallKind
     ThreatCircleStart,
     ThreatCircleCancel,
     AlphaCheck,
+    Declare,
+    Spike,
     RunwayInUse,
     Atis,
+    Divert,
+    CheckIn,
+    CheckOut,
+    SayAgain,
     RadioCheck,
 }
 
@@ -42,12 +48,19 @@ public enum CallKind
 /// whole point is working when nothing else does.
 /// </param>
 /// <param name="SpokenExample">How a pilot would say the same thing, for the manuals and the kneeboard.</param>
+/// <param name="EchoPhrase">
+/// The request on its own, without any callsign - what the pilot's voice reads back on the
+/// frequency after a menu click, so the other pilots hear the question and not only the answer.
+/// It is the tail of <see cref="SpokenExample"/> with the example callsigns removed, and a test
+/// holds the two together so neither can drift.
+/// </param>
 public sealed record CallDefinition(
     CallKind Kind,
     string Id,
     string MenuLabel,
     RadioCapability? Capability,
-    string SpokenExample);
+    string SpokenExample,
+    string EchoPhrase);
 
 /// <summary>
 /// What is true for one pilot at one moment. Everything the ordering needs, and nothing that
@@ -77,6 +90,7 @@ public sealed record CallContext
 
     /// <summary>A hostile is within reporting range, so a bogey dope would actually say something.</summary>
     public bool HostilesNearby { get; init; }
+
 }
 
 public static class CallCatalog
@@ -96,19 +110,33 @@ public static class CallCatalog
     ///   keying that bookkeeping both ways, which is a change to the one service a pilot notices
     ///   immediately when it misbehaves. It stays a spoken call until that is done properly.
     /// </summary>
+    /// <remarks>
+    /// The order here and the base numbers in <see cref="Rank"/> are kept in step on purpose: the
+    /// manuals and the kneeboard read this list, the menu reads the ranks, and a pilot who learns
+    /// one order and then sees the other has been told two different things. A test holds the two
+    /// together.
+    /// </remarks>
     public static IReadOnlyList<CallDefinition> All { get; } = new List<CallDefinition>
     {
-        new(CallKind.BogeyDope,          "bogey_dope",           "Bogey dope",        RadioCapability.Tactical, "Overlord, bogey dope"),
-        new(CallKind.ThreatCheck,        "threat_check",         "Threat check",      RadioCapability.Tactical, "Overlord, threat check"),
-        new(CallKind.Picture,            "picture",              "Picture",           RadioCapability.Tactical, "Overlord, picture"),
-        new(CallKind.AlphaCheck,         "alpha_check",          "Alpha check",       RadioCapability.Tactical, "Overlord, alpha check bullseye"),
-        new(CallKind.ThreatCircleStart,  "threat_circle_start",  "Threat circle on",  RadioCapability.Tactical, "Overlord, threat circle forty miles"),
-        new(CallKind.ThreatCircleCancel, "threat_circle_cancel", "Threat circle off", RadioCapability.Tactical, "Overlord, cancel threat circle"),
+        new(CallKind.BogeyDope,          "bogey_dope",           "Bogey dope",        RadioCapability.Tactical, "Overlord, bogey dope",                                   "bogey dope"),
+        new(CallKind.ThreatCheck,        "threat_check",         "Threat check",      RadioCapability.Tactical, "Overlord, threat check",                                 "threat check"),
+        new(CallKind.Spike,              "spike",                "Spike",             RadioCapability.Tactical, "Overlord, spike two seven zero",                         "spike two seven zero"),
+        new(CallKind.Picture,            "picture",              "Picture",           RadioCapability.Tactical, "Overlord, picture",                                      "picture"),
+        new(CallKind.Declare,            "declare",              "Declare",           RadioCapability.Tactical, "Overlord, declare bullseye zero three zero for four five", "declare bullseye zero three zero for four five"),
+        // ^ Both carry a number the pilot has to say, so neither becomes a menu entry - see
+        //   MenuOffers. They are here because they ARE calls, and the manuals read this list.
+        new(CallKind.AlphaCheck,         "alpha_check",          "Alpha check",       RadioCapability.Tactical, "Overlord, alpha check bullseye",                         "alpha check bullseye"),
+        new(CallKind.ThreatCircleStart,  "threat_circle_start",  "Threat circle on",  RadioCapability.Tactical, "Overlord, threat circle forty miles",                    "threat circle forty miles"),
+        new(CallKind.ThreatCircleCancel, "threat_circle_cancel", "Threat circle off", RadioCapability.Tactical, "Overlord, cancel threat circle",                         "cancel threat circle"),
         // ^ Both are in the catalogue because they ARE calls a pilot can make; they are kept out of
         //   the menu by MenuOffers below, not by being absent here. The catalogue is the one list.
-        new(CallKind.RunwayInUse,        "runway_in_use",        "Runway in use",     RadioCapability.Airfield, "Overlord, runway in use"),
-        new(CallKind.Atis,               "atis",                 "ATIS",              RadioCapability.Airfield, "Overlord, ATIS"),
-        new(CallKind.RadioCheck,         "radio_check",          "Radio check",       null,                     "Overlord, radio check"),
+        new(CallKind.RunwayInUse,        "runway_in_use",        "Runway in use",     RadioCapability.Airfield, "Overlord, runway in use",                                "runway in use"),
+        new(CallKind.Atis,               "atis",                 "ATIS",              RadioCapability.Airfield, "Overlord, ATIS",                                         "ATIS"),
+        new(CallKind.Divert,             "divert",               "Divert",            RadioCapability.Airfield, "Overlord, vector to nearest",                            "vector to nearest"),
+        new(CallKind.CheckIn,            "check_in",             "Check in",          RadioCapability.Tactical, "Overlord, Punch one one checking in",                    "checking in"),
+        new(CallKind.CheckOut,           "check_out",            "Check out",         RadioCapability.Tactical, "Overlord, Punch one one checking out",                   "checking out"),
+        new(CallKind.SayAgain,           "say_again",            "Say again",         null,                     "Overlord, say again",                                    "say again"),
+        new(CallKind.RadioCheck,         "radio_check",          "Radio check",       null,                     "Overlord, radio check",                                  "radio check"),
     };
 
     /// <summary>
@@ -126,6 +154,16 @@ public static class CallCatalog
         // Held per pilot under their SRS name; an F10 click identifies a DCS group. See the note
         // on All - this is a scope line, not a limitation of DCS.
         CallKind.ThreatCircleStart or CallKind.ThreatCircleCancel => false,
+
+        // A declare carries a point and a spike carries a bearing. A submenu of every bearing in
+        // thirty-degree steps would be twelve entries to answer a question the pilot could have
+        // said in two seconds, and a declare point cannot be expressed in a menu at all.
+        CallKind.Declare or CallKind.Spike => false,
+
+        // Keyed per pilot under their SRS name, exactly like the threat circle, and an F10 click
+        // identifies a DCS group instead. The menu makes "say again" largely moot anyway: a pilot
+        // who missed a reply can click the same entry again, which is better than a repeat.
+        CallKind.CheckIn or CallKind.CheckOut or CallKind.SayAgain => false,
 
         _ => true,
     };
@@ -207,8 +245,17 @@ public static class CallCatalog
         CallKind.AlphaCheck => 130,
         CallKind.ThreatCircleStart => 140,
         CallKind.ThreatCircleCancel => 150,
+        CallKind.Declare => 125,
+        CallKind.Spike => 115,
         CallKind.RunwayInUse => 200,
         CallKind.Atis => 210,
+        CallKind.Divert => 220,
+        CallKind.CheckIn => 300,
+        CallKind.CheckOut => 310,
+
+        // Spoken-only calls still get a rank: the ordering is what the manuals and the kneeboard
+        // list, and those cover every call, not only the ones with a menu entry.
+        CallKind.SayAgain => 850,
 
         // Last on purpose. It is the call you make when you suspect nothing works, not one you
         // reach for in the middle of a fight, and it would otherwise sit above real calls on a

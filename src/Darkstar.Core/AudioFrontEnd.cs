@@ -133,10 +133,6 @@ public sealed class DecimatingLowPass
     }
 
     /// <summary>
-    /// Filters and decimates one chunk of PCM16 (48 kHz mono) to PCM16 (16 kHz mono).
-    /// Call repeatedly with consecutive chunks; the filter state carries over.
-    /// </summary>
-    /// <summary>
     /// Scratch space for one call, kept between calls. Frames arrive at fifty a second per radio
     /// and are almost always the same size, so allocating this each time produced about 15 MB of
     /// garbage per minute per radio - measured, and the only reason this instance holds buffers
@@ -144,6 +140,10 @@ public sealed class DecimatingLowPass
     /// </summary>
     private float[] _scratch = Array.Empty<float>();
 
+    /// <summary>
+    /// Filters and decimates one chunk of PCM16 (48 kHz mono) to PCM16 (16 kHz mono).
+    /// Call repeatedly with consecutive chunks; the filter state carries over.
+    /// </summary>
     public byte[] Process(byte[] pcm16Mono48k)
     {
         int inputCount = pcm16Mono48k.Length / 2;

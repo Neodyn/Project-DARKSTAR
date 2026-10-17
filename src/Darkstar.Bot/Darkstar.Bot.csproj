@@ -83,10 +83,6 @@
          real Windows Service (for unattended background operation), using the same .exe. -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
-
-    <!-- Optional, if you use Azure Speech for STT/TTS instead of another engine.
-         Alternatives: Vosk (offline STT), Whisper.net (offline STT), Piper (offline TTS) -->
-    <!-- <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.40.0" /> -->
   </ItemGroup>
 
 </Project>

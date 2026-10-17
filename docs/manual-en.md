@@ -453,7 +453,18 @@ The bot never talks over a pilot: if the time expires while they are still trans
 | `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reads the caller's *own* position back to them from the bullseye. |
-| `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check when the caller can't be matched to a unit — usually a name mismatch, see [8.3](#83-turning-on-the-tactical-replies). |
+| `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check, declare from own position, spike or divert when the caller can't be matched to a unit — usually a name mismatch, see [8.3](#83-turning-on-the-tactical-replies). |
+| `DcsIntelDeclareTriggers` | `["declare"]` | *"Declare bullseye zero three zero for four five."* Hostile, friendly, furball or clean — see [7 → Declare and spike](#declare-and-spike). |
+| `DcsIntelDeclareNoPointReply` | `"Say declare with bullseye bearing and range."` | No bearing and range could be read out of the transmission. |
+| `DcsIntelSpikeTriggers` | `["spike", "spiked", "nails"]` | *"Spike two seven zero."* What is on that bearing, including **buddy spike**. |
+| `DcsIntelSpikeNoBearingReply` | `"Say your spike bearing."` | The transmission carried no bearing. |
+| `DcsIntelSayAgainTriggers` | `["say again", "repeat last", "repeat that"]` | Repeats the last reply this pilot was given. Works on every radio and needs no DCS connection. |
+| `DcsIntelNothingToRepeatReply` | `"Negative, nothing to repeat."` | Nothing on file for that pilot. |
+| `DcsIntelCheckInTriggers` | `["check in", "checking in", "on station"]` | Coming on station. |
+| `DcsIntelCheckOutTriggers` | `["check out", "checking out", "off station", "returning to base"]` | Going off station; also drops that pilot's threat circle on that radio. |
+| `DcsIntelCheckInReply` | `"{pilot}, radar contact, cleared into the area."` | `{pilot}` is the caller's name. |
+| `DcsIntelCheckOutReply` | `"{pilot}, radar service terminated, good day."` | |
+| `DcsIntelCheckInGatesCalls` | `false` | Limits the bot's **unprompted** calls — threat circle warnings — to pilots who checked in. Off by default so nobody loses a warning by not knowing the phrase. |
 | `DcsIntelFriendlyPositionEnabled` | `false` | Tell one pilot where another **human player** on their own side is. Off by default — see [7 → Where is somebody](#where-is-somebody). |
 | `DcsIntelFriendlyPositionTriggers` | `["where is", "where's", "position of", "say position of", "posit on", "locate"]` | Whatever follows the phrase is taken as the aircraft being asked about. |
 | `DcsIntelFriendlyNotFoundReply` | `"Negative, no contact on {pilot}."` | Named pilot not found. `{pilot}` is the name as it was said. |
@@ -471,6 +482,9 @@ The bot never talks over a pilot: if the time expires while they are still trans
 | `DcsAirfieldPressureUnit` | `"Both"` | `Both` / `Hectopascals` / `InchesHg`. |
 | `DcsAirfieldAtFieldNm` | `5` | Within this of an airfield, the pilot's position decides which one — no name needed. |
 | `DcsAirfieldMaxDistanceNm` | `60` | Beyond this the bot asks which airfield. |
+| `DcsAirfieldVectorTriggers` | `["vector to nearest", "nearest airfield", "closest airfield", "divert", "vector home"]` | Somewhere to land: bearing, range and field elevation. Checked **before** the ATIS and runway triggers. |
+| `DcsAirfieldVectorCount` | `2` | How many airfields a divert call offers. |
+| `DcsAirfieldNoVectorReply` | `"Negative, no airfield in range."` | The nearest field is beyond `DcsAirfieldMaxDistanceNm`. |
 | `DcsAirfieldUnknownReply` | `"Say again the airfield, unable to identify."` | No airfield could be worked out from the position or the name. |
 | `DcsAirfieldUnavailableReply` | `"Negative, no airfield data available at this time."` | The airfield data couldn't be read at all — usually `evalEnabled = false` on the DCS-gRPC server, see [8.4](#84-runway-in-use-and-atis). |
 
@@ -642,10 +656,14 @@ check on **CH4 Phrases**, the fixed phrases in `phrases.json`.
 | Bogey dope | The nearest hostile group: BRAA from your own aircraft, with aspect and type. | `bogey dope`, `bogie dope`, `bogey dobe`, `boogie dope`, `nearest bandit`, `closest contact` |
 | Picture | The whole hostile air picture, grouped, from the bullseye. | `picture`, `request picture`, `say picture` |
 | Threat check | The single nearest threat, short. | `threat check`, `any threats`, `threats` |
+| Declare *bullseye B for R* | What sits at that point: hostile, friendly, **furball** or clean. | `declare` |
+| Spike *bearing* | What is on that bearing, including **buddy spike** when it is one of ours. | `spike`, `spiked`, `nails` |
 | Alpha check | **Your own** position from the bullseye — a navigation cross-check. | `alpha check`, `position check`, `say my position` |
 | Where is *callsign* | The position of a **human** player on your own side. Off by default. | `where is`, `where's`, `position of`, `say position of`, `posit on`, `locate` |
 | Threat circle *N* miles | Arms a standing watch around your aircraft; it warns when a hostile enters. | `threat circle`, `threat ring`, `set threat circle` |
 | Cancel threat circle | Ends it. | `cancel threat circle`, `stop threat circle`, `threat circle off`, `cancel threat ring` |
+| Check in / check out | Coming on station and leaving it. Checking out also ends any threat circle of yours. | `check in`, `checking in`, `on station` / `check out`, `checking out`, `off station`, `returning to base` |
+| Say again | The last thing you were told, repeated. Works on every radio, with or without DCS. | `say again`, `repeat last`, `repeat that` |
 | …*bullseye* | Not a call of its own: added to one of the above, it forces the answer to be given from the bullseye instead of from your aircraft. | `bullseye` |
 
 Three of the bogey-dope triggers are not English — `bogey dobe`, `boogie dope`, `bogie dope` are
@@ -658,6 +676,7 @@ what the speech model regularly *hears*. They are in the list on purpose; see
 |---|---|---|
 | Runway in use | The runway the wind favours, plus that wind. Needs `evalEnabled` on the DCS-gRPC server for the runway part. | `runway in use`, `active runway`, `runway request`, `which runway` |
 | ATIS | Wind, temperature, pressure and the runway in use, as an information broadcast. | `atis`, `weather`, `airfield information`, `field conditions` |
+| Divert | Somewhere to land: bearing, range and field elevation to the nearest airfields. | `vector to nearest`, `nearest airfield`, `closest airfield`, `divert`, `vector home` |
 
 Naming an airfield (*"Overlord, Batumi ATIS"*) asks about that one; saying nothing asks about the
 field nearest your aircraft.
@@ -675,11 +694,18 @@ says. They need nothing at all — no DCS, no Gemini quota.
 
 | Say | It answers | Trigger |
 |---|---|---|
-| Say again | *"Copy, say again your last transmission."* | `say again` |
 | Status | *"All systems nominal."* | `status` |
-| Check in | *"Copy your check-in."* | `check in` |
 | Request weather | *"Weather is clear, visibility unrestricted."* | `request weather` |
 | Request RTB | *"Copy, cleared to RTB."* | `request rtb`, `requesting rtb` |
+
+`say again` and `check in` used to be in this list and are not any more. The bot now does both
+properly — a real repeat of your last reply, and a roster entry — and *"Copy, say again your last
+transmission"* in answer to "say again" is the one reply that cannot be what was wanted. See
+[Check in, check out, say again](#check-in-check-out-say-again).
+
+**If you are upgrading**, your existing `phrases.json` still has both entries, and an entry there
+still wins: delete the two lines to get the real calls. The same rule as the radio check — wording
+you wrote yourself is never overruled by an upgrade.
 
 One overlap is worth knowing about, because it is the kind of thing that looks like a bug:
 **`request weather` contains `weather`, which is an ATIS trigger** — and mission-data calls are
@@ -705,6 +731,98 @@ An **alpha check** is the odd one out: it reports *your own* position, not the e
 Bearings are spoken digit by digit ("zero niner zero"), because TTS would otherwise read `090` as "ninety". With `DcsIntelSlowSpeech` (on by default) there is a comma between the digits and the other numbers are spelled out as words, which keeps the voice from rushing them. Aircraft and helicopter types are announced when `DcsIntelSayContactType` is on. Aspect follows standard brevity: **hot** (nose on), **flanking**, **beaming**, **cold** (running away).
 
 For BRAA from your own aircraft, the bot has to find *your* aircraft: it matches your SRS name against the DCS player names. If that fails — for example because your SRS name is nothing like your DCS name — it automatically switches to the bullseye format instead of refusing the request.
+
+### Declare and spike
+
+Two calls about one named piece of sky rather than about whatever is nearest.
+
+| Request | Example reply |
+|---|---|
+| *"Overlord, declare bullseye zero three zero for four five"* | *"Hostile, two contacts, twenty five thousand, fast, MiG-29."* |
+| *"Overlord, declare zero niner zero for twenty"* | Same question, but measured **from your own aircraft** — no "bullseye" in the call. |
+| *"Overlord, spike two seven zero"* | *"Hostile, bearing two, seven, two, forty miles, twenty two thousand, Su-27."* |
+| *"Overlord, spike one eight zero"* | *"Buddy spike, bearing one, seven, eight, twelve miles."* |
+
+**Say the numbers however you like.** "Zero three zero for four five", "zero three zero at forty
+five", "030 45" — all read the same. Spoken digits, the brevity words (`niner`, `tree`, `fife`),
+"for" and "at" as the joiner, and ranges said as words ("forty five", "fifteen") all work.
+
+**Four verdicts for a declare**, from what is within 5 NM of the point:
+
+| Verdict | Means |
+|---|---|
+| **Hostile** | Only hostiles there — with the group's size, altitude, speed and type. |
+| **Friendly** | Only friendlies. |
+| **Furball** | Both, mixed together. Answered first and with *"do not engage"*, because it is the one verdict that changes what you do with the next few seconds. |
+| **Clean** | Nothing of either side. |
+
+Working out a furball needs **our** side as well as the enemy's, which is a second query. If that
+query cannot be read — an AWACS-only contact source has no detection table for friendlies — the
+reply adds *"unable to check friendlies"* instead of reporting "hostile" about a point that may
+have friendlies on it.
+
+**A spike** names the nearest contact within 15° either side of the bearing you called, measured
+from your aircraft — a warning receiver gives you a rough direction, not a precise one. If the
+nearest thing out that way is one of ours you get **buddy spike**, which is the whole reason the
+friendly side is checked at all. Nothing known on that bearing is answered as *"clean on bearing
+…, no contact known"* — which is not the same claim as "nothing is there".
+
+Neither call is bounded by `DcsIntelMaxRangeNm`: you named the place, so that is where the bot
+looks, however far from you it is.
+
+Neither appears in the F10 menu. A declare carries a point and a spike carries a bearing, and a
+menu entry carries no argument — a submenu of twelve bearings would be twelve keypresses to answer
+a question you could have said in two seconds.
+
+### Divert
+
+*"Overlord, vector to nearest."* → *"Divert options: Kutaisi, bearing two, four, five, thirty
+eight miles, field elevation 150 feet. Senaki, bearing three, zero, zero, fifty two miles."*
+
+Bearing, range and field elevation to somewhere to land. Two fields by default
+(`DcsAirfieldVectorCount`), because the nearest one is sometimes behind you; name a field and you
+get that one alone, however far away it is. Answered before the weather query, so it still works
+when the conditions are the thing that is broken — which is when somebody is asking.
+
+**No TACAN channel and no tower frequency.** DCS-gRPC does not expose either, and the bot will not
+invent them: a made-up channel sends a pilot who is already in trouble to tune a dead radio.
+Bearing, range and elevation are real data and are all you get. The elevation is spoken for the
+nearest field only — choosing between two fields needs the two bearings, and the second elevation
+is noise at that point.
+
+Divert **is** in the F10 menu: it needs nothing said out loud.
+
+### Check in, check out, say again
+
+Three calls about you rather than about the enemy. None of them touch DCS, which is why they are
+answered before the mission data is consulted at all — a pilot asking for a repeat usually does so
+because something else is already broken.
+
+| Request | Example reply |
+|---|---|
+| *"Overlord, Punch 1-1 checking in"* | *"Punch 1-1, radar contact, cleared into the area."* |
+| *"Overlord, Punch 1-1 checking out"* | *"Punch 1-1, radar service terminated, good day."* |
+| *"Overlord, say again"* | The last thing you were told, word for word. |
+
+**Say again** repeats any reply, not only a tactical one — the calls most often missed are the long
+ones, and the longest is the ATIS. It works on every radio and with no DCS connection at all.
+Asking twice gives you the same answer twice: a pilot who missed it once may well miss the repeat.
+The repeat comes without an *"I say again"* preamble, because a preamble in front of a long ATIS is
+in the way.
+
+**Checking out** also ends any threat circle of yours on that radio, rather than leaving a watch
+sweeping for an aircraft whose pilot has said goodbye.
+
+**What checking in is for.** On a real net it is a courtesy. Here it can also decide who the bot
+talks to **unprompted** — which is one thing only, the threat circle warning. Set
+`DcsIntelCheckInGatesCalls` to `true` and only pilots who checked in get those. It is off by
+default: a pilot who never learns the phrase would otherwise lose a warning they used to get, and
+lose it silently. Asking for a threat circle counts as checking in, so a request can never be
+accepted and then ignored.
+
+None of the three appear in the F10 menu: they are kept per pilot under your SRS name, while an
+F10 click identifies a DCS group. The menu makes a repeat largely moot anyway — if you missed a
+reply you got from the menu, click the same entry again.
 
 ### Radio check
 
@@ -1088,7 +1206,7 @@ This is the tool to use when you want to know what else could be built on top of
 
 Speech recognition is the one part of this bot that fails for reasons a pilot cannot fix in the air: an accent the model was not trained on, a noisy cockpit, a wake word that simply did not register. Until now the answer to "it does not hear me" was to try again, louder. This is the way through.
 
-Switch on **F10MenuEnabled** (CH8 → Replies, *The F10 menu*) and the bot's calls also appear under **F10 → Darkstar** in the game. Pick one, get the same answer. **Nothing is installed on any pilot's machine** — the menu is built over the DCS-gRPC connection the tactical replies already use, so if those work, this works.
+Switch on **F10MenuEnabled** (CH8 → Replies, *The F10 menu*) and the bot's calls appear in the pilot's **communications menu**: open it with the comms key (`\` unless your pilots rebound it), then **F10 → Darkstar**. This is the radio menu, not the F10 map — a script can only add entries under the comms menu's F10 "Other" branch, never to F1–F9, which belong to the aircraft's own radios. Pick one, get the same answer. **Nothing is installed on any pilot's machine** — the menu is built over the DCS-gRPC connection the tactical replies already use, so if those work, this works.
 
 | Setting | Default | What it decides |
 |---|---|---|
@@ -1096,6 +1214,8 @@ Switch on **F10MenuEnabled** (CH8 → Replies, *The F10 menu*) and the bot's cal
 | `F10MenuRootName` | `Darkstar` | What pilots look for under F10. |
 | `F10ReplyMode` | `Both` | Radio, on-screen text, or both. |
 | `F10TextSeconds` | `20` | How long the on-screen answer stays up. |
+| `F10EchoEnabled` | `true` | Read the call back in a pilot voice before answering, so the frequency hears both halves. |
+| `F10EchoVoice` | `""` | Which voice does that. Empty picks a different one from the radio's by itself. |
 | `F10MenuMaxGroups` | `24` | How many flights may hold a menu. |
 | `F10MenuRefreshSeconds` | `20` | How often the menus are brought up to date. |
 
@@ -1111,7 +1231,17 @@ Switch on **F10MenuEnabled** (CH8 → Replies, *The F10 menu*) and the bot's cal
 - Airborne, the tactical calls come first.
 - *Radio check* is always there and always last. It is the call you make when you suspect nothing works, not one you want to scroll past.
 
-Two calls stay spoken-only. Asking **where another pilot is** needs their name, and a menu entry carries no argument. A **threat circle** is bookkeeping held under the caller's SRS name, while a menu click identifies a DCS group instead; keying it both ways is a change to the service pilots notice fastest when it misbehaves, so it waits.
+**Some calls stay spoken-only**, for two reasons:
+
+- **They carry something a menu entry cannot.** *Where is …* needs another pilot's name, a *declare* needs a point, a *spike* needs a bearing. A submenu of twelve bearings is twelve keypresses for a two-second sentence.
+- **They are kept per pilot under their SRS name**, while a menu click identifies a DCS group: the *threat circle*, and *check in* / *check out* / *say again*. Keying that both ways is a change to the service pilots notice fastest when it misbehaves. For a repeat it hardly matters anyway — if you missed an answer you got from the menu, click the same entry again.
+
+**The frequency hears both halves.** A click is silent, so without help the other pilots get an answer to a question nobody asked — which on a shared frequency reads as a call to somebody else. So the call goes out first, in a second voice:
+
+> **Punch 1-1:** *"Overlord, Punch 1-1, bogey dope."*
+> **Overlord:** *"Punch 1-1, this is Overlord. Bogey, bearing zero, niner, zero, thirty five miles…"*
+
+The pilot voice is picked for you (`F10EchoVoice` empty): one of a different gender from the radio's where this machine has one, otherwise simply a different one. **With only one voice installed the read-back switches itself off** and says so in the log — both halves in the same voice sounds like the controller answering themselves, which is worse than no read-back at all. [Chapter 7 → voices](#different-voices-per-radio) covers where more voices come from. Switch the whole thing off with `F10EchoEnabled`.
 
 > **The menu is not just the fallback.** An F10 request identifies the aircraft outright, because DCS reports which group clicked — no matching an SRS name against a DCS name, which is the step that silently turns a BRAA call into a bullseye call. These answers give BRAA from the pilot's own aircraft even where a spoken call would not.
 
@@ -1229,6 +1359,7 @@ Each line is tagged with the part of the bot it came from. A startup line says w
 | `[Privacy]` | One line at every start naming what reaches the internet with the current settings, and a line per item | Empty of items means nothing does. The place to look before telling your squadron the server is offline. |
 | `[Airfield]` | Runway in use and ATIS: the startup state, each request, and gRPC errors underneath | |
 | `[RadioCheck]` | A radio check was answered, with the trigger that matched | |
+| `[Roster]` | A pilot checked in or out, or asked for a repeat — with the trigger that matched and how many pilots are on file | Says whether a "say again" had anything on file. A warning held back by `DcsIntelCheckInGatesCalls` is a `[ThreatCircle]` debug line, not a `[Roster]` one. |
 | `[ThreatCircle]` | A circle armed, cancelled or expired, each sweep's warnings | |
 | `[Radio]` | A request arrived on a frequency that does not serve it | Says whether it was handed off to the right frequency or fell through to `phrases.json`. |
 | `[Coalition Check]` | At startup, and whenever a transmission from the opposing coalition was ignored | |
@@ -1319,7 +1450,30 @@ SRS delivers 48 kHz audio; Vosk wants 16 kHz. Getting from one to the other mean
 
 **"Even out quiet pilots"** amplifies transmissions that arrive too quiet for the recogniser. It is off by default on purpose: any automatic gain also lifts background noise, and noise lifted into speech range is exactly what produces wake words nobody said. If you turn it on, watch the false-trigger rate afterwards. It never touches the audio that gets transcribed or saved — only what the detector hears.
 
-### 12.4 Measuring instead of guessing
+### 12.4 What the log already tells you
+
+Before setting anything up: the bot keeps score of its own listening while it runs, and says so in the log. A line every twenty-five transmissions, and the full picture when it shuts down:
+
+```
+[Speech] 143 transmission(s): 118 answered as a call, 9 as a fixed phrase, 14 matched nothing, 2 unintelligible.
+[Speech] 83% were understood as a call.
+[Speech] 11 transmission(s) were a pilot trying again within 20 seconds of something that was not
+         answered as a call - the clearest sign of a miss, because the pilot is the one saying so.
+[Speech] Heard but matched nothing, commonest first - a spelling here is a candidate for the
+         trigger list or for KeywordVariants:
+[Speech]   6x  "Overlord, boogie dope"
+[Speech]   3x  "Overlord, bogey dobe"
+```
+
+**The repeat count is the honest one.** Everything else is the bot's own opinion of how it did; a pilot keying up four seconds later is the pilot saying the answer was no good. If that number is high while the percentage looks fine, the bot is confidently answering the wrong thing — which is a different fault from not hearing at all.
+
+**The list at the bottom is the actionable part.** Those are the words the transcriber really produced, so a spelling there can be pasted straight into a trigger list or into `KeywordVariants` ([12.5](#125-accents-accepting-how-the-word-is-really-heard)). The six mishearings above are six calls that silently fell through to Gemini.
+
+Percentages start at ten transmissions, because one understood call out of one is not a hundred percent of anything. Nothing needs switching on, and the last 2,000 transmissions are kept.
+
+This covers stages 2 and 3 — transcription and matching. A wake word that never fires leaves nothing to count, and that is what the rest of this chapter is for.
+
+### 12.4b Measuring the wake word
 
 Turn on **"Save every transmission to `recordings\`"** (CH3 Speech) and fly normally for a while. The bot writes one WAV per transmission, tagged with what happened:
 

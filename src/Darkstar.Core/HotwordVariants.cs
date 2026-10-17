@@ -43,6 +43,13 @@ public static class HotwordVariants
     // ---------------------------------------------------------------------------------------
 
     /// <summary>
+    /// The accepted set for an already-resolved wake word and its own variants - for a detector,
+    /// which is handed the outcome of the inheritance rule rather than deciding it.
+    /// </summary>
+    public static List<string> Resolve(string? keyword, IEnumerable<string>? variants) =>
+        Resolve(keyword, variants, globalKeyword: null, globalVariants: null);
+
+    /// <summary>
     /// The full set of spellings one radio accepts: its wake word first, then its variants.
     ///
     /// Variants belong to the word they are variants OF, which decides the inheritance rule: a
@@ -50,13 +57,6 @@ public static class HotwordVariants
     /// tanker on "Texaco" would start answering to "over lord" because that was configured
     /// globally for the AWACS - a bug that would be very hard to see in a log.
     /// </summary>
-    /// <summary>
-    /// The accepted set for an already-resolved wake word and its own variants - for a detector,
-    /// which is handed the outcome of the inheritance rule rather than deciding it.
-    /// </summary>
-    public static List<string> Resolve(string? keyword, IEnumerable<string>? variants) =>
-        Resolve(keyword, variants, globalKeyword: null, globalVariants: null);
-
     public static List<string> Resolve(string? radioKeyword, IEnumerable<string>? radioVariants,
         string? globalKeyword, IEnumerable<string>? globalVariants)
     {

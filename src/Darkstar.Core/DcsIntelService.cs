@@ -25,6 +25,18 @@ public enum IntelRequestKind
     ThreatCircleCancel,
 
     /// <summary>
+    /// What sits at a named point: "declare bullseye zero three zero for four five". Hostile,
+    /// friendly, furball or clean.
+    /// </summary>
+    Declare,
+
+    /// <summary>
+    /// A radar warning on a bearing: "spike two seven zero". Names whatever is out that way,
+    /// including "buddy spike" when it turns out to be one of ours.
+    /// </summary>
+    Spike,
+
+    /// <summary>
     /// The pilot's own position, as a bearing and range from their coalition's bullseye - the
     /// standard way a controller confirms a pilot knows where they are.
     /// </summary>
@@ -200,6 +212,15 @@ public class DcsIntelService
             if (matchedTrigger != null) return IntelRequestKind.FriendlyPosition;
         }
 
+        // Declare and spike before the general contact calls. Both name a specific piece of sky,
+        // so they are the more specific question, and both read a number out of the transmission
+        // that the others would ignore.
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelDeclareTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.Declare;
+
+        matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelSpikeTriggers);
+        if (matchedTrigger != null) return IntelRequestKind.Spike;
+
         // Bogey dope before picture: "bogey dope, and picture" should give the more specific answer.
         matchedTrigger = TriggerMatcher.FindMatch(transcript, _config.DcsIntelBogeyDopeTriggers);
         if (matchedTrigger != null) return IntelRequestKind.BogeyDope;
@@ -302,6 +323,19 @@ public class DcsIntelService
             var referenceLat = requester?.Position?.Lat ?? bullseye?.Lat ?? 0;
             var referenceLon = requester?.Position?.Lon ?? bullseye?.Lon ?? 0;
             var haveReference = requester != null || bullseye != null;
+
+            // Declare and spike answer before the range filter and before the "clean" shortcut
+            // below, and for the same reason in both cases: they are about a piece of sky the
+            // pilot named, not about what happens to be near the pilot. A declare at bullseye
+            // 030 for 45 can be a hundred miles from them, and a radar big enough to spike them
+            // can be further away still - DcsIntelMaxRangeNm would quietly empty the answer. The
+            // "clean" shortcut has to be skipped too, because a buddy spike with no hostiles
+            // anywhere is still something the pilot needs to hear.
+            if (kind is IntelRequestKind.Declare or IntelRequestKind.Spike)
+            {
+                return await AnswerPointQueryAsync(channel, headers, deadline, kind, transcript,
+                    requester, bullseye, contacts, friendlyCoalition, sourceLabel, cancellationToken);
+            }
 
             if (haveReference && _config.DcsIntelMaxRangeNm > 0)
             {
@@ -469,6 +503,268 @@ public class DcsIntelService
             Logger.Debug($"[RadioCheck] Could not check whether the caller is on scope: {ex.Message}");
             return RadioCheck.ScopeState.Unknown;
         }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Declare and spike: a question about one piece of sky
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Answers a declare or a spike. Both ask about a named place rather than about whatever is
+    /// nearest, and both have to look at our own side as well as the enemy's - a declare to work
+    /// out whether the point is a furball, a spike to recognise a buddy spike.
+    ///
+    /// The friendly side is fetched with the same query as the hostile one, just with the other
+    /// coalition. If it cannot be read, the answer says so instead of quietly reporting "hostile"
+    /// about a point that may have friendlies sitting on it.
+    /// </summary>
+    private async Task<IntelResult> AnswerPointQueryAsync(GrpcChannel channel, Metadata headers,
+        DateTime deadline, IntelRequestKind kind, string transcript, Unit? requester, Position? bullseye,
+        List<AirContact> hostiles, Coalition friendlyCoalition, string sourceLabel, CancellationToken token)
+    {
+        var friendlySet = await GetHostileContactsAsync(channel, headers, deadline, friendlyCoalition, token);
+        var friendlies = friendlySet.Usable ? friendlySet.Contacts : new List<AirContact>();
+
+        // Our own aircraft is not a contact to report back to us. Matched on unit name because
+        // that is what both sides of this comparison actually have.
+        if (requester != null)
+            friendlies = friendlies
+                .Where(f => !string.Equals(f.UnitName, requester.Name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        return kind == IntelRequestKind.Declare
+            ? await AnswerDeclareAsync(channel, headers, deadline, transcript, requester, bullseye,
+                hostiles, friendlies, friendlySet.Usable, sourceLabel, token)
+            : await AnswerSpikeAsync(channel, headers, deadline, transcript, requester,
+                hostiles, friendlies, sourceLabel, token);
+    }
+
+    private async Task<IntelResult> AnswerDeclareAsync(GrpcChannel channel, Metadata headers,
+        DateTime deadline, string transcript, Unit? requester, Position? bullseye,
+        List<AirContact> hostiles, List<AirContact> friendlies, bool friendliesChecked,
+        string sourceLabel, CancellationToken token)
+    {
+        var kind = IntelRequestKind.Declare;
+
+        var point = TacticalCalls.ParseDeclarePoint(transcript);
+        if (point == null)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelDeclareNoPointReply,
+                Detail = "declare: no bearing and range could be read out of the transmission"
+            };
+
+        // A bullseye declare measures from the bullseye; without the word, from the pilot's own
+        // aircraft. Getting that backwards answers about sky nobody asked about, so each case
+        // refuses outright rather than falling back on the other reference.
+        double originLat, originLon;
+        if (point.FromBullseye)
+        {
+            if (bullseye == null)
+                return new IntelResult
+                {
+                    Kind = kind,
+                    Reply = _config.DcsIntelUnavailableReply,
+                    Detail = "declare: no bullseye for this coalition"
+                };
+            (originLat, originLon) = (bullseye.Lat, bullseye.Lon);
+        }
+        else
+        {
+            if (requester?.Position == null)
+                return new IntelResult
+                {
+                    Kind = kind,
+                    Reply = _config.DcsIntelNoPositionReply,
+                    Detail = "declare: measured from the pilot, who could not be matched to a unit"
+                };
+            (originLat, originLon) = (requester.Position.Lat, requester.Position.Lon);
+        }
+
+        var declination = _config.DcsIntelMagneticBearings
+            ? await GetDeclinationAsync(channel, headers, deadline, originLat, originLon, token)
+            : 0.0;
+
+        // The pilot spoke a magnetic bearing; the geometry runs on true.
+        var (pointLat, pointLon) = PointFrom(originLat, originLon,
+            point.BearingDegrees + declination, point.RangeNm);
+
+        var hostilesThere = hostiles
+            .Where(c => DistanceNm(pointLat, pointLon, c.Lat, c.Lon) <= TacticalCalls.DeclareRadiusNm)
+            .ToList();
+        var friendliesThere = friendlies
+            .Where(c => DistanceNm(pointLat, pointLon, c.Lat, c.Lon) <= TacticalCalls.DeclareRadiusNm)
+            .ToList();
+
+        var verdict = TacticalCalls.Declare(hostilesThere.Count > 0, friendliesThere.Count > 0);
+        var reply = BuildDeclare(verdict, hostilesThere, friendliesThere, friendliesChecked);
+
+        var reference = point.FromBullseye ? "bullseye" : "the pilot";
+        return new IntelResult
+        {
+            Kind = kind,
+            Reply = reply,
+            Detail = $"declare {point.BearingDegrees:000} for {point.RangeNm:0} from {reference}; " +
+                     $"source={sourceLabel}; {hostilesThere.Count} hostile and {friendliesThere.Count} friendly " +
+                     $"within {TacticalCalls.DeclareRadiusNm:0} NM" +
+                     (friendliesChecked ? "" : "; the friendly side could not be read")
+        };
+    }
+
+    private async Task<IntelResult> AnswerSpikeAsync(GrpcChannel channel, Metadata headers,
+        DateTime deadline, string transcript, Unit? requester,
+        List<AirContact> hostiles, List<AirContact> friendlies, string sourceLabel, CancellationToken token)
+    {
+        var kind = IntelRequestKind.Spike;
+
+        var bearing = TacticalCalls.ParseSpikeBearing(transcript);
+        if (bearing == null)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelSpikeNoBearingReply,
+                Detail = "spike: no bearing could be read out of the transmission"
+            };
+
+        // A spike bearing is read off the pilot's own warning receiver, so it only means anything
+        // measured from their aircraft. The bullseye is no substitute here.
+        if (requester?.Position == null)
+            return new IntelResult
+            {
+                Kind = kind,
+                Reply = _config.DcsIntelNoPositionReply,
+                Detail = "spike: the pilot could not be matched to a unit"
+            };
+
+        var lat = requester.Position.Lat;
+        var lon = requester.Position.Lon;
+
+        var declination = _config.DcsIntelMagneticBearings
+            ? await GetDeclinationAsync(channel, headers, deadline, lat, lon, token)
+            : 0.0;
+
+        (AirContact Contact, int Bearing, double RangeNm)? Nearest(List<AirContact> set)
+        {
+            var onBearing = set
+                .Select(c => (Contact: c,
+                              Bearing: MagneticBearing(lat, lon, c.Lat, c.Lon, declination),
+                              RangeNm: DistanceNm(lat, lon, c.Lat, c.Lon)))
+                .Where(c => TacticalCalls.IsOnBearing(bearing.Value, c.Bearing))
+                .OrderBy(c => c.RangeNm)
+                .ToList();
+
+            return onBearing.Count == 0 ? null : onBearing[0];
+        }
+
+        var hostile = Nearest(hostiles);
+        var friendly = Nearest(friendlies);
+
+        // Whichever is nearer along that bearing is what the warning is most likely to be. A
+        // friendly in front of a hostile means "buddy spike" - and saying "hostile" there is how
+        // a pilot ends up shooting at their own flight.
+        var buddy = friendly != null && (hostile == null || friendly.Value.RangeNm < hostile.Value.RangeNm);
+
+        string reply;
+        string detail;
+        if (buddy)
+        {
+            reply = $"Buddy spike, bearing {SpeakBearing(friendly!.Value.Bearing, BearingSeparator)}, " +
+                    $"{SpeakRange((int)Math.Round(friendly.Value.RangeNm))} miles.";
+            detail = $"spike {bearing:000}: friendly '{friendly.Value.Contact.UnitName}' at " +
+                     $"{friendly.Value.RangeNm:0} NM is the nearest thing on that bearing";
+        }
+        else if (hostile != null)
+        {
+            var type = TypeOf(hostile.Value.Contact.Type);
+            var typePart = string.IsNullOrEmpty(type) ? "" : $", {type}";
+            reply = $"Hostile, bearing {SpeakBearing(hostile.Value.Bearing, BearingSeparator)}, " +
+                    $"{SpeakRange((int)Math.Round(hostile.Value.RangeNm))} miles, " +
+                    $"{SpeakAltitude(hostile.Value.Contact.AltitudeMeters)}{typePart}.";
+            detail = $"spike {bearing:000}: hostile '{hostile.Value.Contact.UnitName}' at " +
+                     $"{hostile.Value.RangeNm:0} NM; source={sourceLabel}";
+        }
+        else
+        {
+            // Nothing known on that bearing is not the same as nothing there: the spike is real,
+            // the emitter is simply not in anything we can see. The wording says that.
+            reply = $"Clean on bearing {SpeakBearing(bearing.Value, BearingSeparator)}, no contact known.";
+            detail = $"spike {bearing:000}: nothing within " +
+                     $"{TacticalCalls.SpikeConeDegrees:0} degrees of that bearing; source={sourceLabel}";
+        }
+
+        return new IntelResult { Kind = kind, Reply = reply, Detail = detail };
+    }
+
+    /// <summary>
+    /// The declare call as the pilot hears it.
+    ///
+    /// Furball leads, because it is the one verdict that changes what they do with the next few
+    /// seconds. A hostile verdict carries the group's size and type so the pilot knows what they
+    /// are pointing at, and a friendly one deliberately does not - the useful part of "friendly"
+    /// is the word itself.
+    /// </summary>
+    private string BuildDeclare(TacticalCalls.DeclareVerdict verdict, List<AirContact> hostiles,
+        List<AirContact> friendlies, bool friendliesChecked)
+    {
+        // Said when the friendly picture could not be read at all. "Hostile" on its own would be a
+        // claim the bot is not in a position to make.
+        var caveat = friendliesChecked ? "" : " Unable to check friendlies.";
+
+        switch (verdict)
+        {
+            case TacticalCalls.DeclareVerdict.Furball:
+                return $"Furball, {SpeakCount(hostiles.Count)} hostile and " +
+                       $"{SpeakCount(friendlies.Count)} friendly in that area. Do not engage.";
+
+            case TacticalCalls.DeclareVerdict.Hostile:
+            {
+                var words = DescribeGroup(hostiles);
+                return $"Hostile, {string.Join(", ", words)}.{caveat}";
+            }
+
+            case TacticalCalls.DeclareVerdict.Friendly:
+                return $"Friendly, {SpeakCount(friendlies.Count)} contact{(friendlies.Count == 1 ? "" : "s")}.";
+
+            default:
+                return $"Clean.{caveat}";
+        }
+    }
+
+    /// <summary>
+    /// A set of contacts in the words that follow a position: how many, how fast, how high, what
+    /// type. The arithmetic behind the choice of word is in <see cref="TacticalCalls.FillIns"/>;
+    /// this turns the live contacts into the numbers it wants.
+    /// </summary>
+    private List<string> DescribeGroup(List<AirContact> contacts)
+    {
+        if (contacts.Count == 0) return new List<string> { "no contacts" };
+
+        var fastestKnots = contacts.Max(c => c.SpeedMps) * 1.94384;
+        var altitudeMeters = contacts.Max(c => c.AltitudeMeters);
+        var altitudeFeet = altitudeMeters * 3.28084;
+
+        // A group usually flies one type; if it doesn't, the most common one is the useful thing
+        // to call rather than whichever unit happened to be first in the list.
+        var type = contacts
+            .GroupBy(c => c.Type)
+            .OrderByDescending(g => g.Count())
+            .Select(g => TypeOf(g.Key))
+            .FirstOrDefault() ?? "";
+
+        // DCS gives altitude above sea level and nothing about the ground underneath, so height
+        // above ground is passed as the same figure. In the mountains that under-reports "low",
+        // which is the safer direction to be wrong in: a group not called low that is costs the
+        // pilot more than one called low that isn't.
+        var words = TacticalCalls.FillIns(contacts.Count, fastestKnots, altitudeFeet, altitudeFeet, type);
+
+        // The altitude itself is more use to a pilot than the word for it, and saying both -
+        // "twenty five thousand, high" - is noise. The figure goes in where the word was.
+        words.Remove("high");
+        words.Remove("low");
+        words.Insert(1, SpeakAltitude(altitudeMeters));
+
+        return words;
     }
 
     // ---------------------------------------------------------------------------------
@@ -1047,7 +1343,8 @@ public class DcsIntelService
                 // A group usually flies one type; if it doesn't, the most common one is the
                 // useful thing to call rather than whichever unit happened to be first.
                 Type = g.GroupBy(c => c.Type).OrderByDescending(t => t.Count()).First().Key,
-                MixedTypes = g.Select(c => c.Type).Distinct().Count() > 1
+                MixedTypes = g.Select(c => c.Type).Distinct().Count() > 1,
+                FastestKnots = g.Max(c => c.SpeedMps) * 1.94384
             })
             .OrderBy(g => DistanceNm(sortLat, sortLon, g.Lat, g.Lon))
             .Take(Math.Max(1, _config.DcsIntelMaxGroups))
@@ -1066,10 +1363,41 @@ public class DcsIntelService
             var reference = useBullseye ? "bullseye" : "bearing";
 
             var type = TypeOf(g.Type);
-            var typePart = string.IsNullOrEmpty(type) ? "" : g.MixedTypes ? $", mixed, lead {type}" : $", {type}";
+            var typeWord = string.IsNullOrEmpty(type) ? "" : g.MixedTypes ? $"mixed, lead {type}" : type;
+
+            // Size, speed and type in a controller's order. The altitude is spoken as a figure
+            // just before these, so the "high" and "low" words would only repeat it - see
+            // DescribeGroup for the same reasoning.
+            var fillIns = TacticalCalls.FillIns(g.Count, g.FastestKnots,
+                g.Altitude * 3.28084, g.Altitude * 3.28084, typeWord);
+            fillIns.Remove("high");
+            fillIns.Remove("low");
 
             parts.Add($"{label}, {reference} {SpeakBearing(bearing, BearingSeparator)}, for {SpeakRange(rangeNm)} miles, " +
-                      $"{SpeakAltitude(g.Altitude)}, {SpeakCount(g.Count)} contact{(g.Count == 1 ? "" : "s")}{typePart}.");
+                      $"{SpeakAltitude(g.Altitude)}, {string.Join(", ", fillIns)}.");
+        }
+
+        // How the groups sit relative to each other, which is only meaningful from the pilot's own
+        // aircraft: from the bullseye the same three groups make a different shape. Two or three
+        // groups get a word; one has no shape and four is not called as one.
+        if (requester?.Position != null && groups.Count is 2 or 3)
+        {
+            var fromPilot = groups
+                .Select(g => (
+                    Bearing: MagneticBearing(requester.Position.Lat, requester.Position.Lon, g.Lat, g.Lon, declination),
+                    RangeNm: DistanceNm(requester.Position.Lat, requester.Position.Lon, g.Lat, g.Lon)))
+                .ToList();
+
+            var formation = TacticalCalls.Formation(
+                fromPilot.Select(f => f.Bearing).ToList(),
+                fromPilot.Select(f => f.RangeNm).ToList());
+
+            // Two groups are described ("groups azimuth"); three are named outright ("wall"),
+            // which is how the words are actually used on the radio.
+            if (formation is "azimuth" or "range")
+                parts.Add($"Groups {formation}.");
+            else if (formation != null)
+                parts.Add($"{char.ToUpperInvariant(formation[0])}{formation[1..]}.");
         }
 
         if (totalGroups > groups.Count)
@@ -1082,7 +1410,6 @@ public class DcsIntelService
     // Geometry and speech helpers (internal so they can be unit-tested)
     // ---------------------------------------------------------------------------------
 
-    /// <summary>Great-circle distance in nautical miles.</summary>
     /// <summary>
     /// "Punch 1-1, alpha check, bullseye zero one zero, one two two." Bearing and range measured
     /// FROM the bullseye TO the aircraft, which is the direction a bullseye call always runs.
@@ -1165,6 +1492,35 @@ public class DcsIntelService
         return $"{name}, {reference} {spokenBearing}, {spokenRange} miles, {altitude}{heading}.";
     }
 
+    /// <summary>
+    /// The point that lies a given true bearing and distance from another - the inverse of
+    /// <see cref="TrueBearing"/> and <see cref="DistanceNm"/>, and what turns "bullseye zero three
+    /// zero for four five" into somewhere to look.
+    ///
+    /// Great-circle rather than flat: over 45 miles the difference is small, but the same formula
+    /// is used for a 200-mile declare on a big map, and a flat approximation drifts by miles there.
+    /// </summary>
+    internal static (double Lat, double Lon) PointFrom(double lat, double lon, double trueBearing, double distanceNm)
+    {
+        const double earthRadiusNm = 6371000.0 / 1852.0;
+        var angular = distanceNm / earthRadiusNm;
+
+        var φ1 = ToRadians(lat);
+        var λ1 = ToRadians(lon);
+        var θ = ToRadians(NormalizeBearing(trueBearing));
+
+        var φ2 = Math.Asin(Math.Sin(φ1) * Math.Cos(angular) + Math.Cos(φ1) * Math.Sin(angular) * Math.Cos(θ));
+        var λ2 = λ1 + Math.Atan2(Math.Sin(θ) * Math.Sin(angular) * Math.Cos(φ1),
+                                 Math.Cos(angular) - Math.Sin(φ1) * Math.Sin(φ2));
+
+        // Back into -180..180, or a declare just east of the date line answers about the Pacific.
+        var lon2 = ToDegrees(λ2);
+        lon2 = ((lon2 + 540) % 360) - 180;
+
+        return (ToDegrees(φ2), lon2);
+    }
+
+    /// <summary>Great-circle distance in nautical miles.</summary>
     internal static double DistanceNm(double lat1, double lon1, double lat2, double lon2)
     {
         const double earthRadiusMeters = 6371000.0;
@@ -1241,14 +1597,6 @@ public class DcsIntelService
     }
 
     /// <summary>
-    /// Bearings are read digit by digit on the radio ("zero niner zero", not "ninety"). Spelling
-    /// the digits out as words also stops TTS engines from reading "090" as "ninety".
-    ///
-    /// The separator is what makes the difference between an intelligible and a rushed-sounding
-    /// bearing: with a comma between the digits, TTS engines insert a short pause after each one
-    /// instead of running "zeroninerzero" together.
-    /// </summary>
-    /// <summary>
     /// A bearing as it is read on the radio: 1 to 360, never 0. Due north is "three six zero" -
     /// "zero zero zero" is not something a controller says, and a pilot hearing it would wonder
     /// whether the bot had lost the track.
@@ -1262,6 +1610,14 @@ public class DcsIntelService
     /// <summary>The same bearing written out, for the fast (non-spelled) replies.</summary>
     internal static string BearingText(int bearing) => BearingForSpeech(bearing).ToString("000");
 
+    /// <summary>
+    /// Bearings are read digit by digit on the radio ("zero niner zero", not "ninety"). Spelling
+    /// the digits out as words also stops TTS engines from reading "090" as "ninety".
+    ///
+    /// The separator is what makes the difference between an intelligible and a rushed-sounding
+    /// bearing: with a comma between the digits, TTS engines insert a short pause after each one
+    /// instead of running "zeroninerzero" together.
+    /// </summary>
     internal static string SpeakBearing(int bearing, string separator = " ")
     {
         var normalized = BearingForSpeech(bearing);

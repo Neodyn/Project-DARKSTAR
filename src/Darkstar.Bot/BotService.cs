@@ -13,6 +13,58 @@ public sealed class BotService : BackgroundService
 {
     private readonly IHostApplicationLifetime _lifetime;
     private SrsConnection? _srs;
+
+    /// <summary>
+    /// What became of each transmission, for the quality report. Held here rather than inside the
+    /// receive loop so shutdown can summarise it, and locked because several radios reach it from
+    /// their own threads.
+    ///
+    /// "It does not understand me" is the hardest complaint to act on. This is the bot keeping
+    /// the evidence as it goes, so nobody has to set up an experiment to get numbers.
+    /// </summary>
+    private readonly List<Transmission> _heard = new();
+
+    private int _sayAgainCount;
+
+    private void Remember(string pilot, double frequencyHz, string transcript,
+        TransmissionOutcome outcome, string? trigger)
+    {
+        SpeechReport? running = null;
+
+        lock (_heard)
+        {
+            _heard.Add(new Transmission(DateTime.UtcNow, pilot ?? "", frequencyHz,
+                transcript ?? "", outcome, trigger));
+
+            if (_heard.Count > SpeechQuality.MaxRemembered) _heard.RemoveAt(0);
+
+            // A running line every so often, because a dedicated server is usually killed rather
+            // than stopped - a report that only appears at shutdown is one nobody ever sees.
+            if (_heard.Count % 25 == 0) running = SpeechQuality.Analyse(_heard, _sayAgainCount);
+        }
+
+        // Outside the lock on purpose: this one is taken by every radio's receive loop, and the
+        // logger can block on disk. Holding it across a write would stall the radios behind it.
+        if (running != null)
+            Logger.Log($"[Speech] So far: {running.Calls} of {running.Total} transmissions understood as a call, " +
+                       $"{running.Unmatched} matched nothing, {running.ImmediateRepeats} were a pilot trying again.");
+    }
+
+    /// <summary>The full report, for the log at shutdown.</summary>
+    private void ReportSpeechQuality()
+    {
+        List<Transmission> snapshot;
+        int sayAgains;
+        lock (_heard)
+        {
+            snapshot = _heard.ToList();
+            sayAgains = _sayAgainCount;
+        }
+
+        foreach (var line in SpeechQuality.Describe(SpeechQuality.Analyse(snapshot, sayAgains)))
+            Logger.Log($"[Speech] {line}");
+    }
+
     private AppConfig? _config;
     private Model? _voskModel;
 
@@ -32,12 +84,20 @@ public sealed class BotService : BackgroundService
         public string Modulation = "AM";
         public string Callsign = "Overlord";
 
+
         /// <summary>
         /// TTS voice for this radio's replies, resolved once at startup (radio's own, else the
         /// global one, else empty for whatever ExternalAudio picks). Empty is passed through
         /// rather than substituted, so the decision stays in one place.
         /// </summary>
         public string Voice = "";
+
+        /// <summary>
+        /// The voice that reads a menu click back as the pilot. Resolved once at startup against
+        /// the voices this machine actually has; null means none was distinguishable from
+        /// <see cref="Voice"/>, and the read-back stays off for this radio.
+        /// </summary>
+        public string? EchoVoice;
 
         public IHotwordDetector Hotword = null!;
 
@@ -147,13 +207,6 @@ public sealed class BotService : BackgroundService
         _ => "Spectator/Unknown"
     };
 
-    /// <summary>
-    /// Parses the pilot's callsign out of their raw SRS player name using the configured
-    /// separator, e.g. "Enfield 1-1 | neodym" -> "Enfield 1-1" (the part after the separator -
-    /// typically the player's real name/handle - is discarded entirely). Falls back to the full
-    /// (trimmed) name if the separator isn't present, so players not following the convention
-    /// still get addressed normally instead of breaking.
-    /// </summary>
     /// <summary>
     /// The callsign the bot addresses a pilot by, taken from their SRS name. See PilotNames for
     /// what gets stripped and why - squadron tags in particular, since "[ISAF] Mobius 1" read out
@@ -351,11 +404,20 @@ public sealed class BotService : BackgroundService
             Logger.Log("Recommendation: set VoskModelPath (free, offline, no account needed - see README).");
         }
 
+        // Who is on station and what they were last told. Outside the DCS-gRPC gate on purpose:
+        // "say again" repeats whatever the bot said last, which includes a fixed phrase or a
+        // Gemini reply on an installation with no DCS connection at all.
+        var roster = new PilotRoster(config);
+        if (config.DcsIntelCheckInGatesCalls)
+            Logger.Log("[Roster] Unprompted calls are limited to pilots who have checked in " +
+                       "(DcsIntelCheckInGatesCalls is true).");
+
         // Tactical replies from live mission data - only useful when DCS-gRPC is actually enabled.
         DcsIntelService? intel = null;
         ThreatCircleService? threatCircles = null;
         DcsAirfieldService? airfields = null;
         DcsMenuService? menus = null;
+
         if (config.DcsIntelEnabled && config.DcsGrpcEnabled)
         {
             intel = new DcsIntelService(config);
@@ -451,6 +513,37 @@ public sealed class BotService : BackgroundService
                 AnswersAirfield = RadioConfig.Answers(radioConfig.AnswerAirfieldRequests, airfieldGloballyOn),
                 AnswersFriendlyPosition = RadioConfig.Answers(radioConfig.AnswerFriendlyPositionRequests, friendlyGloballyOn)
             };
+        }
+
+        // The voice that reads a menu click back as the pilot. Resolved once, here, rather than
+        // per click: listing the voices starts DCS-SR-ExternalAudio.exe and waits for it, which
+        // is fine at startup and not fine in the middle of answering a call.
+        //
+        // Only when there is a menu to click and a read-back to make - an installation with
+        // neither must not pay for a subprocess it has no use for.
+        if (config.F10MenuEnabled && config.DcsGrpcEnabled && config.F10EchoEnabled)
+        {
+            var voices = await TtsVoices.ListAsync(config.ExternalAudioExePath);
+
+            if (!voices.Ok)
+            {
+                Logger.Log($"[Menu] Could not list the installed voices ({voices.Error}) - the pilot read-back " +
+                           "is off until that works. The answers themselves are unaffected.");
+            }
+            else
+            {
+                foreach (var session in sessions.Values)
+                {
+                    session.EchoVoice = PilotEcho.PickVoice(voices.Voices, session.Voice, config.F10EchoVoice);
+
+                    if (session.EchoVoice == null)
+                        Logger.Log(PilotEcho.NoVoiceHint(session.Voice));
+                    else
+                        Logger.Log($"[Menu] {session.FrequencyHz / 1_000_000:0.000} MHz: a menu click is read back " +
+                                   $"as the pilot in \"{session.EchoVoice}\", then answered in " +
+                                   $"\"{(string.IsNullOrWhiteSpace(session.Voice) ? "the engine's default" : session.Voice)}\".");
+                }
+            }
         }
 
         // Who can serve what, for handing a pilot off to the right frequency when they call the
@@ -553,7 +646,11 @@ public sealed class BotService : BackgroundService
         // Transmits one piece of text on a radio, serialized per radio and with the bot's own
         // self-mute active for the whole transmission (see the comment in FinalizeRecordingAsync
         // about the feedback loop). Used for both the real reply and the standby acknowledgement.
-        async Task TransmitAsync(RadioSession session, string spokenText, CancellationToken token = default)
+        // voiceOverride is for the one transmission that is not the controller speaking: the
+        // pilot read-back after a menu click. Everything else passes null and keeps the radio's
+        // own voice, so the decision about which voice belongs to which radio stays in one place.
+        async Task TransmitAsync(RadioSession session, string spokenText, CancellationToken token = default,
+            string? voiceOverride = null)
         {
             await session.TransmitLock.WaitAsync(token);
             session.IsTransmittingReply = true;
@@ -563,7 +660,8 @@ public sealed class BotService : BackgroundService
                 // own Opus encoding/UDP sending, which makes it protocol-safe.
                 // The voice travels with the radio, not with the bot: on a mission with an AWACS,
                 // a tanker and a tower configured, each answers in its own voice.
-                await audioSender.SendTextAsync(spokenText, session.FrequencyHz, session.Modulation, session.Voice);
+                await audioSender.SendTextAsync(spokenText, session.FrequencyHz, session.Modulation,
+                    string.IsNullOrWhiteSpace(voiceOverride) ? session.Voice : voiceOverride);
 
                 // Small safety margin in case the transmission trails off slightly before it
                 // arrives back at the bot itself as incoming audio.
@@ -765,6 +863,9 @@ public sealed class BotService : BackgroundService
                         ? $"This is {ForSpeech(session.Callsign)}... {sayAgain}"
                         : $"{ForSpeech(senderName)}, this is {ForSpeech(session.Callsign)}... {sayAgain}";
 
+                    Remember(senderRawName, session.FrequencyHz, "",
+                        TransmissionOutcome.Unintelligible, null);
+
                     CancelPendingAck(session, ackCts);
                     await TransmitAsync(session, spokenSayAgain);
                     return;
@@ -791,6 +892,58 @@ public sealed class BotService : BackgroundService
                                $"answered (scope: {scope}).");
                 }
 
+                // "Say again", and coming on or off station. None of these three touch DCS, which
+                // is why they are answered here rather than through the intel service: a pilot
+                // asking for a repeat most often does so when something else is already broken.
+                //
+                // "Say again" is answered on any radio - it only repeats what this pilot was last
+                // told, whoever told them. Checking in and out gate the bot's unprompted calls,
+                // which are a tactical service, so they stay on a radio that provides one.
+                //
+                // An entry in phrases.json wins, exactly as it does for the radio check: an
+                // installation that already has "say again" or "check in" in there was answering
+                // those before the bot could do it properly, and an upgrade must not silently
+                // start saying something else. New installations no longer get those entries.
+                var rememberThisReply = true;
+                if (intelReply == null && PhraseBook.TryMatch(text, phrases) == null)
+                {
+                    var rosterKind = roster.Classify(text, out var rosterTrigger);
+
+                    if (rosterKind == RosterRequestKind.SayAgain)
+                    {
+                        intelReply = roster.SayAgain(senderRawName);
+
+                        // The repeat must not become the thing that gets repeated: a pilot who
+                        // asks twice would otherwise be told "negative, nothing to repeat" the
+                        // second time, having just been given a perfectly good answer.
+                        rememberThisReply = false;
+                        Interlocked.Increment(ref _sayAgainCount);
+
+                        Logger.Log($"[Roster] {freqLabel}: say again, triggered by \"{rosterTrigger}\" - " +
+                                   (roster.LastReply(senderRawName) == null
+                                       ? "nothing on file for this pilot."
+                                       : "last reply repeated."));
+                    }
+                    else if (rosterKind != RosterRequestKind.None && session.AnswersTactical)
+                    {
+                        intelReply = rosterKind == RosterRequestKind.CheckIn
+                            ? roster.CheckIn(senderRawName)
+                            : roster.CheckOut(senderRawName);
+
+                        // Going off station stops the unprompted calls outright rather than
+                        // leaving a watch sweeping for an aircraft whose pilot has said goodbye.
+                        // Done here and not inside the roster, which knows nothing about circles.
+                        if (rosterKind == RosterRequestKind.CheckOut && threatCircles != null)
+                        {
+                            threatCircles.Cancel(senderRawName, session.FrequencyHz);
+                            Logger.Debug($"[Roster] Any threat circle for \"{senderRawName}\" on this radio was dropped as well.");
+                        }
+
+                        Logger.Log($"[Roster] {freqLabel}: {rosterKind}, triggered by \"{rosterTrigger}\" " +
+                                   $"({roster.Count} pilot(s) on file).");
+                    }
+                }
+
                 if (intelReply == null && intel != null)
                 {
                     var kind = intel.Classify(text, out var matchedTrigger);
@@ -814,6 +967,12 @@ public sealed class BotService : BackgroundService
                         intelReply = kind == IntelRequestKind.ThreatCircleStart
                             ? await threatCircles.StartAsync(senderRawName, senderName, session.FrequencyHz, senderCoalition, text)
                             : threatCircles.Cancel(senderRawName, session.FrequencyHz);
+
+                        // Asking for a standing watch is a pilot putting themselves on station.
+                        // Without this, a server with the check-in gate on would accept the
+                        // request and then never make the warning it exists to make.
+                        if (kind == IntelRequestKind.ThreatCircleStart)
+                            roster.MarkOnStation(senderRawName);
 
                         Logger.Log($"[Intel] {freqLabel}: {kind} handled, triggered by \"{matchedTrigger}\" " +
                                    $"({threatCircles.ActiveCount} threat circle(s) active).");
@@ -927,8 +1086,23 @@ public sealed class BotService : BackgroundService
                 var callsignPrefix = string.IsNullOrWhiteSpace(senderName)
                     ? $"This is {session.Callsign}..."
                     : $"{senderName}, this is {session.Callsign}...";
+                // Which bucket this transmission falls into. A recognised call is the outcome
+                // everything aims at; a fixed phrase is a lesser one; anything else means the
+                // bot guessed or gave up, and those are the ones worth counting.
+                Remember(senderRawName, session.FrequencyHz, text,
+                    intelReply != null ? TransmissionOutcome.Call
+                    : phraseMatch != null ? TransmissionOutcome.Phrase
+                    : TransmissionOutcome.Unmatched,
+                    null);
+
                 var addressedReply = $"{callsignPrefix} {reply}";
                 Logger.Log($"[Reply] {freqLabel}: \"{addressedReply}\"");
+
+                // On file for "say again". The bare reply, without the callsign prefix: repeating
+                // "Punch one one, this is Overlord" in front of it a second time is not what the
+                // pilot asked for. Everything goes in here, not only tactical answers - the calls
+                // most often missed are the long ones, and the longest is the ATIS.
+                if (rememberThisReply) roster.Remember(senderRawName, reply);
 
                 // Separate, TTS-only version: hyphens in callsigns ("1-1") get read out loud or
                 // misheard as "dash"/"minus" by most TTS voices - replacing them with a comma
@@ -1122,6 +1296,16 @@ public sealed class BotService : BackgroundService
                 if (!sessions.TryGetValue(key, out var session))
                     return; // the radio the circle belongs to is no longer configured
 
+                // The one place the check-in gate actually bites: this is the bot's only
+                // unprompted transmission. Off by default, so nobody loses a warning by not
+                // knowing the phrase.
+                if (!roster.MayBeCalledUnprompted(alert.Circle.RawPlayerName))
+                {
+                    Logger.Debug($"[ThreatCircle] Warning for \"{alert.Circle.PilotCallsign}\" held back - " +
+                                 "they have not checked in and DcsIntelCheckInGatesCalls is true.");
+                    return;
+                }
+
                 // Don't cut into a pilot's transmission. Bounded wait, so a recording that never
                 // finalizes can't hold the warning back indefinitely - a threat call is
                 // time-critical and late is worse than slightly overlapping.
@@ -1290,7 +1474,7 @@ public sealed class BotService : BackgroundService
                     }
                 }
             }, stoppingToken);
-        }
+                }
 
         // Answers one F10 click and sends the reply the way F10ReplyMode asks for.
         async Task AnswerMenuCallAsync(CallDefinition call, string groupName, uint groupId,
@@ -1309,11 +1493,19 @@ public sealed class BotService : BackgroundService
                 }
                 else if (call.Capability == RadioCapability.Airfield && airfields != null)
                 {
-                    var kind = call.Kind == CallKind.Atis ? AirfieldRequestKind.Atis : AirfieldRequestKind.RunwayInUse;
+                    var kind = call.Kind switch
+                    {
+                        CallKind.Atis => AirfieldRequestKind.Atis,
+                        CallKind.Divert => AirfieldRequestKind.Divert,
+                        _ => AirfieldRequestKind.RunwayInUse,
+                    };
 
                     // No transcript to name an airfield in, so this is the pure position-based
-                    // path - which is the one the airfield lookup prefers anyway.
-                    var result = await airfields.AnswerAsync(kind, "", "", config.Coalition, token);
+                    // path - which is the one the airfield lookup prefers anyway. The group DCS
+                    // attributed the click to is what identifies the pilot; without it there is
+                    // no SRS name and no transcript either, and the lookup cannot locate them.
+                    var result = await airfields.AnswerAsync(kind, "", "", config.Coalition, token,
+                        knownGroupName: groupName);
                     reply = result.Handled ? result.Reply : config.DcsAirfieldUnavailableReply;
                 }
                 else if (intel != null)
@@ -1355,7 +1547,21 @@ public sealed class BotService : BackgroundService
                        $"{session.FrequencyHz / 1_000_000:0.000} MHz ({mode}): {reply}");
 
             if (overRadio)
+            {
+                // The pilot's half first. A click is silent on the frequency, so without this the
+                // other pilots hear an answer to a question nobody asked - which reads as a call
+                // to somebody else. Skipped when no second voice was found: both halves in one
+                // voice sounds like the controller talking to themselves.
+                if (config.F10EchoEnabled && session.EchoVoice != null)
+                {
+                    var echo = PilotEcho.Build(session.Callsign, groupName, call.EchoPhrase);
+
+                    if (echo.Length > 0)
+                        await TransmitAsync(session, ForSpeech(echo), token, voiceOverride: session.EchoVoice);
+                }
+
                 await TransmitAsync(session, $"This is {ForSpeech(session.Callsign)}... {ForSpeech(reply)}", token);
+            }
 
             if (onScreen && menus != null)
             {
@@ -1589,6 +1795,8 @@ public sealed class BotService : BackgroundService
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         Logger.Log("Shutting down...");
+
+        ReportSpeechQuality();
 
         var callsign = _config?.BotCallsign ?? "Bot";
         DiscordNotifier.Notify($"🛑 **{callsign}** bot is shutting down.");

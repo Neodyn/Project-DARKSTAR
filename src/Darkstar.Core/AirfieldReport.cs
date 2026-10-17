@@ -26,6 +26,13 @@ public enum AirfieldRequestKind
 
     /// <summary>The full weather picture: wind, temperature, pressure and the runway.</summary>
     Atis,
+
+    /// <summary>
+    /// A steer to somewhere to land: "vector to nearest", "divert". Bearing, range and elevation
+    /// only - DCS-gRPC exposes no TACAN channel and no tower frequency, and a made-up one sends a
+    /// pilot who is already in trouble to tune a dead radio.
+    /// </summary>
+    Divert,
 }
 
 /// <summary>One runway strip as DCS describes it.</summary>

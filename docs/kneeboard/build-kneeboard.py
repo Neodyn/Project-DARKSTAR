@@ -46,6 +46,22 @@ LANGUAGES = {
 
 PAGES = (1, 2, 3)
 CSS_WIDTH, CSS_HEIGHT = 768, 1024      # the page as it is designed
+
+# The footer is `position: absolute; bottom: 18px`, so it sits OVER the content rather than after
+# it: text does not stop at the footer, it runs underneath it. That makes the page height the
+# wrong limit to check against - a page can measure comfortably under 1024 and still print its
+# last line across the footer rule, which is how one shipped once.
+#
+# The number below is the clearance the text must keep above that rule, and it is calibrated
+# against rendered pages rather than chosen for tidiness. Three observations fix it: a page
+# measuring 1016 and one measuring 1019 both clear the rule with the descenders intact, while one
+# measuring 1022 prints its last line across it. That puts the real limit between 1019 and 1022;
+# 1020 is the cautious end of that range. The two values in between are untested, so a page that
+# lands there is flagged on the assumption it is too close rather than passed on the hope it is
+# not - the cost of looking at a page needlessly is nothing, and the cost of missing one is a
+# kneeboard that quietly loses its last line in the cockpit.
+FOOTER_CLEARANCE = 4
+USABLE_HEIGHT = CSS_HEIGHT - FOOTER_CLEARANCE
 SCALE = 2                              # 1536x2048 - what DCS expects of a kneeboard page
 MEASURE_HEIGHT = 2600                  # tall enough that nothing is clipped while measuring
 
@@ -170,9 +186,9 @@ def render_language(browser, language, source, offset, scratch):
         crop_to_page(out)
         produced.append(out)
 
-        over = tall - CSS_HEIGHT
-        status = "ok" if over <= 0.5 else f"OVERFLOWS by {over:.0f} px"
-        print(f"  page {page}: content {tall:.0f} of {CSS_HEIGHT} px  [{status}]")
+        over = tall - USABLE_HEIGHT
+        status = "ok" if over <= 0.5 else f"RUNS INTO THE FOOTER by {over:.0f} px"
+        print(f"  page {page}: content {tall:.0f} of {USABLE_HEIGHT} px  [{status}]")
         if over > 0.5:
             overflowing.append((page, over))
 

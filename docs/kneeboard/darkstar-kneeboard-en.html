@@ -153,7 +153,7 @@
     <div class="what">The whole hostile picture, grouped, from the bullseye.</div>
     <div class="say">"Overlord, picture."</div>
     <div class="reply">Picture: two groups. Lead group, bullseye two, seven, zero, for forty miles,
-      twenty five thousand, two contacts, Su-27…</div>
+      twenty five thousand, two contacts, Su-27… Groups azimuth.</div>
   </div>
 
   <div class="call">
@@ -161,6 +161,13 @@
     <div class="what">Only the nearest threat. Short, for when you have no time.</div>
     <div class="say">"Overlord, threat check."</div>
     <div class="reply">Nearest contact zero, niner, zero at thirty five miles, twenty two thousand.</div>
+  </div>
+
+  <div class="call">
+    <div class="name">DECLARE &nbsp;·&nbsp; SPIKE</div>
+    <div class="what">What sits at a point, or on a bearing. <b>Furball</b> = both sides mixed, do not shoot.</div>
+    <div class="say">"Overlord, declare bullseye zero three zero for four five."<br>"Overlord, spike two seven zero."</div>
+    <div class="reply">Hostile, two contacts, twenty five thousand, fast, MiG-29. &nbsp;/&nbsp; Buddy spike, twelve miles.</div>
   </div>
 
   <div class="call">
@@ -223,6 +230,15 @@
       QNH one zero one three, altimeter two niner niner two, runway in use two five.</div>
   </div>
 
+  <div class="call">
+    <div class="name">DIVERT</div>
+    <div class="what">Somewhere to land. No TACAN or tower frequency — the mission data has
+      neither.</div>
+    <div class="say">"Overlord, vector to nearest."</div>
+    <div class="reply">Divert options: Kutaisi, bearing two, four, five, thirty eight miles, field
+      elevation 150 feet. Senaki, bearing three, zero, zero, fifty two miles.</div>
+  </div>
+
   <h2 class="section">ALWAYS WORKS <span class="need">— no mission data needed, answers on every frequency</span></h2>
 
   <div class="call">
@@ -233,11 +249,16 @@
     <div class="reply">Loud and clear, contact. &nbsp;/&nbsp; Loud and clear, but no radar contact on you.</div>
   </div>
 
+  <h2 class="section">ON STATION <span class="need">— and asking for a repeat</span></h2>
+  <div class="kv" style="font-size:14px;margin-top:6px">
+    <b>"say again"</b><span>The last thing you were told, again. Any call, not just a tactical one.</span>
+    <b>"checking in"</b><span>Punch 1-1, radar contact, cleared into the area.</span>
+    <b>"checking out"</b><span>Radar service terminated. Also ends your threat circle.</span>
+  </div>
+
   <h2 class="section">SMALL TALK IT ANSWERS <span class="need">— samples your admin can change</span></h2>
   <div class="kv" style="font-size:14px;margin-top:6px">
-    <b>"say again"</b><span>Copy, say again your last transmission.</span>
     <b>"status"</b><span>All systems nominal.</span>
-    <b>"check in"</b><span>Copy your check-in.</span>
     <b>"request weather"</b><span>Weather is clear, visibility unrestricted. <i>(gives the real ATIS when the airfield replies are on)</i></span>
     <b>"request RTB"</b><span>Copy, cleared to RTB.</span>
   </div>
@@ -300,8 +321,9 @@
       <li>Did you say the <b>wake word</b>? Nothing without it is even listened to.</li>
       <li>One call per transmission. Two questions in one go get one answer at best.</li>
       <li>While the bot is speaking it does not hear you. Let it finish, then key up.</li>
-      <li><b>Still not understood? <code>F10 &rarr; Darkstar</code>.</b> The same calls from a menu,
-        no speaking involved. Usually <b>F1</b>. Not there if your server switched it off.</li>
+      <li><b>Still not understood?</b> Open the <b>comms menu</b> (<code>\</code> by default), then
+        <code>F10 &rarr; Darkstar</code>. Usually <b>F1</b>; your call is read back first, so the
+        others hear both sides.</li>
     </ul>
   </div>
 
