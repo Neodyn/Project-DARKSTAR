@@ -1,5 +1,6 @@
 @namespace Darkstar.Gui
 @inject ConfigStore Store
+@inject IPathPicker Picker
 @implements IDisposable
 
 <div class="titlebar">
@@ -44,7 +45,10 @@
             <p style="color:#8CA0A8">@Store.StatusMessage</p>
             <div class="field" style="max-width:480px">
                 <label>CONFIG FOLDER</label>
-                <input type="text" @bind="Store.ConfigFolder" />
+                <div class="path-row">
+                    <input type="text" @bind="Store.ConfigFolder" />
+                    <button class="browse" @onclick="BrowseFolder">Browse...</button>
+                </div>
                 <div class="hint">Folder containing config.json / phrases.json / vocabulary.json. Auto-detected based on where an existing config.json was found nearby; change it if the bot lives elsewhere. A folder loaded from here is remembered for the next start, and CH10 Profiles can change it again later.</div>
             </div>
             <button class="link-action" @onclick="() => Store.UseFolder(Store.ConfigFolder)"><span>Load</span></button>
@@ -99,6 +103,19 @@
 </div>
 
 @code {
+
+    /// <summary>
+    /// On the "not loaded" screen the picked folder is loaded straight away: there is nothing on
+    /// screen to lose, and picking a folder there is the whole purpose of that screen.
+    /// </summary>
+    private void BrowseFolder()
+    {
+        var picked = Picker.PickFolder("Select the folder holding the bot's config.json",
+            Store.ConfigFolder);
+
+        if (picked != null) Store.UseFolder(picked);
+    }
+
     /// <summary>
     /// One entry in the sidebar.
     /// </summary>
@@ -127,14 +144,26 @@
     private sealed record NavGroup(string Title, NavEntry[] Items);
 
     /// <summary>
-    /// The sidebar, grouped by the question the operator is answering rather than by the order the
-    /// features were built in - which is what the numbering reflects and the only reason CH6
-    /// Discord used to sit between logging and the mission data.
+    /// The sidebar: grouped by the question the operator is answering, and ordered by number.
+    ///
+    /// The rule is exactly two sentences long, on purpose. A group comes before another when its
+    /// lowest channel number is lower, and inside a group the numbers ascend. That is what puts
+    /// SERVER (1) first and MISSION DATA (8) last, and it is the whole decision - there is nothing
+    /// else to weigh when a panel is added.
+    ///
+    /// It replaced an attempt to order each group by the sequence somebody sets the bot up in,
+    /// which read 1, 10, 9, 2, 3, 4, 5, 8, 7, 6 down the sidebar. The reasoning was sound and the
+    /// result was not: the numbers are the index everybody actually navigates by - around ninety
+    /// places in the documentation say "on CH2 Radios", and a channel selector on a radio counts
+    /// upwards - so a list that jumps looks broken whatever the rationale behind it was.
     ///
     /// CH8 is three entries instead of one. It had grown into a thousand-line page holding the
     /// connection, every tactical and airfield reply setting, two test buttons and a 38-query
     /// explorer, and no amount of grouping in the sidebar helps a page nobody can find anything on.
     /// The number stays CH8 for all three, because that is what the documentation calls it.
+    ///
+    /// The order is asserted verbatim in EditorPanelTests, so changing it is a decision rather
+    /// than a side effect of adding a panel to whichever group was nearest.
     /// </summary>
     private NavGroup[] _groups = Array.Empty<NavGroup>();
 
@@ -165,6 +194,11 @@
                 new NavEntry("phrases", "CH4", "PHRASES"),
                 new NavEntry("vocabulary", "CH5", "VOCABULARY"),
             }),
+            new NavGroup("MONITORING", new[]
+            {
+                new NavEntry("discord", "CH6", "DISCORD", null, () => !Store.Config.DiscordEnabled),
+                new NavEntry("logging", "CH7", "LOGGING", null, () => !Store.Config.LoggingEnabled),
+            }),
             new NavGroup("MISSION DATA — CH8", new[]
             {
                 new NavEntry("dcsgrpc", "", "SERVER & TEST", DcsGrpcPanel.SectionServer,
@@ -172,11 +206,6 @@
                 new NavEntry("dcsgrpc", "", "REPLIES", DcsGrpcPanel.SectionReplies,
                     () => !Store.Config.DcsIntelEnabled),
                 new NavEntry("dcsgrpc", "", "MISSION EXPLORER", DcsGrpcPanel.SectionExplorer),
-            }),
-            new NavGroup("MONITORING", new[]
-            {
-                new NavEntry("discord", "CH6", "DISCORD", null, () => !Store.Config.DiscordEnabled),
-                new NavEntry("logging", "CH7", "LOGGING", null, () => !Store.Config.LoggingEnabled),
             }),
         };
     }

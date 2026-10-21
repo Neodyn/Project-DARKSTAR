@@ -1,12 +1,16 @@
 @namespace Darkstar.Gui.Pages
 @implements IDisposable
 @inject ConfigStore Store
+@inject IPathPicker Picker
 
 <h1>PROFILES</h1>
 
 <div class="field">
     <label>CONFIG FOLDER</label>
-    <input type="text" @bind="_folder" />
+    <div class="path-row">
+        <input type="text" @bind="_folder" />
+        <button class="browse" @onclick="BrowseFolder">Browse...</button>
+    </div>
     <div class="hint">
         The folder the bot reads <code>config.json</code>, <code>phrases.json</code> and
         <code>vocabulary.json</code> from — the one its <code>Darkstar.exe</code> sits in. The bot
@@ -136,6 +140,18 @@ else
 </div>
 
 @code {
+
+    /// <summary>
+    /// Picks the folder, but does not switch to it - "Use this folder and load" still has to be
+    /// pressed. Browsing is how you find a folder; loading it is a decision, and it reloads
+    /// everything on screen.
+    /// </summary>
+    private void BrowseFolder()
+    {
+        var picked = Picker.PickFolder("Select the folder holding the bot's config.json", _folder);
+        if (picked != null) _folder = picked;
+    }
+
     private string _folder = "";
     private string _newName = "";
 

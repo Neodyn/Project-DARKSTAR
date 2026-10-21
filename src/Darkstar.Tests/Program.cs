@@ -91,6 +91,14 @@ Console.WriteLine("======== Config profiles ========");
 ConfigProfileTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== What pressing Save writes ========");
+SavingTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The editor's sidebar and path fields ========");
+EditorPanelTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== Housekeeping, requests, documentation ========");
 await HousekeepingTests.RunAsync();
 

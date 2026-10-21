@@ -85,6 +85,25 @@ html, body {
 }
 .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #F2A93B; }
 .field .hint { font-size: 11px; color: #5A6A70; margin-top: 4px; }
+
+/* A path field with a Browse button beside it. The input keeps its own styling and simply stops
+   being full-width; the button matches the input's height rather than the link-actions elsewhere,
+   because it belongs to the field rather than to the panel. */
+.path-row { display: flex; gap: 8px; align-items: stretch; }
+.path-row input[type=text] { flex: 1; min-width: 0; }
+.path-row .browse {
+    flex-shrink: 0;
+    background: #1B2429;
+    border: 1px solid #2A363C;
+    border-radius: 4px;
+    color: #8CA0A8;
+    font-size: 11px;
+    font-family: inherit;
+    padding: 0 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.path-row .browse:hover { color: #E7EDEF; border-color: #3A464C; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }

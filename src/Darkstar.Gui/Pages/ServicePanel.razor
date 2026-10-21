@@ -1,5 +1,6 @@
 @namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
+@inject IPathPicker Picker
 
 <h1>WINDOWS SERVICE</h1>
 <p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
@@ -43,7 +44,10 @@
 
 <div class="field">
     <label>BOT EXECUTABLE</label>
-    <input type="text" @bind="_exePath" disabled="@(_busy || IsInstalled)" />
+    <div class="path-row">
+        <input type="text" @bind="_exePath" disabled="@(_busy || IsInstalled)" />
+        <button class="browse" @onclick="BrowseExe" disabled="@(_busy || IsInstalled)">Browse...</button>
+    </div>
     <div class="hint">
         @if (System.IO.File.Exists(_exePath))
         {
@@ -128,6 +132,13 @@ else
 }
 
 @code {
+
+    private void BrowseExe()
+    {
+        var picked = Picker.PickFile("Select Darkstar.exe", _exePath, IPathPicker.Filters.Executables);
+        if (picked != null) _exePath = picked;
+    }
+
     private string _serviceName = WindowsServiceManager.DefaultServiceName;
     private string _displayName = WindowsServiceManager.DefaultDisplayName;
     private string _exePath = "";

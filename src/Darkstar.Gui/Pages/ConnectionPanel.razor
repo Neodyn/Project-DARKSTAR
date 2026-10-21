@@ -1,5 +1,6 @@
 @namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
+@inject IPathPicker Picker
 
 <h1>CONNECTION</h1>
 
@@ -28,7 +29,10 @@
 
 <div class="field">
     <label>EXTERNALAUDIO.EXE PATH</label>
-    <input type="text" @bind="Store.Config.ExternalAudioExePath" />
+    <div class="path-row">
+        <input type="text" @bind="Store.Config.ExternalAudioExePath" />
+        <button class="browse" @onclick="BrowseExternalAudio">Browse...</button>
+    </div>
     <div class="hint">
         Ships with DCS-SimpleRadio-Standalone, normally in its <code>ExternalAudio</code> subfolder.
         Every reply is transmitted through it.
@@ -78,6 +82,19 @@
 </div>
 
 @code {
+
+    /// <summary>
+    /// Picks DCS-SR-ExternalAudio.exe. A cancelled dialog returns null and the field keeps what
+    /// it had - the same rule in every one of these handlers.
+    /// </summary>
+    private void BrowseExternalAudio()
+    {
+        var picked = Picker.PickFile("Select DCS-SR-ExternalAudio.exe",
+            Store.Config.ExternalAudioExePath, IPathPicker.Filters.Executables);
+
+        if (picked != null) Store.Config.ExternalAudioExePath = picked;
+    }
+
     private bool _detecting;
     private bool _detectOk;
     private string? _detectMessage;

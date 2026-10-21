@@ -36,6 +36,10 @@ public partial class App : Application
         // back (reusing Darkstar.Core, the same code the actual bot runs on).
         services.AddSingleton<ConfigStore>();
 
+        // Windows' own folder and file pickers, behind an interface so the panels that use them
+        // stay compilable without WPF - see IPathPicker.
+        services.AddSingleton<IPathPicker, WindowsPathPicker>();
+
         Resources.Add("services", services.BuildServiceProvider());
     }
 }

@@ -37,24 +37,60 @@ The footer has two buttons:
 Styled after a radio's channel selector, one channel per settings panel. The channels are grouped
 by the question you are answering rather than by their number:
 
-| Group | Channels |
+| Group | Channels, in sidebar order |
 |---|---|
 | **SERVER** | CH1 Connection, CH9 Service, CH10 Profiles |
 | **RADIO & SPEECH** | CH2 Radios, CH3 Speech, CH4 Phrases, CH5 Vocabulary |
-| **MISSION DATA — CH8** | Server & test, Replies, Mission explorer |
 | **MONITORING** | CH6 Discord, CH7 Logging |
+| **MISSION DATA — CH8** | Server & test, Replies, Mission explorer |
 
-Two things about that table are deliberate:
+Three things about that table are deliberate:
 
 - **A panel never changes its number.** Around ninety places in this documentation say "on CH2
   Radios" — so panels may be regrouped and reordered, but CH7 is the log today and tomorrow.
 - **CH8 is three entries rather than one.** It had grown into a thousand-line page holding the
   connection, every reply setting, two test buttons and a 38-query explorer; no amount of grouping
   in the sidebar helps a page nobody can find anything on. All three are still CH8.
+- **The order is the numbers.** A group comes before another when its lowest channel number is
+  lower, and inside a group the numbers ascend — so the sidebar reads 1, 9, 10 · 2, 3, 4, 5 ·
+  6, 7 · 8. That is the whole rule, and it means a new panel has exactly one place to go.
+
+  An earlier version ordered each group by the sequence somebody sets the bot up in instead, and
+  read 1, 10, 9, 2, 3, 4, 5, 8, 7, 6 down the page. Every swap had a reason and the result was
+  still wrong: the numbers are the index people navigate by, and a list that jumps looks broken
+  whatever the thinking behind it was. The suite asserts both the exact order **and** the rule, so
+  neither a stray panel nor a reordering with the expected list "fixed" to match gets through; see
+  `EditorPanelTests`.
 
 An entry is marked **off** when the thing it configures is switched off in the configuration. That
 means "you turned this off", never "this is unreachable right now" — a connection that cannot be
 reached is a different problem, reported on the panel itself.
+
+## Path fields have a Browse button
+
+Every setting that holds a path has **Browse…** beside it, opening Windows' own picker:
+
+| Channel | Field | Picks |
+|---|---|---|
+| CH1 | ExternalAudio.exe path | a file, filtered to `*.exe` |
+| CH3 | Whisper model file | a file, filtered to `*.bin` |
+| CH3 | Vosk model folder | a **folder** |
+| CH9 | Bot executable | a file, filtered to `*.exe` |
+| CH10 | Config folder | a **folder** |
+
+Which of the two it is matters: a Vosk model is a directory containing `am\`, `conf\`, `graph\`
+and `ivector\`, and the usual way to get that setting wrong is to point it at a file inside the
+directory, or at the zip's outer folder, which contains only the model folder. A Whisper model is
+a single `.bin`. The pairing of field to picker is asserted in the suite, because a folder field
+wired to a file picker looks perfectly normal in a screenshot.
+
+The picker starts in the folder the field already names, when that folder exists, and a file is
+preselected so correcting a path is one click. Cancelling leaves the field untouched. On CH10 the
+picked folder is only filled in — **Use this folder and load** still has to be pressed; on the
+"not loaded" screen it loads straight away, since there is nothing on screen to lose.
+
+Typing a path by hand works exactly as before. If a picker ever fails to open, the log says so and
+the text box is still there.
 
 ---
 

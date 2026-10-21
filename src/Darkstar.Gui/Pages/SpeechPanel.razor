@@ -1,5 +1,6 @@
 @namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
+@inject IPathPicker Picker
 
 <h1>SPEECH — TRANSCRIPTION &amp; REPLY</h1>
 
@@ -37,8 +38,11 @@
 
         <div class="field" style="margin-top:10px">
             <label>WHISPER MODEL FILE (ggml-*.bin)</label>
-            <input type="text" @bind="Store.Config.WhisperModelPath"
-                   placeholder="e.g. models\ggml-small.en.bin" />
+            <div class="path-row">
+                <input type="text" @bind="Store.Config.WhisperModelPath"
+                       placeholder="e.g. models\ggml-small.en.bin" />
+                <button class="browse" @onclick="BrowseWhisperModel">Browse...</button>
+            </div>
         </div>
 
         <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -250,7 +254,10 @@
 
 <div class="field">
     <label>VOSK MODEL FOLDER</label>
-    <input type="text" @bind="Store.Config.VoskModelPath" placeholder="(empty = volume-based fallback, no real wake word)" />
+    <div class="path-row">
+        <input type="text" @bind="Store.Config.VoskModelPath" placeholder="(empty = volume-based fallback, no real wake word)" />
+        <button class="browse" @onclick="BrowseVoskModel">Browse...</button>
+    </div>
 </div>
 
 <div class="row2">
@@ -395,6 +402,26 @@
 </div>
 
 @code {
+
+    private void BrowseWhisperModel()
+    {
+        var picked = Picker.PickFile("Select a Whisper model file",
+            Store.Config.WhisperModelPath, IPathPicker.Filters.WhisperModels);
+
+        if (picked != null) Store.Config.WhisperModelPath = picked;
+    }
+
+    /// <summary>
+    /// A folder, not a file: a Vosk model is a directory holding am\, conf\, graph\ and
+    /// ivector\, and the commonest way to get this setting wrong is to point it at a file inside
+    /// that directory - or at the zip's outer folder, which holds only the model folder.
+    /// </summary>
+    private void BrowseVoskModel()
+    {
+        var picked = Picker.PickFolder("Select the Vosk model folder", Store.Config.VoskModelPath);
+        if (picked != null) Store.Config.VoskModelPath = picked;
+    }
+
     /// <summary>
     /// Whether the Whisper half of this panel is shown. Hidden entirely under Gemini rather than
     /// greyed out: it is a whole second engine's worth of fields, and nobody running the default
