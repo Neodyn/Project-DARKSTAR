@@ -87,7 +87,7 @@ public static class VoskModelCheck
                 Hints = new[]
                 {
                     "Install the model with the full installer, or download one from https://alphacephei.com/vosk/models,",
-                    "unpack it and enter the unpacked folder in the config editor under CH3 Speech.",
+                    "unpack it and enter the unpacked folder in the config editor under CH5 Speech.",
                 },
             };
         }
@@ -102,7 +102,7 @@ public static class VoskModelCheck
                 Message = $"The Vosk model folder '{path}' does not exist.",
                 Hints = new[]
                 {
-                    "Check VoskModelPath in config.json (config editor, CH3 Speech).",
+                    "Check VoskModelPath in config.json (config editor, CH5 Speech).",
                     "After a slim install the model has to be downloaded separately: https://alphacephei.com/vosk/models",
                 },
             };

@@ -35,32 +35,34 @@ The footer has two buttons:
 ## The sidebar
 
 Styled after a radio's channel selector, one channel per settings panel. The channels are grouped
-by the question you are answering rather than by their number:
+by the question you are answering, and they count straight up:
 
 | Group | Channels, in sidebar order |
 |---|---|
-| **SERVER** | CH1 Connection, CH9 Service, CH10 Profiles |
-| **RADIO & SPEECH** | CH2 Radios, CH3 Speech, CH4 Phrases, CH5 Vocabulary |
-| **MONITORING** | CH6 Discord, CH7 Logging |
+| **SERVER** | CH1 Connection, CH2 Windows Service, CH3 Profiles |
+| **RADIO & SPEECH** | CH4 Radios, CH5 Speech, CH6 Phrases, CH7 Vocabulary |
 | **MISSION DATA — CH8** | Server & test, Replies, Mission explorer |
+| **MONITORING** | CH9 Discord, CH10 Logging |
 
 Three things about that table are deliberate:
 
-- **A panel never changes its number.** Around ninety places in this documentation say "on CH2
-  Radios" — so panels may be regrouped and reordered, but CH7 is the log today and tomorrow.
+- **The order is the numbers.** A group comes before another when its lowest channel number is
+  lower, and inside a group the numbers ascend — so the sidebar reads 1 to 10 with no jumps. That
+  is the whole rule, and it means a new panel has exactly one place to go.
 - **CH8 is three entries rather than one.** It had grown into a thousand-line page holding the
   connection, every reply setting, two test buttons and a 38-query explorer; no amount of grouping
   in the sidebar helps a page nobody can find anything on. All three are still CH8.
-- **The order is the numbers.** A group comes before another when its lowest channel number is
-  lower, and inside a group the numbers ascend — so the sidebar reads 1, 9, 10 · 2, 3, 4, 5 ·
-  6, 7 · 8. That is the whole rule, and it means a new panel has exactly one place to go.
+- **A panel does not change its number.** This documentation names the channels in about three
+  hundred places, so the number is part of the panel's identity.
 
-  An earlier version ordered each group by the sequence somebody sets the bot up in instead, and
-  read 1, 10, 9, 2, 3, 4, 5, 8, 7, 6 down the page. Every swap had a reason and the result was
-  still wrong: the numbers are the index people navigate by, and a list that jumps looks broken
-  whatever the thinking behind it was. The suite asserts both the exact order **and** the rule, so
-  neither a stray panel nor a reordering with the expected list "fixed" to match gets through; see
-  `EditorPanelTests`.
+That last rule was broken exactly once, to get the first one. Two earlier versions kept the
+original numbers and sorted the groups by how a setup is actually done; both left a sidebar that
+jumped — 1, 9, 10, 2, 3, 4, 5, 8, 7, 6 at worst — and both were wrong, because the numbers are
+what people navigate by and a channel selector counts upwards. So the numbers were reassigned in
+one pass, every reference with them, and they are fixed again from here.
+
+The suite asserts the exact order **and** the rule behind it, so neither a stray panel nor a
+reordering with the expected list "fixed" to match gets through; see `EditorPanelTests`.
 
 An entry is marked **off** when the thing it configures is switched off in the configuration. That
 means "you turned this off", never "this is unreachable right now" — a connection that cannot be
@@ -73,10 +75,10 @@ Every setting that holds a path has **Browse…** beside it, opening Windows' ow
 | Channel | Field | Picks |
 |---|---|---|
 | CH1 | ExternalAudio.exe path | a file, filtered to `*.exe` |
-| CH3 | Whisper model file | a file, filtered to `*.bin` |
-| CH3 | Vosk model folder | a **folder** |
-| CH9 | Bot executable | a file, filtered to `*.exe` |
-| CH10 | Config folder | a **folder** |
+| CH5 | Whisper model file | a file, filtered to `*.bin` |
+| CH5 | Vosk model folder | a **folder** |
+| CH2 | Bot executable | a file, filtered to `*.exe` |
+| CH3 | Config folder | a **folder** |
 
 Which of the two it is matters: a Vosk model is a directory containing `am\`, `conf\`, `graph\`
 and `ivector\`, and the usual way to get that setting wrong is to point it at a file inside the
@@ -85,7 +87,7 @@ a single `.bin`. The pairing of field to picker is asserted in the suite, becaus
 wired to a file picker looks perfectly normal in a screenshot.
 
 The picker starts in the folder the field already names, when that folder exists, and a file is
-preselected so correcting a path is one click. Cancelling leaves the field untouched. On CH10 the
+preselected so correcting a path is one click. Cancelling leaves the field untouched. On CH3 the
 picked folder is only filled in — **Use this folder and load** still has to be pressed; on the
 "not loaded" screen it loads straight away, since there is nothing on screen to lose.
 
@@ -117,7 +119,92 @@ It reports what it found, says so when the configured path was already correct, 
 field untouched when there is nothing to find. The probing lives in `src\Darkstar.Core\SrsPaths.cs`,
 which the installer mirrors in Pascal script.
 
-## CH2 — Radios
+## CH2 — Windows Service
+
+Installs, removes, starts and stops the bot's Windows Service, so it runs in the background and
+after every reboot without anyone logging in.
+
+The panel shows the live state (not installed / running / stopped), the display name, the start
+type, and **which executable the service is actually registered to run** — with a warning when
+that differs from the path configured below it, which is how a stale installation pointing at an
+old folder gets spotted. On startup it checks the known service names (`Darkstar` and the
+installer's `D.A.R.K.S.T.A.R.`) and preselects whichever exists.
+
+| Button | What it does |
+|---|---|
+| **Install** | Registers the executable — pre-filled as `Darkstar.exe` next to the resolved config folder, since the service reads the config from its own folder — optionally with delayed auto-start so the network and SRS are up first, and optionally starts it right away. |
+| **Stop and remove** | Asks for confirmation, stops the service, waits until it has really reached "Stopped", and only then deletes it. Deleting a running service merely marks it for deletion and leaves a ghost entry until the next reboot. |
+| **Start / Stop** | Controls the installed service without removing it. |
+
+Every operation that changes a service needs administrator rights, so Windows shows a UAC prompt
+each time; the editor itself does not have to run elevated, and reading the status needs no
+elevation. A dismissed prompt is reported rather than failing silently, and the output of the
+elevated commands is shown in a details box when something goes wrong.
+
+Internally this goes through PowerShell (`Get-Service` / `New-Service` / `Start-Service`) rather
+than parsing `sc.exe` output, because `sc.exe` localizes its field labels — screen-scraping it
+would break on a German Windows.
+
+## CH3 — Profiles
+
+Two things live here: which folder the bot's settings are in, and several named `config.json` files
+kept side by side.
+
+### The config folder
+
+The field at the top is the folder the bot reads `config.json`, `phrases.json` and
+`vocabulary.json` from — the one its `Darkstar.exe` sits in. Until this panel existed the editor
+found that folder by searching near its own location on every start, and could only be corrected
+before loading. The search is right on a normal installation and wrong in exactly the case that
+brings somebody here: two copies of `config.json` on the machine, with the bot reading one and the
+editor editing the other.
+
+**Use this folder and load** switches to it and remembers it, so the next launch starts there — the
+panel shows `remembered` once it does, and **Forget it** goes back to searching. A folder that no
+longer exists is refused rather than created: a typo would otherwise produce an empty folder with a
+fresh default `config.json`, and the editor would look like it had worked while the bot went on
+reading the folder it always did. A remembered folder that has gone away (an unplugged drive) falls
+back to the search.
+
+The bot names the folder it actually used in the first lines of its own log — *Settings read from:
+…* — so the two can be compared directly. See the first entry in the manual's
+[troubleshooting table](manual-en.md#11-troubleshooting).
+
+### Profiles
+
+A profile is a whole `config.json`, saved under its own name in a `Profiles` subfolder of the
+config folder. Activating one copies it over the `config.json` the bot reads.
+
+| Action | What it does |
+|---|---|
+| **Save as profile** | Writes the settings **currently in the editor** — including changes not yet saved to `config.json` — to `Profiles\<name>.json`. Trying something out and keeping it without touching the live settings is the usual reason to be here. An existing name asks before replacing. |
+| **activate** | Copies that profile over `config.json`, backing up the config that was there, and reloads the editor from it. The bot has to be restarted for it to take effect. |
+| **delete** | Asks once, then deletes, leaving a copy in `Profiles\Backup\`. |
+
+Deliberate limits, each for a reason:
+
+- **The bot knows nothing about profiles.** It reads `config.json` and only that, exactly as
+  before. All the copying happens in the editor, so there is no second way to point a running
+  service at the wrong file.
+- **`phrases.json` and `vocabulary.json` are shared**, not part of a profile. Swapping the fixed
+  phrases along with a frequency plan is the kind of surprise that gets found mid-mission.
+- **A profile that cannot be parsed is refused** before anything is copied, with `config.json`
+  left untouched — overwriting working settings with a broken file leaves a bot that will not
+  start, which is the opposite of what a profile is for.
+- **A name becomes a file name**, so `..\config`, the characters Windows forbids, and the device
+  names (`CON`, `COM1`, …) are refused with a message saying which rule was hit, rather than
+  silently cleaned up.
+
+The header line shows which profile was activated last, and whether `config.json` still holds what
+that profile holds — *Active: Training* against *Active: Training — config.json has been edited
+since*. That comparison is made on the settings rather than on the file text, so re-indenting a
+file, or a `config.json` that predates a setting an update added, does not read as a change.
+
+The editor's own two memories — the chosen folder and the active profile — are kept in
+`%LOCALAPPDATA%\Darkstar\editor.json`, not in `config.json`. Keeping them in `config.json` would
+carry them into every profile, and activating a profile could then change where the editor looks.
+
+## CH4 — Radios
 
 Manages the `Radios` list. Each radio is a card:
 
@@ -155,7 +242,7 @@ speaks through SAPI5, which cannot see Windows' modern "natural" voices.
 a name writes it in, and `global default` clears the field again. One radio's list is open at a
 time, because a generated tower per airfield can mean twenty radios on this page. The chips in the
 card below are deliberately *not* clickable: that card sits under every radio, so a click there
-would have no radio to write to. On CH3, where there is only one voice field, the chips do write
+would have no radio to write to. On CH5, where there is only one voice field, the chips do write
 into it.
 
 **Where do I get more voices?** is a collapsed block on both panels, from one shared component so
@@ -210,7 +297,7 @@ greeting for a flight of four checking in together) and when to switch it off ag
 If the radio list is empty, a notice explains that the bot falls back to the legacy single-radio
 fields, editable in their own card below.
 
-## CH3 — Speech
+## CH5 — Speech
 
 Everything about hearing and answering:
 
@@ -218,7 +305,7 @@ Everything about hearing and answering:
 |---|---|
 | Engine | Which engine turns a transmission into text. Gemini by default; picking Whisper reveals the model path, the check button and the language, plus what changes with it: transcription stays on the machine and freely worded replies are off. Hidden entirely under Gemini rather than greyed out — it is a second engine's worth of fields and nobody on the default needs to scroll past them. |
 | Gemini | API key, primary and optional fallback model, retry count and delay. |
-| Voice | The global TTS voice, with the same **List available voices** button as CH2, clickable chips that write into the field (`let ExternalAudio pick` clears it), the **Where do I get more voices?** block, a note that a per-radio voice overrides it, and the Azure/Google credentials hint on the extra-arguments field. |
+| Voice | The global TTS voice, with the same **List available voices** button as CH4, clickable chips that write into the field (`let ExternalAudio pick` clears it), the **Where do I get more voices?** block, a note that a per-radio voice overrides it, and the Azure/Google credentials hint on the extra-arguments field. |
 | Detection | Pre-roll seconds, Vosk model folder, global wake word and its variants, silence frames to end a recording. |
 | Standby acknowledgement | `AckEnabled` / `AckAfterSeconds` / `AckMessage`, with `{pilot}` and `{callsign}`. |
 | Rate limit | Requests per pilot per sliding window, and what to say when somebody goes over. |
@@ -237,7 +324,7 @@ whether the wake word fired. That tagging is what lets
 impressions (see [manual-en.md, chapter 12](manual-en.md#12-wake-word-accuracy)). The two
 retention limits for that folder sit next to it.
 
-## CH4 — Phrases
+## CH6 — Phrases
 
 An editable table of trigger/response pairs (`phrases.json`), with:
 
@@ -255,53 +342,17 @@ It sits on this channel rather than CH8 because it is the same kind of thing as 
 it, and because it works without DCS-gRPC. The card says so, and also that a `radio check` row in
 the table takes priority over all of it.
 
-## CH5 — Vocabulary
+## CH7 — Vocabulary
 
 A chip editor for `vocabulary.json`: existing terms are removable chips, a text field (with an Add
 button and Enter-to-add) appends new ones, deduplicated case-insensitively. The panel notes that
-this list only affects transcription accuracy, not what the bot responds to — that is CH4.
+this list only affects transcription accuracy, not what the bot responds to — that is CH6.
 
 Any term that is **also a trigger phrase** is drawn in red above a warning card. The two lists
 must stay separate because speech recognition snaps anything that merely sounds like a vocabulary
 term onto its exact spelling: a command phrase here turns an unclear transmission into that
 command, and the bot answers it instead of asking for a repeat. The check is
 `AppConfig.FindVocabularyTriggerConflicts`, and the bot logs the same warning at startup.
-
-## CH6 — Discord
-
-A toggle for `DiscordEnabled` and the webhook URL, which stays greyed out while the toggle is off
-— the integration is entirely opt-in.
-
-The panel lists the five events that send a message:
-
-| Event | |
-|---|---|
-| Started and connected | With the frequencies it monitors. |
-| SRS connection lost / restored | Once per outage, not once per five-second retry. |
-| Shutting down | |
-| Start failed | With the reason. |
-| Stopped unexpectedly | With the error. |
-
-The last two are the ones that matter on a server nobody is watching: a bot that never came up is
-otherwise indistinguishable from a quiet frequency.
-
-## CH7 — Logging
-
-- Toggles for `LoggingEnabled` and `DebugLogging`. The latter is off by default because per-packet
-  logging is expensive — and an error dumps the last 200 verbose lines by itself, so turning it on
-  is only needed to watch something live.
-- The resolved log folder and its two retention limits (`LogRetentionDays` / `LogRetentionMaxMb`),
-  with a note that the three newest files are never deleted; the one being written is among them.
-- The file currently being shown, and a tail of its last 40 lines read straight from disk — so a
-  bot running as a service can be watched without leaving the editor. A **Live** switch re-reads
-  every two seconds, which is as fresh as it gets: the bot forces its log to disk about once a
-  second.
-
-**The file is picked by the timestamp in its name**, not by its modification time. That matters
-more than it sounds. Windows does not update a file's size or modification time while a handle is
-open on it, so the log being written looks older — and 0 bytes long — next to a finished one from
-an earlier run. Sorting by modification time therefore showed the *previous* run's log until the
-bot was stopped. See `LogFiles.PickNewest` in `Darkstar.Core`.
 
 ## CH8 — DCS-gRPC
 
@@ -433,90 +484,41 @@ Four things make it usable rather than merely complete:
 Built against the `RurouniJones.Dcs.Grpc` 0.7.1 bindings. A server running a newer DCS-gRPC still
 answers these calls; RPCs added later appear once the package is updated.
 
-## CH9 — Windows Service
+## CH9 — Discord
 
-Installs, removes, starts and stops the bot's Windows Service, so it runs in the background and
-after every reboot without anyone logging in.
+A toggle for `DiscordEnabled` and the webhook URL, which stays greyed out while the toggle is off
+— the integration is entirely opt-in.
 
-The panel shows the live state (not installed / running / stopped), the display name, the start
-type, and **which executable the service is actually registered to run** — with a warning when
-that differs from the path configured below it, which is how a stale installation pointing at an
-old folder gets spotted. On startup it checks the known service names (`Darkstar` and the
-installer's `D.A.R.K.S.T.A.R.`) and preselects whichever exists.
+The panel lists the five events that send a message:
 
-| Button | What it does |
+| Event | |
 |---|---|
-| **Install** | Registers the executable — pre-filled as `Darkstar.exe` next to the resolved config folder, since the service reads the config from its own folder — optionally with delayed auto-start so the network and SRS are up first, and optionally starts it right away. |
-| **Stop and remove** | Asks for confirmation, stops the service, waits until it has really reached "Stopped", and only then deletes it. Deleting a running service merely marks it for deletion and leaves a ghost entry until the next reboot. |
-| **Start / Stop** | Controls the installed service without removing it. |
+| Started and connected | With the frequencies it monitors. |
+| SRS connection lost / restored | Once per outage, not once per five-second retry. |
+| Shutting down | |
+| Start failed | With the reason. |
+| Stopped unexpectedly | With the error. |
 
-Every operation that changes a service needs administrator rights, so Windows shows a UAC prompt
-each time; the editor itself does not have to run elevated, and reading the status needs no
-elevation. A dismissed prompt is reported rather than failing silently, and the output of the
-elevated commands is shown in a details box when something goes wrong.
+The last two are the ones that matter on a server nobody is watching: a bot that never came up is
+otherwise indistinguishable from a quiet frequency.
 
-Internally this goes through PowerShell (`Get-Service` / `New-Service` / `Start-Service`) rather
-than parsing `sc.exe` output, because `sc.exe` localizes its field labels — screen-scraping it
-would break on a German Windows.
+## CH10 — Logging
 
-## CH10 — Profiles
+- Toggles for `LoggingEnabled` and `DebugLogging`. The latter is off by default because per-packet
+  logging is expensive — and an error dumps the last 200 verbose lines by itself, so turning it on
+  is only needed to watch something live.
+- The resolved log folder and its two retention limits (`LogRetentionDays` / `LogRetentionMaxMb`),
+  with a note that the three newest files are never deleted; the one being written is among them.
+- The file currently being shown, and a tail of its last 40 lines read straight from disk — so a
+  bot running as a service can be watched without leaving the editor. A **Live** switch re-reads
+  every two seconds, which is as fresh as it gets: the bot forces its log to disk about once a
+  second.
 
-Two things live here: which folder the bot's settings are in, and several named `config.json` files
-kept side by side.
-
-### The config folder
-
-The field at the top is the folder the bot reads `config.json`, `phrases.json` and
-`vocabulary.json` from — the one its `Darkstar.exe` sits in. Until this panel existed the editor
-found that folder by searching near its own location on every start, and could only be corrected
-before loading. The search is right on a normal installation and wrong in exactly the case that
-brings somebody here: two copies of `config.json` on the machine, with the bot reading one and the
-editor editing the other.
-
-**Use this folder and load** switches to it and remembers it, so the next launch starts there — the
-panel shows `remembered` once it does, and **Forget it** goes back to searching. A folder that no
-longer exists is refused rather than created: a typo would otherwise produce an empty folder with a
-fresh default `config.json`, and the editor would look like it had worked while the bot went on
-reading the folder it always did. A remembered folder that has gone away (an unplugged drive) falls
-back to the search.
-
-The bot names the folder it actually used in the first lines of its own log — *Settings read from:
-…* — so the two can be compared directly. See the first entry in the manual's
-[troubleshooting table](manual-en.md#11-troubleshooting).
-
-### Profiles
-
-A profile is a whole `config.json`, saved under its own name in a `Profiles` subfolder of the
-config folder. Activating one copies it over the `config.json` the bot reads.
-
-| Action | What it does |
-|---|---|
-| **Save as profile** | Writes the settings **currently in the editor** — including changes not yet saved to `config.json` — to `Profiles\<name>.json`. Trying something out and keeping it without touching the live settings is the usual reason to be here. An existing name asks before replacing. |
-| **activate** | Copies that profile over `config.json`, backing up the config that was there, and reloads the editor from it. The bot has to be restarted for it to take effect. |
-| **delete** | Asks once, then deletes, leaving a copy in `Profiles\Backup\`. |
-
-Deliberate limits, each for a reason:
-
-- **The bot knows nothing about profiles.** It reads `config.json` and only that, exactly as
-  before. All the copying happens in the editor, so there is no second way to point a running
-  service at the wrong file.
-- **`phrases.json` and `vocabulary.json` are shared**, not part of a profile. Swapping the fixed
-  phrases along with a frequency plan is the kind of surprise that gets found mid-mission.
-- **A profile that cannot be parsed is refused** before anything is copied, with `config.json`
-  left untouched — overwriting working settings with a broken file leaves a bot that will not
-  start, which is the opposite of what a profile is for.
-- **A name becomes a file name**, so `..\config`, the characters Windows forbids, and the device
-  names (`CON`, `COM1`, …) are refused with a message saying which rule was hit, rather than
-  silently cleaned up.
-
-The header line shows which profile was activated last, and whether `config.json` still holds what
-that profile holds — *Active: Training* against *Active: Training — config.json has been edited
-since*. That comparison is made on the settings rather than on the file text, so re-indenting a
-file, or a `config.json` that predates a setting an update added, does not read as a change.
-
-The editor's own two memories — the chosen folder and the active profile — are kept in
-`%LOCALAPPDATA%\Darkstar\editor.json`, not in `config.json`. Keeping them in `config.json` would
-carry them into every profile, and activating a profile could then change where the editor looks.
+**The file is picked by the timestamp in its name**, not by its modification time. That matters
+more than it sounds. Windows does not update a file's size or modification time while a handle is
+open on it, so the log being written looks older — and 0 bytes long — next to a finished one from
+an earlier run. Sorting by modification time therefore showed the *previous* run's log until the
+bot was stopped. See `LogFiles.PickNewest` in `Darkstar.Core`.
 
 ## Known build requirements
 

@@ -43,7 +43,7 @@ public sealed class RadioConfig
     ///
     /// This is what makes several radios sound like several people rather than one bot on three
     /// frequencies: the AWACS, the tanker and the tower each get their own voice. The name has to
-    /// match exactly what DCS-SR-ExternalAudio.exe reports - the config editor lists them on CH2,
+    /// match exactly what DCS-SR-ExternalAudio.exe reports - the config editor lists them on CH4,
     /// and a name it doesn't know fails silently, with nothing but no audio to show for it.
     /// </summary>
     public string Voice { get; set; } = "";
@@ -1169,7 +1169,7 @@ public sealed class AppConfig
                    string.Join(", ", conflicts.Select(c => $"\"{c}\"")));
         Logger.Log("  The transcriber is told to snap anything that sounds like a vocabulary term onto its exact");
         Logger.Log("  spelling, so those terms turn unclear transmissions into that request - the bot then answers");
-        Logger.Log("  it instead of asking you to repeat. Remove them from vocabulary.json (CH5 Vocabulary);");
+        Logger.Log("  it instead of asking you to repeat. Remove them from vocabulary.json (CH7 Vocabulary);");
         Logger.Log("  keep only proper nouns there, such as callsigns, aircraft types and map names.");
     }
 
@@ -1381,11 +1381,11 @@ public sealed class AppConfig
             {
                 if (radios.All(r => r.AnswerTacticalRequests == false))
                     Warn("DcsIntelEnabled is true, but every radio has tactical requests switched off - " +
-                         "no radio will answer bogey dope, picture or threat check (CH2 Radios).");
+                         "no radio will answer bogey dope, picture or threat check (CH4 Radios).");
 
                 if (config.DcsAirfieldEnabled && radios.All(r => r.AnswerAirfieldRequests == false))
                     Warn("DcsAirfieldEnabled is true, but every radio has airfield requests switched off - " +
-                         "no radio will answer \"runway in use\" or ATIS (CH2 Radios).");
+                         "no radio will answer \"runway in use\" or ATIS (CH4 Radios).");
             }
 
             var triggerCount = (config.DcsIntelBogeyDopeTriggers?.Count ?? 0)

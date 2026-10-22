@@ -734,7 +734,7 @@ begin
       WizardForm.StatusLabel.Caption := 'Starting the D.A.R.K.S.T.A.R. service...';
       if not StartDarkstarService() then
         MsgBox('The update is installed, but the D.A.R.K.S.T.A.R. service could not be started again.' + #13#10 + #13#10 +
-               'Start it by hand in services.msc, or from the config editor on CH9 Service.',
+               'Start it by hand in services.msc, or from the config editor on CH2 Service.',
                mbInformation, MB_OK);
     end;
   end;

@@ -1671,9 +1671,9 @@ internal static class HousekeepingTests
             unreachable.Count == 0 ? "" : "orphaned: " + string.Join(", ", unreachable));
 
         // The channel numbers are the one thing in this editor that may not drift: ~90 places in the
-        // documentation say "on CH2 Radios" or "the test button on CH8", and so does everybody who
+        // documentation say "on CH4 Radios" or "the test button on CH8", and so does everybody who
         // has used it before. Panels may be regrouped and reordered; a number belongs to a panel.
-        // Two digits, matched greedily, or CH10 would be read as CH1 and the tenth channel would
+        // Two digits, matched greedily, or CH3 would be read as CH1 and the tenth channel would
         // look both present and duplicated.
         var navNumbers = System.Text.RegularExpressions.Regex
             .Matches(main, @"CH([1-9][0-9]?)")
@@ -1699,7 +1699,7 @@ internal static class HousekeepingTests
         // The documentation test below proves a setting is WRITTEN DOWN. That is not the same as
         // being reachable: the whole frequency announcer - four settings and a feature pilots depend
         // on to learn the generated frequencies at all - was documented in three places and editable
-        // in none, so the only way to switch it off was a text editor. Worse, CH2 pointed at CH8 for
+        // in none, so the only way to switch it off was a text editor. Worse, CH4 pointed at CH8 for
         // it, where it had never been. Documentation cannot catch that; this can.
         var panelMarkup = string.Join("\n", System.IO.Directory
             .GetFiles(Root + System.IO.Path.Combine("src", "Darkstar.Gui", "Pages"), "*.razor")
@@ -1755,9 +1755,9 @@ internal static class HousekeepingTests
 
         var channelOf = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["ConnectionPanel"] = "CH1", ["RadiosPanel"] = "CH2", ["SpeechPanel"] = "CH3",
-            ["PhrasesPanel"] = "CH4", ["VocabularyPanel"] = "CH5", ["DiscordPanel"] = "CH6",
-            ["LoggingPanel"] = "CH7", ["DcsGrpcPanel"] = "CH8", ["ServicePanel"] = "CH9",
+            ["ConnectionPanel"] = "CH1", ["RadiosPanel"] = "CH4", ["SpeechPanel"] = "CH5",
+            ["PhrasesPanel"] = "CH6", ["VocabularyPanel"] = "CH7", ["DiscordPanel"] = "CH9",
+            ["LoggingPanel"] = "CH10", ["DcsGrpcPanel"] = "CH8", ["ServicePanel"] = "CH2",
         };
 
         var selfReferences = new List<string>();
@@ -2477,7 +2477,7 @@ internal static class HousekeepingTests
         // looks right and isn't. Cheap to check, invisible otherwise.
         // One hyphen per whitespace character, NOT per run of them - which is what GitHub does,
         // and the difference is invisible until a heading contains punctuation with spaces around
-        // it. "CH10 — Profiles" loses the dash and keeps both spaces, so the anchor GitHub
+        // it. "CH3 — Profiles" loses the dash and keeps both spaces, so the anchor GitHub
         // generates is "ch10--profiles" with two hyphens. Collapsing the run here produced
         // "ch10-profiles", and a link written to match THAT passed this check and was dead on
         // GitHub - the one outcome this whole section exists to prevent.

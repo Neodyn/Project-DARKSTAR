@@ -21,7 +21,7 @@ See the [README](../README.md#project-structure) for the folder layout. The thre
 
   Four rules the test suite enforces here:
 
-  - A panel's **channel number never changes** — the documentation is full of "on CH2 Radios".
+  - A panel's **channel number never changes** — the documentation is full of "on CH4 Radios".
   - CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel`. A mismatch shows a blank page and fails nowhere.
   - The **whole sidebar order** is asserted verbatim, so a panel cannot change place by accident.
   - Every path setting sits in a `path-row` with a Browse button wired to the right picker, folder or file.

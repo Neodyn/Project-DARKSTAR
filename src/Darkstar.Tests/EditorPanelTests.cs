@@ -19,47 +19,44 @@ internal static class EditorPanelTests
     /// The sidebar, top to bottom: group titles and the entries under them.
     ///
     /// Written out rather than derived, because the order is a decision and this is where it is
-    /// recorded. Changing the sidebar fails this check, which is the intended cost - the order has
-    /// been wrong twice by accident (a panel appended to whichever group was nearest) and twice on
-    /// purpose, and an accident should not be indistinguishable from a decision.
+    /// recorded. Changing the sidebar fails this check, which is the intended cost - the order was
+    /// wrong three times running, and an accident should not be indistinguishable from a decision.
     ///
     /// The rule, in full: a group comes before another when its lowest channel number is lower,
-    /// and inside a group the numbers ascend. So SERVER (1), RADIO &amp; SPEECH (2),
-    /// MONITORING (6), MISSION DATA (8), and the sidebar reads 1, 9, 10 · 2, 3, 4, 5 · 6, 7 · 8.
+    /// and inside a group the numbers ascend. So SERVER (1), RADIO &amp; SPEECH (4),
+    /// MISSION DATA (8), MONITORING (9) - and the sidebar counts straight up, 1 to 10.
     ///
-    /// The previous attempt ordered each group by the sequence somebody sets the bot up in, which
-    /// read 1, 10, 9, 2, 3, 4, 5, 8, 7, 6 down the page. Each swap had a reason - CH10 holds the
-    /// config folder, so it belongs before "install as a service"; the log is on by default, so it
-    /// belongs above an opt-in Discord panel - and the result was still rejected, correctly. The
-    /// numbers are the index people navigate by: around ninety places in the documentation say
-    /// "on CH2 Radios", and a channel selector on a radio counts upwards. A list that jumps looks
-    /// broken whatever the thinking behind it was, and a rule beats a judgement call here because
-    /// the next panel has to go somewhere without reopening the argument.
+    /// Reaching that took reassigning the numbers once, which this project had treated as
+    /// forbidden because the documentation names them in about three hundred places. Two earlier
+    /// attempts kept the numbers and sorted the groups by how a setup is actually done; both
+    /// produced a sidebar that jumped (1, 9, 10, 2, 3, 4, 5, 8, 7, 6 at worst), and both were
+    /// rejected - correctly, because the numbers are the index people navigate by and a channel
+    /// selector counts upwards. The numbers are fixed again from here; what moved, moved once.
     ///
     /// CH8 stays one group of three parts (connect, configure, inspect) with no numbers of its
-    /// own, because all three are CH8.
+    /// own, because all three are CH8. Its position comes from its title.
     /// </summary>
     private static readonly string[] ExpectedSidebar =
     {
         "SERVER",
         "CH1 CONNECTION",
-        "CH9 SERVICE",
-        "CH10 PROFILES",
+        "CH2 SERVICE",
+        "CH3 PROFILES",
 
         "RADIO & SPEECH",
-        "CH2 RADIOS",
-        "CH3 SPEECH",
-        "CH4 PHRASES",
-        "CH5 VOCABULARY",
-
-        "MONITORING",
-        "CH6 DISCORD",
-        "CH7 LOGGING",
+        "CH4 RADIOS",
+        "CH5 SPEECH",
+        "CH6 PHRASES",
+        "CH7 VOCABULARY",
 
         "MISSION DATA — CH8",
         "SERVER & TEST",
         "REPLIES",
         "MISSION EXPLORER",
+
+        "MONITORING",
+        "CH9 DISCORD",
+        "CH10 LOGGING",
     };
 
     /// <summary>
@@ -77,14 +74,14 @@ internal static class EditorPanelTests
         // CH1: the SRS tool every reply is transmitted through.
         ("Store.Config.ExternalAudioExePath", "PickFile", "Store.Config.ExternalAudioExePath = picked"),
 
-        // CH3: a Whisper model is one .bin file; a Vosk model is a folder of four subfolders.
+        // CH5: a Whisper model is one .bin file; a Vosk model is a folder of four subfolders.
         ("Store.Config.WhisperModelPath", "PickFile", "Store.Config.WhisperModelPath = picked"),
         ("Store.Config.VoskModelPath", "PickFolder", "Store.Config.VoskModelPath = picked"),
 
-        // CH9: which executable to register as the service.
+        // CH2: which executable to register as the service.
         ("_exePath", "PickFile", "_exePath = picked"),
 
-        // CH10: filled in only - loading it is a separate decision, made by its own button.
+        // CH3: filled in only - loading it is a separate decision, made by its own button.
         ("_folder", "PickFolder", "_folder = picked"),
 
         // The "not loaded" screen, where there is nothing on screen to lose, so it loads at once.
@@ -166,7 +163,7 @@ internal static class EditorPanelTests
 
         // The five path settings are the ones nobody can type from memory - an SRS install folder,
         // a model folder several levels down. A field without a Browse button is the one that gets
-        // a wrong path typed into it, which is how most of CH1's and CH3's support questions start.
+        // a wrong path typed into it, which is how most of CH1's and CH5's support questions start.
         var browsable = new List<string>();
 
         foreach (var file in Directory.GetFiles(PagesFolder, "*.razor").OrderBy(f => f, StringComparer.Ordinal))

@@ -205,14 +205,14 @@ Seine Parameter und der Projektaufbau stehen in [contributing.md](contributing.m
    | `SrsHost`, `SrsPort` | CH1 Connection | Dein SRS-Server (Standard `127.0.0.1:5002`). |
    | `Coalition` | CH1 Connection | `2` = Blau, `1` = Rot, `0` = Zuschauer. |
    | `ExternalAudioExePath` | CH1 Connection | Pfad zu `DCS-SR-ExternalAudio.exe` im Ordner `ExternalAudio` der SRS-Installation. Wird normalerweise schon vom Installer eingetragen; sonst findet ihn **Detect SRS installation**. |
-   | `Radios` | CH2 Radios | Die zu überwachenden Frequenzen, je mit Hotword und Rufzeichen. |
-   | `SpeechEngine` | CH3 Speech | `Gemini` (Standard) oder `Whisper`. Mit `Whisper` trägst du eine Modelldatei statt eines API-Keys ein. |
-   | `GeminiApiKey` | CH3 Speech | Dein API-Key. |
-   | `VoskModelPath` | CH3 Speech | Vom Installer bereits gesetzt; von Hand nur nach einer `-slim`-Installation oder einem Quellcode-Build nötig. |
+   | `Radios` | CH4 Radios | Die zu überwachenden Frequenzen, je mit Hotword und Rufzeichen. |
+   | `SpeechEngine` | CH5 Speech | `Gemini` (Standard) oder `Whisper`. Mit `Whisper` trägst du eine Modelldatei statt eines API-Keys ein. |
+   | `GeminiApiKey` | CH5 Speech | Dein API-Key. |
+   | `VoskModelPath` | CH5 Speech | Vom Installer bereits gesetzt; von Hand nur nach einer `-slim`-Installation oder einem Quellcode-Build nötig. |
 
    Danach **Save changes** — von jeder Datei wird vorher automatisch eine Sicherung angelegt.
 
-3. **Bot starten:** entweder auf **CH9 Service** als Windows-Dienst registrieren (läuft im Hintergrund und nach jedem Neustart), oder zum Testen einfach `Darkstar.exe` mit sichtbarem Konsolenfenster ausführen.
+3. **Bot starten:** entweder auf **CH2 Service** als Windows-Dienst registrieren (läuft im Hintergrund und nach jedem Neustart), oder zum Testen einfach `Darkstar.exe` mit sichtbarem Konsolenfenster ausführen.
 
 4. **Log prüfen.** Ein gesunder Start zeigt der Reihe nach: geladene Phrasen, aktive Hotword-Erkennung mit deiner Radioliste, „Connecting to SRS server …", „Connected. Waiting for hotword…".
 
@@ -348,7 +348,7 @@ Transkription und Antwort sind ein einziger API-Aufruf — das halbiert den Kont
 
 **Das Skript liegt auf GitHub, die Modelle nicht.** [`models\download-ggml-model.cmd`](https://github.com/ggml-org/whisper.cpp/blob/master/models/download-ggml-model.cmd) aus dem whisper.cpp-Repository holt sie von [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp). `tiny.en` 75 MB, `base.en` 142 MB, `small.en` 466 MB, `medium.en` 1,5 GB — jeweils etwa das Doppelte an Arbeitsspeicher zur Laufzeit.
 
-**Auf CH3 *Check the model* drücken**, statt dem Pfad zu vertrauen. Der Fehler, der wirklich passiert, ist nicht die fehlende, sondern die halbe Datei — die Prüfung liest daher Größe und die ersten vier Bytes: unter 20 MB kann kein Modell sein, und die Datei muss mit der ggml-Kennung beginnen. Ein abgebrochener Download und eine als `.bin` gespeicherte HTML-Fehlerseite bestehen beide ein bloßes „existiert die Datei" und werden beide erkannt.
+**Auf CH5 *Check the model* drücken**, statt dem Pfad zu vertrauen. Der Fehler, der wirklich passiert, ist nicht die fehlende, sondern die halbe Datei — die Prüfung liest daher Größe und die ersten vier Bytes: unter 20 MB kann kein Modell sein, und die Datei muss mit der ggml-Kennung beginnen. Ein abgebrochener Download und eine als `.bin` gespeicherte HTML-Fehlerseite bestehen beide ein bloßes „existiert die Datei" und werden beide erkannt.
 
 > **Vorher die Maschine prüfen.** Die Whisper-Runtime braucht **Windows 11 oder Server 2022** und eine CPU mit AVX2 — ein DCS-Server auf Server 2019 oder Windows 10 kann sie nicht ausführen.
 
@@ -401,7 +401,7 @@ meist auf demselben Rechner.
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `ExternalAudioExePath` | `C:\Program Files\DCS-SimpleRadio-Standalone\ExternalAudio\DCS-SR-ExternalAudio.exe` | Das SRS-Werkzeug für die Aussendung. Wird vom Installer aus der tatsächlichen SRS-Installation übernommen; **Detect SRS installation** auf CH1 sucht ihn jederzeit erneut. |
-| `VoiceName` | `""` | TTS-Stimme für jedes Radio, das keine eigene setzt, z. B. `"Microsoft David Desktop"`. Leer = was ExternalAudio selbst wählt. **List available voices** auf CH2 oder CH3 drücken, oder `DCS-SR-ExternalAudio.exe --help` aufrufen. Siehe [7 → Verschiedene Stimmen](#verschiedene-stimmen-pro-radio). |
+| `VoiceName` | `""` | TTS-Stimme für jedes Radio, das keine eigene setzt, z. B. `"Microsoft David Desktop"`. Leer = was ExternalAudio selbst wählt. **List available voices** auf CH4 oder CH5 drücken, oder `DCS-SR-ExternalAudio.exe --help` aufrufen. Siehe [7 → Verschiedene Stimmen](#verschiedene-stimmen-pro-radio). |
 | `ExternalAudioExtraArgs` | `""` | Zusätzliche Argumente für jede Aussendung, für Optionen, die der Bot nicht selbst setzt. Ob deine SRS-Version einen Parameter fürs Sprechtempo hat und wie er heißt, hängt von der Version ab — in `--help` nachsehen und hier eintragen (z. B. `--speed=-1`). |
 
 #### Zwischenansage bei langsamer Antwort
@@ -535,7 +535,7 @@ Der Transkriptionsaufruf findet trotzdem statt — der erkannte Text ist ja die 
 
 *„Overlord, Punch 1-1, where is Springfield 2-1?"* → *„Springfield 2 1, bearing 040, 25 miles, 18 thousand, heading 090."*
 
-**Standardmäßig aus** (`DcsIntelFriendlyPositionEnabled`, CH8) — und das ist eine Entscheidung über deinen Server, keine Einstellung zum Durchklicken. Ein Bot, der auf Zuruf jede Spielerposition verrät, verändert, wie ein PvP-Server gespielt wird. Die Funktion lässt sich auf CH2 außerdem auf bestimmte Frequenzen beschränken, genau wie die Tower- und AWACS-Rollen — ein Staffelkanal, der nur das beantwortet, ist ein sinnvoller Aufbau.
+**Standardmäßig aus** (`DcsIntelFriendlyPositionEnabled`, CH8) — und das ist eine Entscheidung über deinen Server, keine Einstellung zum Durchklicken. Ein Bot, der auf Zuruf jede Spielerposition verrät, verändert, wie ein PvP-Server gespielt wird. Die Funktion lässt sich auf CH4 außerdem auf bestimmte Frequenzen beschränken, genau wie die Tower- und AWACS-Rollen — ein Staffelkanal, der nur das beantwortet, ist ein sinnvoller Aufbau.
 
 Drei Grenzen sind eingebaut und nicht konfigurierbar:
 
@@ -594,23 +594,23 @@ Eine schlichte Liste von Begriffen, die Gemini als Hinweis mitbekommt. Sie ände
 
 Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen aber erst nach einem Neustart des Bots.
 
-Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer Nummer — **SERVER** (CH1, CH9), **RADIO & SPEECH** (CH2–CH5), **MISSION DATA — CH8** (drei Einträge) und **MONITORING** (CH6, CH7). Die Nummer eines Panels ändert sich nie, alles was dieses Handbuch über CH2 oder CH7 sagt, zeigt also weiterhin an dieselbe Stelle. Ein Eintrag mit der Markierung *off* ist in der Konfiguration ausgeschaltet — das heißt nicht, dass etwas nicht erreichbar wäre.
+Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer Nummer — **SERVER** (CH1, CH2), **RADIO & SPEECH** (CH4–CH7), **MISSION DATA — CH8** (drei Einträge) und **MONITORING** (CH9, CH10). Die Nummer eines Panels ändert sich nie, alles was dieses Handbuch über CH4 oder CH10 sagt, zeigt also weiterhin an dieselbe Stelle. Ein Eintrag mit der Markierung *off* ist in der Konfiguration ausgeschaltet — das heißt nicht, dass etwas nicht erreichbar wäre.
 
 | Kanal | Inhalt |
 |---|---|
 | **CH1 Connection** | Konfigurationsordner, SRS-Host/-Port, Clientname, EAM-Passwort, der Pfad zu `DCS-SR-ExternalAudio.exe` samt Knopf **Detect SRS installation**, Koalition, Koalitionsbeschränkung. |
-| **CH2 Radios** | Die Radioliste: Frequenz, Modulation, Hotword, akzeptierte Hotword-Schreibweisen, Rufzeichen und Stimme je Radio, die drei Rollenschalter (Taktik / Flugplatz / Positionen von Freunden), ein Knopf **List available voices**, hinzufügen/entfernen. Darunter der Verweistext auf die richtige Frequenz, der Tower-Generator mit der Karte **Announce the frequencies in game** und die Begrüßung beim Aufschalten. |
-| **CH3 Speech** | Gemini-Key/-Modell/-Wiederholungen, die globale TTS-Stimme samt **List available voices**, Pre-Roll, Vosk-Modellordner, globales Hotword und seine akzeptierten Schreibweisen, Stille-Frames, die Zwischenansage, das Rate-Limit pro Pilot, die Karte zur Hotword-Genauigkeit samt Aufnahmen-Aufräumgrenzen und die Werte des Platzhalter-Detektors. |
-| **CH4 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases`, die Fallback-Antwort und die Radio-Check-Karte. |
-| **CH5 Vocabulary** | Die Hinweiswortliste als Chips, wobei alles, was auch eine Triggerphrase ist, rot markiert wird. |
-| **CH6 Discord** | Hauptschalter und Webhook-URL. |
-| **CH7 Logging** | Log-Schalter, ermittelter Log-Ordner, Aufräumgrenzen für Logs und eine Live-Ansicht der neuesten Logzeilen. |
+| **CH4 Radios** | Die Radioliste: Frequenz, Modulation, Hotword, akzeptierte Hotword-Schreibweisen, Rufzeichen und Stimme je Radio, die drei Rollenschalter (Taktik / Flugplatz / Positionen von Freunden), ein Knopf **List available voices**, hinzufügen/entfernen. Darunter der Verweistext auf die richtige Frequenz, der Tower-Generator mit der Karte **Announce the frequencies in game** und die Begrüßung beim Aufschalten. |
+| **CH5 Speech** | Gemini-Key/-Modell/-Wiederholungen, die globale TTS-Stimme samt **List available voices**, Pre-Roll, Vosk-Modellordner, globales Hotword und seine akzeptierten Schreibweisen, Stille-Frames, die Zwischenansage, das Rate-Limit pro Pilot, die Karte zur Hotword-Genauigkeit samt Aufnahmen-Aufräumgrenzen und die Werte des Platzhalter-Detektors. |
+| **CH6 Phrases** | Die Trigger-/Antworttabelle plus `RestrictToKnownPhrases`, die Fallback-Antwort und die Radio-Check-Karte. |
+| **CH7 Vocabulary** | Die Hinweiswortliste als Chips, wobei alles, was auch eine Triggerphrase ist, rot markiert wird. |
+| **CH9 Discord** | Hauptschalter und Webhook-URL. |
+| **CH10 Logging** | Log-Schalter, ermittelter Log-Ordner, Aufräumgrenzen für Logs und eine Live-Ansicht der neuesten Logzeilen. |
 | **CH8 DCS-gRPC** | Drei Einträge in der Seitenleiste: **Server & test** (Verbindung und Testknopf), **Replies** (taktische Antworten inklusive Alpha Check mit eigenem Testknopf, die Karte für Positionen von Freunden, der Threat Circle und die Flugplatz-Karte) und **Mission explorer**. |
-| **CH9 Service** | Windows-Dienst installieren, starten, stoppen und sauber entfernen. |
+| **CH2 Service** | Windows-Dienst installieren, starten, stoppen und sauber entfernen. |
 
 Fußzeile: **Discard (reload from disk)** und **Save changes**. Vor jedem Speichern wird eine Sicherungskopie mit Zeitstempel angelegt.
 
-Einzelheiten zu CH8 und CH9 stehen in den nächsten beiden Kapiteln, eine vollständige Beschreibung in [gui.md](gui.md).
+Einzelheiten zu CH8 und CH2 stehen in den nächsten beiden Kapiteln, eine vollständige Beschreibung in [gui.md](gui.md).
 
 ---
 
@@ -649,7 +649,7 @@ darauf hört der Bot.
 
 Erkannt wird über **enthaltenen Text**, *„Overlord, Punch 1-1, requesting a picture"* trifft also
 `picture`. Alle Listen sind änderbar: die Missionsdaten-Calls auf **CH8 → Replies**, der Radio Check
-auf **CH4 Phrases**, die festen Phrasen in `phrases.json`.
+auf **CH6 Phrases**, die festen Phrasen in `phrases.json`.
 
 **Missionsdaten — braucht DCS-gRPC und `DcsIntelEnabled`**
 
@@ -830,7 +830,7 @@ F10-Klick eine DCS-Gruppe identifiziert. Im Menü ist eine Wiederholung ohnehin 
 
 *„Overlord, radio check“* → *„Loud and clear.“*
 
-Wird auf **jedem** Funkkanal beantwortet, egal wofür dieser auf CH2 konfiguriert ist — ein Tower, ein AWACS und ein Tanker beantworten alle einen Radio Check; einen abzulehnen, weil dieser Kanal „nur für Flugplatz-Anfragen“ ist, wäre absurd. Und es braucht überhaupt keine Missionsdaten: Genau darum geht es, wenn man herausfinden will, ob überhaupt etwas funktioniert.
+Wird auf **jedem** Funkkanal beantwortet, egal wofür dieser auf CH4 konfiguriert ist — ein Tower, ein AWACS und ein Tanker beantworten alle einen Radio Check; einen abzulehnen, weil dieser Kanal „nur für Flugplatz-Anfragen“ ist, wäre absurd. Und es braucht überhaupt keine Missionsdaten: Genau darum geht es, wenn man herausfinden will, ob überhaupt etwas funktioniert.
 
 Mit aktiviertem DCS-gRPC sagt die Antwort etwas mehr:
 
@@ -882,7 +882,7 @@ Ein Kreis endet per Sprachkommando, nach dem konfigurierten Zeitlimit oder wenn 
 - Die Frage nach **sich selbst** wird als Alpha Check beantwortet, nicht mit „bearing zero zero zero, zero miles".
 - Ein Pilot, der gerade nicht in der Mission ist, ergibt `DcsIntelFriendlyNotFoundReply`. Der Bot meldet nie eine Position, die er nicht messen konnte.
 
-Wie jede andere taktische Antwort lässt sich auch diese auf bestimmte Frequenzen beschränken (CH2 → *friendly positions*) — so landet sie auf einem Staffelkanal und sonst nirgends.
+Wie jede andere taktische Antwort lässt sich auch diese auf bestimmte Frequenzen beschränken (CH4 → *friendly positions*) — so landet sie auf einem Staffelkanal und sonst nirgends.
 
 ### Wenn der Bot beschäftigt ist
 
@@ -906,7 +906,7 @@ Jedes Radio antwortet nur auf sein eigenes Hotword und mit seinem eigenen Rufzei
 
 ### Verschiedene Stimmen pro Radio
 
-Jedes Radio kann auch **seine eigene Stimme** haben (`Radios[].Voice`, oder das Feld auf CH2). Bleibt es leer, nimmt das Radio die globale `VoiceName` von CH3; ist auch die leer, wählt ExternalAudio selbst. Bei drei konfigurierten Radios ist das der Unterschied zwischen einem Bot auf drei Frequenzen und drei Personen im Funkkreis:
+Jedes Radio kann auch **seine eigene Stimme** haben (`Radios[].Voice`, oder das Feld auf CH4). Bleibt es leer, nimmt das Radio die globale `VoiceName` von CH5; ist auch die leer, wählt ExternalAudio selbst. Bei drei konfigurierten Radios ist das der Unterschied zwischen einem Bot auf drei Frequenzen und drei Personen im Funkkreis:
 
 ```json
 "Radios": [
@@ -916,13 +916,13 @@ Jedes Radio kann auch **seine eigene Stimme** haben (`Radios[].Voice`, oder das 
 ]
 ```
 
-**Was du wirklich hast**, zeigt der Knopf **List available voices** auf CH2 (oder CH3): Er ruft `DCS-SR-ExternalAudio.exe --help` auf und zeigt das Ergebnis. Diese Liste ist die einzige, die zählt — und sie ist meist kürzer als erwartet:
+**Was du wirklich hast**, zeigt der Knopf **List available voices** auf CH4 (oder CH5): Er ruft `DCS-SR-ExternalAudio.exe --help` auf und zeigt das Ergebnis. Diese Liste ist die einzige, die zählt — und sie ist meist kürzer als erwartet:
 
 > ExternalAudio spricht über die ältere SAPI5-Schnittstelle von Windows. Die modernen „natürlichen“ Stimmen von Windows 11 — Aria, Guy, Ryan und die anderen — sind OneCore-Stimmen, und SAPI5 sieht sie in der Regel nicht. Wenn eine Stimme in den Windows-Einstellungen auftaucht, aber nicht in dieser Liste, ist das der Grund und kein Konfigurationsfehler. Ein englisches Standard-Windows hat meist *David* und *Zira* (en-US); *Hazel*, *George* und *Susan* (en-GB) kommen mit dem britischen Sprachpaket.
 
 Ein nicht vorhandener Name schlägt **stumm** fehl — die Aussendung passiert einfach nicht. Zwei Dinge machen das sichtbar: Das Startup-Log nennt die Stimme jedes Radios, und bei einer Beschwerde des Tools erscheint eine `[ExternalAudio:ERR]`-Zeile. Wenn ein Radio nach einem Stimmenwechsel verstummt, dort zuerst nachsehen.
 
-**Zuweisen, ohne zu tippen:** bei dem betreffenden Radio **Pick a voice** drücken und einen Namen anklicken — oder das VOICE-Feld selbst anklicken, das dieselbe Liste aufklappt. Beides schreibt die exakte Schreibweise, und darauf kommt es an: Ein Stimmenname wird wörtlich verglichen, ein Tippfehler schlägt auf die oben beschriebene stumme Art fehl. Auf CH3 tun die Chips unter dem globalen Stimmenfeld dasselbe für den Standard.
+**Zuweisen, ohne zu tippen:** bei dem betreffenden Radio **Pick a voice** drücken und einen Namen anklicken — oder das VOICE-Feld selbst anklicken, das dieselbe Liste aufklappt. Beides schreibt die exakte Schreibweise, und darauf kommt es an: Ein Stimmenname wird wörtlich verglichen, ein Tippfehler schlägt auf die oben beschriebene stumme Art fehl. Auf CH5 tun die Chips unter dem globalen Stimmenfeld dasselbe für den Standard.
 
 #### Mehr SAPI5-Stimmen bekommen
 
@@ -940,7 +940,7 @@ Wenn nichts davon reizt: Der nächste Abschnitt ist die bessere Antwort — die 
 
 #### Deutlich bessere Stimmen: Azure oder Google
 
-Lokal installierte Stimmen klingen nach Sprachcomputer. ExternalAudio kann auch über Azure AI Speech oder Google Cloud Text-to-Speech sprechen, deren neuronale Stimmen nach einem Menschen klingen. Beide brauchen ein Konto und kosten pro Zeichen — und beide funktionieren heute schon über `ExternalAudioExtraArgs` (CH3):
+Lokal installierte Stimmen klingen nach Sprachcomputer. ExternalAudio kann auch über Azure AI Speech oder Google Cloud Text-to-Speech sprechen, deren neuronale Stimmen nach einem Menschen klingen. Beide brauchen ein Konto und kosten pro Zeichen — und beide funktionieren heute schon über `ExternalAudioExtraArgs` (CH5):
 
 ```json
 "ExternalAudioExtraArgs": "--azureCredentials=\"DEIN_KEY;westeurope\"",
@@ -958,7 +958,7 @@ Auch über `ExternalAudioExtraArgs`: `--gender=male`, `--culture=en-GB`. Externa
 
 ### Ein Tower pro Flugplatz
 
-Eine Kaukasus-Mission hat ein Dutzend Flugplätze oder mehr. Statt für jeden einen Radio-Eintrag zu tippen, auf CH2 den Knopf **Generate from the running mission** drücken: er liest die Flugplatzliste aus der gerade geladenen Mission und legt pro Platz ein Radio an — Rufzeichen `<Flugplatz> Tower`, Flugplatz-Anfragen an, Taktik aus. Vorhandene Radios bleiben, ihre Frequenzen werden übersprungen statt doppelt belegt.
+Eine Kaukasus-Mission hat ein Dutzend Flugplätze oder mehr. Statt für jeden einen Radio-Eintrag zu tippen, auf CH4 den Knopf **Generate from the running mission** drücken: er liest die Flugplatzliste aus der gerade geladenen Mission und legt pro Platz ein Radio an — Rufzeichen `<Flugplatz> Tower`, Flugplatz-Anfragen an, Taktik aus. Vorhandene Radios bleiben, ihre Frequenzen werden übersprungen statt doppelt belegt.
 
 ```
 133.000 MHz (AM): wake word "Overlord", callsign "Batumi Tower",   answers: airfield
@@ -987,7 +987,7 @@ Ist ein Tower pro Platz besser als einer für alle? Performance spielt kaum eine
 
 ### Den Piloten die Frequenzen mitteilen
 
-Weil die Tower-Frequenzen erfunden sind, stehen sie in keinem Briefing und auf keinem Kneeboard. Der Bot schreibt sie deshalb beim Start in die laufende Mission (`AnnounceFrequenciesEnabled`, standardmäßig an — **CH2 Radios → Announce the frequencies in game**, unter dem Tower-Generator):
+Weil die Tower-Frequenzen erfunden sind, stehen sie in keinem Briefing und auf keinem Kneeboard. Der Bot schreibt sie deshalb beim Start in die laufende Mission (`AnnounceFrequenciesEnabled`, standardmäßig an — **CH4 Radios → Announce the frequencies in game**, unter dem Tower-Generator):
 
 - **Ein F10-Kartenmarker pro Flugplatz**, an dessen Position, mit dem zuständigen Tower, den nicht platzgebundenen Frequenzen — AWACS, Tanker — und dem Hotword. Das ist die dauerhafte Hälfte: bleibt die ganze Mission über stehen und ist jederzeit nachlesbar.
 - **Eine einmalige Bildschirmmeldung** beim Start, für den, der schon fliegt. Sie nennt die nicht platzgebundenen Radios vollständig und fasst die Tower zusammen, weil ein Dutzend davon aus dem Bild scrollen würde.
@@ -1019,7 +1019,7 @@ Schalten Sie die Funktion ein, solange die erzeugten Tower-Frequenzen für Ihre 
 
 ### Einer Frequenz eine Aufgabe geben
 
-Standardmäßig beantwortet jedes Radio alles. Die Aufteilung ist der Weg zu einem Tower: auf **CH2 Radios** hat jedes Radio einen Dreifachschalter für **taktische Anfragen** (Bogey Dope, Picture, Threat Check, Threat Circle) und für **Flugplatz-Anfragen** (Bahn in Benutzung, ATIS).
+Standardmäßig beantwortet jedes Radio alles. Die Aufteilung ist der Weg zu einem Tower: auf **CH4 Radios** hat jedes Radio einen Dreifachschalter für **taktische Anfragen** (Bogey Dope, Picture, Threat Check, Threat Circle) und für **Flugplatz-Anfragen** (Bahn in Benutzung, ATIS).
 
 | | Bedeutung |
 |---|---|
@@ -1255,7 +1255,7 @@ Menüs werden neu gebaut statt ergänzt: ein Wurzeleintrag, entfernt und neu ges
 
 Als Dienst läuft der Bot im Hintergrund und nach jedem Neustart, ohne dass sich jemand anmelden muss.
 
-Am bequemsten geht das über GUI → **CH9 SERVICE**:
+Am bequemsten geht das über GUI → **CH2 SERVICE**:
 
 - Das Panel zeigt den aktuellen Zustand, den Starttyp und **welche EXE tatsächlich registriert ist** — mit Warnung, falls das vom konfigurierten Pfad abweicht. So fällt eine veraltete Installation sofort auf.
 - **Install**: Der EXE-Pfad ist mit `Darkstar.exe` neben dem Konfigurationsordner vorbelegt. Optional mit verzögertem Autostart (damit Netzwerk und SRS-Server vorher oben sind) und optional sofortigem Start.
@@ -1267,8 +1267,8 @@ Jede ändernde Aktion fragt per UAC nach Administratorrechten; der Editor selbst
 Zwei Dinge, die man wissen sollte:
 
 - **Der Dienst führt genau die registrierte EXE aus** und liest die `config.json` aus *deren* Ordner. Wenn du zum Testen eine zweite Kopie des Bots hast, achte darauf, die Konfiguration zu bearbeiten, die der Dienst auch wirklich verwendet — genau dafür zeigt das Panel den registrierten Pfad an.
-- **Ein Dienst hat kein Konsolenfenster.** Was er tut, steht in den Logdateien unter `logs\` — oder in der Live-Ansicht auf CH7 Logging, dieselben Daten ohne den Editor zu verlassen.
-- **Das Log wird laufend geschrieben** und etwa einmal pro Sekunde auf die Platte gezwungen. Zeigt der Explorer die aktuelle Logdatei mit 0 Bytes an, aktualisiert Windows nur den Verzeichniseintrag einer offenen Datei nicht — der Inhalt ist da. Lies sie über CH7, mit einem Tail-Werkzeug (`Get-Content -Wait`) oder in einem Editor, statt der Größenspalte zu glauben.
+- **Ein Dienst hat kein Konsolenfenster.** Was er tut, steht in den Logdateien unter `logs\` — oder in der Live-Ansicht auf CH10 Logging, dieselben Daten ohne den Editor zu verlassen.
+- **Das Log wird laufend geschrieben** und etwa einmal pro Sekunde auf die Platte gezwungen. Zeigt der Explorer die aktuelle Logdatei mit 0 Bytes an, aktualisiert Windows nur den Verzeichniseintrag einer offenen Datei nicht — der Inhalt ist da. Lies sie über CH10, mit einem Tail-Werkzeug (`Get-Content -Wait`) oder in einem Editor, statt der Größenspalte zu glauben.
 
 Alternativ kann der Installer den Dienst während der Installation registrieren, oder du machst es von Hand mit `sc.exe`.
 
@@ -1287,7 +1287,7 @@ Alles liegt neben der EXE des Bots:
 | `recordings\` | Nur mit aktivem `SaveRecordings`. Eine WAV pro Aussendung, etwa 100 KB pro Sekunde Sprache. |
 | `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung. |
 | `grpc-dumps\` | Gespeicherte JSON-Ergebnisse aus dem Missionsdaten-Explorer. |
-| `Profiles\` | Gespeicherte `config.json`-Varianten, eine Datei je Profil. Wird nur von CH10 des Konfigurationseditors geschrieben und gelesen — der Bot sieht hier nie hinein. Siehe [die Anleitung zum Editor](gui.md#ch10--profiles). |
+| `Profiles\` | Gespeicherte `config.json`-Varianten, eine Datei je Profil. Wird nur von CH3 des Konfigurationseditors geschrieben und gelesen — der Bot sieht hier nie hinein. Siehe [die Anleitung zum Editor](gui.md#ch3--profiles). |
 
 **Keiner der beiden Ordner wächst unbegrenzt.** Beim Start und einmal pro Stunde löscht der Bot seine eigenen alten Dateien: Aufnahmen nach `RecordingRetentionDays` (7) oder sobald `recordings\` über `RecordingRetentionMaxMb` (500) liegt, Logs nach `LogRetentionDays` (30) bzw. `LogRetentionMaxMb` (200). Erst das Alter, dann die Größe: Was das Alterslimit überlebt, wird von den ältesten Dateien her gekürzt, bis der Ordner passt. Die drei neuesten Logdateien werden nie gelöscht, egal was die Limits sagen — ein versehentlich gesetztes 1-MB-Budget kann also nicht das Log löschen, in das gerade geschrieben wird. Ein Limit auf `0` schaltet es ab. Jede Löschung steht mit Begründung im Log:
 
@@ -1407,20 +1407,20 @@ Ein Reconnect löst **keine** Welle von Begrüßungen aus: der Bot weiß weiterh
 | **Antwort wird erzeugt, aber nie gehört** | `ExternalAudioExePath` falsch oder TTS-Stimme nicht installiert. Auf CH1 **Detect SRS installation** drücken, dann eine Aussendung manuell testen (siehe [Kapitel 4](#4-erster-start)). Das Log nennt den gefundenen Pfad, wenn der eingetragene nicht existiert. |
 | **Bot antwortet auf seine eigenen Antworten** | Sollte unmöglich sein — das Radio ist währenddessen selbst stummgeschaltet. Falls doch, bitte mit Log melden. |
 | **Zahlen werden heruntergerattert / sind schwer verständlich** | `DcsIntelSlowSpeech` einschalten (GUI: CH8 → **Replies** → *Slow, clearly spoken numbers*). Ist die Stimme insgesamt zu schnell, eine andere `VoiceName` probieren oder — falls deine SRS-Version das kann — einen Tempo-Parameter über `ExternalAudioExtraArgs` setzen. |
-| **Ein Radio ist nach dem Setzen einer Stimme verstummt** | Den Stimmennamen hat dieser Rechner nicht. **List available voices** auf CH2 drücken und einen Namen aus dieser Liste verwenden — die „natürlichen“ Windows-Stimmen sind meist nicht dabei. Das Startup-Log nennt die Stimme jedes Radios, `[ExternalAudio:ERR]`-Zeilen zeigen die Beschwerde des Tools. |
+| **Ein Radio ist nach dem Setzen einer Stimme verstummt** | Den Stimmennamen hat dieser Rechner nicht. **List available voices** auf CH4 drücken und einen Namen aus dieser Liste verwenden — die „natürlichen“ Windows-Stimmen sind meist nicht dabei. Das Startup-Log nennt die Stimme jedes Radios, `[ExternalAudio:ERR]`-Zeilen zeigen die Beschwerde des Tools. |
 | **„Where is X" wird mit „say again, which aircraft?" beantwortet** | Der Name muss hinter der Triggerphrase stehen: *„where is Springfield 2-1"*, nicht *„Springfield 2-1, where is he"*. Siehe [7 → Wo ist jemand](#wo-ist-jemand). |
 | **„Where is X" ergibt „unable to identify your coalition"** | Der Anrufer steht in der SRS-Clientliste nicht auf Rot oder Blau — typischerweise ein Zuschauerslot. Diese Anfrage lehnt ab statt eine Seite zu raten. |
 | **„Where is X" findet nie einen KI-Wingman** | So gewollt: gemeldet werden nur menschliche Spieler. |
-| **Der Bot antwortet „standby, working other traffic" und ignoriert mich danach** | Das Rate-Limit pro Pilot. Das Log nennt die Wartezeit (`[Rate limit]`). Auf CH3 `RateLimitMaxRequests` erhöhen oder `RateLimitWindowSeconds` senken, wenn es für deinen Server zu streng ist. |
-| **Alle Radios sprechen mit derselben Stimme** | `Radios[].Voice` ist bei allen leer, sie fallen also auf die globale `VoiceName` zurück. Pro Radio auf CH2 setzen. |
+| **Der Bot antwortet „standby, working other traffic" und ignoriert mich danach** | Das Rate-Limit pro Pilot. Das Log nennt die Wartezeit (`[Rate limit]`). Auf CH5 `RateLimitMaxRequests` erhöhen oder `RateLimitWindowSeconds` senken, wenn es für deinen Server zu streng ist. |
+| **Alle Radios sprechen mit derselben Stimme** | `Radios[].Voice` ist bei allen leer, sie fallen also auf die globale `VoiceName` zurück. Pro Radio auf CH4 setzen. |
 | **Antwort kommt sehr spät** | 2–5 s sind normal. Zwischenansage aktivieren, damit Piloten wissen, dass sie gehört wurden. |
 | **Threat-Circle-Warnungen kommen nie an** | Im Log nach `[ThreatCircle]`-Zeilen sehen, die jeden Durchlauf protokollieren. Meist lässt sich das Flugzeug des Piloten nicht seinem SRS-Namen zuordnen (der Kreis braucht es als Mittelpunkt), oder der Kreis ist bereits abgelaufen. |
 | **Taktische Anfragen liefern „no tactical data“** | DCS-gRPC läuft nicht, keine Mission geladen, falsche Adresse, oder `DcsGrpcEnabled` aus. Auf CH8 → **Server & test** testen. |
 | **Taktische Antworten nutzen immer Bullseye statt BRAA** | Dein SRS-Name ließ sich keinem DCS-Spielernamen zuordnen. Namen angleichen oder die Trennzeichen-Konvention nutzen (`CALLSIGN 1-1 \| handle`). Am schnellsten bestätigt: *„radio check“* rufen — *„no radar contact on you“* heißt genau das. |
 | **`recordings\` oder `logs\` haben die Platte gefüllt** | Sollte nicht mehr passieren: Beide werden beim Start und stündlich aufgeräumt. Die `[Retention]`-Zeilen im Log prüfen, und dass `RecordingRetentionDays`/`RecordingRetentionMaxMb` nicht beide `0` sind. |
-| **Die Antwort auf `radio check` ist nicht die auf CH4 eingestellte** | Eine Zeile `radio check` in der `phrases.json` hat absichtlich Vorrang vor der eingebauten Antwort. Zeile löschen, um das eingebaute Verhalten zu bekommen. |
+| **Die Antwort auf `radio check` ist nicht die auf CH6 eingestellte** | Eine Zeile `radio check` in der `phrases.json` hat absichtlich Vorrang vor der eingebauten Antwort. Zeile löschen, um das eingebaute Verhalten zu bekommen. |
 | **„Picture clean“, obwohl Feinde in der Luft sind** | Die konfigurierte AWACS-Einheit ist spielergeflogen oder existiert nicht, dazu eine zu enge Reichweitengrenze. Zum Test `DcsIntelAwacsUnitName` leeren oder `DcsIntelMaxRangeNm` erhöhen. |
-| **Dienst startet nicht** | Meist ein Pfadproblem: Auf CH9 die registrierte EXE prüfen und ob die `config.json` in *diesem* Ordner liegt. |
+| **Dienst startet nicht** | Meist ein Pfadproblem: Auf CH2 die registrierte EXE prüfen und ob die `config.json` in *diesem* Ordner liegt. |
 | **Dienst lässt sich nicht entfernen** | Etwas hält noch ein Handle darauf (services.msc, Task-Manager). Beides schließen und erneut versuchen; ein Neustart räumt es immer auf. |
 | **GUI meldet „config.json exists but has invalid JSON“** | Absicht: Der Editor weigert sich, eine kaputte Datei mit Standardwerten zu überschreiben. Syntax korrigieren (das Log nennt die Stelle) und neu laden. |
 | **Aussendung an einen entfernten SRS-Server kommt nicht an** | `DCS-SR-ExternalAudio.exe` wird derzeit ohne Serverparameter aufgerufen und sendet damit an `127.0.0.1`. Bei entferntem SRS-Server bleiben die Antworten lokal. Den richtigen Parameternamen in `--help` nachsehen und einbauen lassen. |
@@ -1444,7 +1444,7 @@ Das kleine Modell (~40 MB) ist ein Kompromiss für Rechner, die nichts übrig ha
 
 Vorher den alten Modellordner löschen, dann `VoskModelPath` auf den neuen zeigen lassen.
 
-### 12.2 Audio-Aufbereitung (CH3 Speech → „Audio preparation")
+### 12.2 Audio-Aufbereitung (CH5 Speech → „Audio preparation")
 
 SRS liefert 48 kHz, Vosk will 16 kHz. Der Weg dorthin bedeutet, zwei von drei Samples wegzuwerfen — und was im Original über 8 kHz liegt, verschwindet dabei nicht einfach. Es klappt als Spiegelbild in den hörbaren Bereich zurück: 10 kHz erscheint wieder bei 6 kHz, 11 kHz bei 5 kHz, 12 kHz bei 4 kHz. Genau dort werden Konsonanten unterschieden — deshalb äußert sich der Effekt als verhörte Wörter und nicht als hörbares Rauschen.
 
@@ -1484,7 +1484,7 @@ Das deckt Stufe 2 und 3 ab — Transkription und Zuordnung. Ein Hotword, das nie
 
 ### 12.4b Das Hotword messen
 
-**„Save every transmission to `recordings\`"** (CH3 Speech) einschalten und eine Weile normal fliegen. Der Bot schreibt eine WAV-Datei pro Aussendung, benannt nach dem, was passiert ist:
+**„Save every transmission to `recordings\`"** (CH5 Speech) einschalten und eine Weile normal fliegen. Der Bot schreibt eine WAV-Datei pro Aussendung, benannt nach dem, was passiert ist:
 
 - `..._hit_...` — das Hotword hat ausgelöst.
 - `..._missed_...` — jemand hat gesendet und es hat nicht ausgelöst. Das sind die interessanten, und ihretwegen gibt es das Ganze: ein Überhören hinterlässt sonst nirgends eine Spur.
@@ -1540,7 +1540,7 @@ of a lord
 
 Der erste Fall ist der wichtige. Der Bot hat das Wort im Grunde richtig gehört und trotzdem nichts getan, weil der Erkenner mitten hinein ein Leerzeichen gesetzt hat. Noch deutlicher zu sprechen hilft dagegen nicht.
 
-Deshalb kann ein Radio **mehrere Schreibweisen** seines Hotwords akzeptieren — `VoskKeywordVariants` global, `Radios[].KeywordVariants` pro Radio, oder das Feld *„Also accept as the wake word"* auf CH2/CH3:
+Deshalb kann ein Radio **mehrere Schreibweisen** seines Hotwords akzeptieren — `VoskKeywordVariants` global, `Radios[].KeywordVariants` pro Radio, oder das Feld *„Also accept as the wake word"* auf CH4/CH5:
 
 ```json
 "VoskKeyword": "Overlord",

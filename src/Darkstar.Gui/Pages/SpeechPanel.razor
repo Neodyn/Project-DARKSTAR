@@ -195,7 +195,7 @@
                 <span style="color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">@Store.TtsVoiceStatus</span>
             }
         </div>
-        @* Unambiguous here, unlike on CH2: there is exactly one field on this panel, so a chip can
+        @* Unambiguous here, unlike on CH4: there is exactly one field on this panel, so a chip can
            simply write into it. Clicking the field drops the same list down, but an <input list>
            gives no sign of that, and a voice name typed from memory fails silently. *@
         @if (Store.TtsVoiceList.Count > 0)
@@ -220,7 +220,7 @@
         }
 
         <div class="hint">
-            A per-radio voice on <strong>CH2</strong> overrides this, which is how the AWACS, the tanker
+            A per-radio voice on <strong>CH4</strong> overrides this, which is how the AWACS, the tanker
             and the tower end up sounding like three different people.
         </div>
     </div>
@@ -281,7 +281,7 @@
             <code>Darkstar.exe --test-hotword recordings --suggest-variants</code>: it reads what the
             model heard on the transmissions it missed, proposes only the candidates that never turned
             up when nobody called, and prints a line ready to paste here. Radios with their own wake
-            word don't inherit these — set theirs on CH2.
+            word don't inherit these — set theirs on CH4.
         </div>
     </div>
     <div class="field">
