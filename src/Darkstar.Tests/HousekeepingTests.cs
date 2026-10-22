@@ -1499,56 +1499,97 @@ internal static class HousekeepingTests
         var gap = TimeSpan.FromSeconds(90);
 
         Check("the first pilot on a frequency is greeted",
-            greetingState.ShouldGreet("guid-a", 251_000_000, tuneIn, gap));
+            greetingState.ShouldGreet("guid-a", null, null, 251_000_000, tuneIn, gap));
         Check("the same pilot on the same frequency never again - not an hour later either",
-            !greetingState.ShouldGreet("guid-a", 251_000_000, tuneIn.AddHours(1), gap));
+            !greetingState.ShouldGreet("guid-a", null, null, 251_000_000, tuneIn.AddHours(1), gap));
 
         // A flight of four checks in within seconds of each other. One greeting, not four.
         Check("the second aircraft of a flight hears nothing",
-            !greetingState.ShouldGreet("guid-b", 251_000_000, tuneIn.AddSeconds(3), gap));
+            !greetingState.ShouldGreet("guid-b", null, null, 251_000_000, tuneIn.AddSeconds(3), gap));
         Check("nor the third",
-            !greetingState.ShouldGreet("guid-c", 251_000_000, tuneIn.AddSeconds(8), gap));
+            !greetingState.ShouldGreet("guid-c", null, null, 251_000_000, tuneIn.AddSeconds(8), gap));
         Check("somebody arriving after the gap is greeted again",
-            greetingState.ShouldGreet("guid-d", 251_000_000, tuneIn.AddSeconds(91), gap));
+            greetingState.ShouldGreet("guid-d", null, null, 251_000_000, tuneIn.AddSeconds(91), gap));
 
         // The ordering inside ShouldGreet matters: the already-greeted check comes first on purpose.
         // If a pilot flipping back to a preset refreshed the per-frequency gap, one bored pilot
         // could keep everybody else silent indefinitely.
         var ordering = new TuneInGreeting.State();
-        Check("first pilot greeted", ordering.ShouldGreet("guid-a", 251_000_000, tuneIn, gap));
-        Check("the same pilot tuning back in is refused", !ordering.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(100), gap));
+        Check("first pilot greeted", ordering.ShouldGreet("guid-a", null, null, 251_000_000, tuneIn, gap));
+        Check("the same pilot tuning back in is refused", !ordering.ShouldGreet("guid-a", null, null, 251_000_000, tuneIn.AddSeconds(100), gap));
         Check("and that refusal did not push the gap out for the next arrival",
-            ordering.ShouldGreet("guid-b", 251_000_000, tuneIn.AddSeconds(100), gap));
+            ordering.ShouldGreet("guid-b", null, null, 251_000_000, tuneIn.AddSeconds(100), gap));
 
         // The gap is per frequency, because a tower and the tactical radio are different channels
         // with different listeners.
         var perFrequency = new TuneInGreeting.State();
-        Check("a pilot tuning the tower is greeted", perFrequency.ShouldGreet("guid-a", 133_000_000, tuneIn, gap));
+        Check("a pilot tuning the tower is greeted", perFrequency.ShouldGreet("guid-a", null, null, 133_000_000, tuneIn, gap));
         Check("and again on the tactical radio, which nobody on it has heard yet",
-            perFrequency.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(1), gap));
+            perFrequency.ShouldGreet("guid-a", null, null, 251_000_000, tuneIn.AddSeconds(1), gap));
         Check("a greeting on one frequency does not silence another",
-            perFrequency.ShouldGreet("guid-b", 265_000_000, tuneIn.AddSeconds(2), gap));
+            perFrequency.ShouldGreet("guid-b", null, null, 265_000_000, tuneIn.AddSeconds(2), gap));
         Check("all three are counted", perFrequency.Sent == 3, perFrequency.Sent.ToString());
 
-        Check("a client with no guid is never greeted - there would be no way to remember it",
-            !perFrequency.ShouldGreet("", 243_000_000, tuneIn, gap));
+        Check("a client with nothing to identify it by is never greeted",
+            !perFrequency.ShouldGreet("", null, null, 243_000_000, tuneIn, gap));
 
-        Section("Forgetting pilots who left");
+        Section("A pilot who reconnects is not greeted again");
 
-        var forgetting = new TuneInGreeting.State();
-        forgetting.ShouldGreet("guid-a", 251_000_000, tuneIn, gap);
-        forgetting.ShouldGreet("guid-a", 133_000_000, tuneIn, gap);
-        forgetting.ShouldGreet("guid-b", 265_000_000, tuneIn, gap);
-        Check("three greetings are remembered", forgetting.Tracked == 3, forgetting.Tracked.ToString());
+        // The bug this replaced: the memory was keyed on the SRS ClientGuid and wiped on
+        // disconnect. SRS issues a new guid on every reconnect, and in DCS a slot change, a
+        // respawn or a momentary client blip IS a reconnect - so the greeting came back over and
+        // over during one mission, while the class documented "never again, even hours later".
+        var reslotting = new TuneInGreeting.State();
+        var sep = "|";
 
-        forgetting.Forget("guid-a");
-        Check("a disconnect drops every frequency that pilot was greeted on, and nobody else's",
-            forgetting.Tracked == 1, forgetting.Tracked.ToString());
-        Check("so somebody who rejoins is greeted again",
-            forgetting.ShouldGreet("guid-a", 251_000_000, tuneIn.AddSeconds(500), gap));
-        Check("forgetting an unknown guid is harmless", forgetting.Tracked == 2);
-        forgetting.Forget("");
-        Check("and so is forgetting nothing at all", forgetting.Tracked == 2);
+        Check("greeted on arrival",
+            reslotting.ShouldGreet("guid-1", "Enfield 1-1 | neodym", sep, 251_000_000, tuneIn, gap));
+
+        // Same human, new aircraft: new guid from SRS, and the callsign half of the name changed
+        // too. Only the handle is the same, which is why the handle is what is keyed on.
+        Check("not greeted again after changing slot",
+            !reslotting.ShouldGreet("guid-2", "Springfield 2-1 | neodym", sep, 251_000_000,
+                tuneIn.AddMinutes(20), gap));
+
+        Check("nor after a reconnect with the name unchanged",
+            !reslotting.ShouldGreet("guid-3", "Enfield 1-1 | neodym", sep, 251_000_000,
+                tuneIn.AddMinutes(40), gap));
+
+        // A different pilot behind the same callsign is somebody else and does get a greeting.
+        Check("but a different handle is a different pilot",
+            reslotting.ShouldGreet("guid-4", "Enfield 1-1 | someone else", sep, 251_000_000,
+                tuneIn.AddMinutes(60), gap));
+
+        // Without the separator convention the whole name is the identity, which is stable too:
+        // re-slotting does not rename an SRS client.
+        var noSeparator = new TuneInGreeting.State();
+        Check("a name with no handle still identifies its pilot",
+            noSeparator.ShouldGreet("guid-1", "Mobius 1", sep, 251_000_000, tuneIn, gap));
+        Check("and survives the reconnect as well",
+            !noSeparator.ShouldGreet("guid-2", "Mobius 1", sep, 251_000_000, tuneIn.AddMinutes(10), gap));
+        Check("spelling it differently is still the same pilot",
+            !noSeparator.ShouldGreet("guid-3", "MOBIUS_1", sep, 251_000_000, tuneIn.AddMinutes(20), gap));
+
+        // The guid remains the fallback for a client SRS reports with no name at all.
+        var nameless = new TuneInGreeting.State();
+        Check("a nameless client falls back to its id",
+            nameless.ShouldGreet("guid-x", "   ", sep, 251_000_000, tuneIn, gap));
+        Check("and is remembered under it",
+            !nameless.ShouldGreet("guid-x", "", sep, 251_000_000, tuneIn.AddMinutes(5), gap));
+
+        Section("The memory is capped rather than pruned");
+
+        // Making room by forgetting somebody would greet them twice, so it goes quiet instead.
+        var full = new TuneInGreeting.State();
+        for (var i = 0; i < TuneInGreeting.State.MaxRemembered; i++)
+            full.ShouldGreet($"guid-{i}", $"pilot {i}", sep, 251_000_000, tuneIn.AddSeconds(i * 600), gap);
+
+        Check($"it remembers {TuneInGreeting.State.MaxRemembered} pairs",
+            full.Tracked == TuneInGreeting.State.MaxRemembered, full.Tracked.ToString());
+        Check("and then stays silent instead of forgetting one",
+            !full.ShouldGreet("guid-new", "somebody new", sep, 251_000_000,
+                tuneIn.AddDays(1), gap));
+        Check("without losing what it had", full.Tracked == TuneInGreeting.State.MaxRemembered);
 
         Section("What the pilot hears when they tune in");
 
@@ -1630,7 +1671,15 @@ internal static class HousekeepingTests
             greetHandler.Contains("client.Coalition != config.Coalition", StringComparison.Ordinal));
         Check("a frequency the bot does not monitor is skipped rather than greeted into the void",
             greetHandler.Contains("if (!sessions.TryGetValue(key, out var session)) continue;", StringComparison.Ordinal));
-        Check("a disconnect is forgotten", bot.Contains("greetings.Forget(guid)", StringComparison.Ordinal));
+        // The reverse of what this once asserted. Forgetting a client on disconnect is what made
+        // the greeting repeat all mission, because every reconnect brings a new guid - so the
+        // subscription must NOT be there, and the pilot's name has to reach ShouldGreet.
+        Check("a disconnect no longer wipes that pilot from the memory",
+            !bot.Contains("greetings.Forget", StringComparison.Ordinal)
+            && !bot.Contains("OnClientDisconnected += guid => greetings", StringComparison.Ordinal));
+        Check("the greeting is keyed on the pilot's name rather than the client id",
+            greetHandler.Contains("client.Name", StringComparison.Ordinal)
+            && greetHandler.Contains("config.PlayerNameCallsignSeparator", StringComparison.Ordinal));
         Check("the gap cannot be configured down to nothing",
             bot.Contains("Math.Max(5, config.TuneInGreetingGapSeconds)", StringComparison.Ordinal));
 

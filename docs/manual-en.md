@@ -450,7 +450,7 @@ The bot never talks over a pilot: if the time expires while they are still trans
 | `DcsIntelTimeoutSeconds` | `5` | Timeout per mission-data query. |
 | `DcsIntelBogeyDopeTriggers` | `["bogey dope", "bogie dope", "bogey dobe", "boogie dope", "nearest bandit", "closest contact"]` | Matched case-insensitively anywhere in the transcription. The deliberate misspellings catch common recognition errors. |
 | `DcsIntelPictureTriggers` | `["picture", "request picture", "say picture"]` | |
-| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
+| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats", "thread check", "any threads", "threads"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reads the caller's *own* position back to them from the bullseye. |
 | `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check, declare from own position, spike or divert when the caller can't be matched to a unit — usually a name mismatch, see [8.3](#83-turning-on-the-tactical-replies). |
@@ -499,8 +499,8 @@ The bot never talks over a pilot: if the time expires while they are still trans
 | `DcsIntelThreatCircleDurationMinutes` | `30` | Automatic expiry. |
 | `DcsIntelThreatCircleMaxActive` | `8` | Circles running at the same time. |
 | `DcsIntelThreatCircleMaxAlertsPerSweep` | `2` | Warnings per circle and sweep; the rest follow later. |
-| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle"]` | Start phrases. |
-| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring"]` | Cancel phrases. |
+| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle", "thread circle", "thread ring", "set thread circle"]` | Start phrases. |
+| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring", "cancel thread circle", "stop thread circle", "thread circle off", "cancel thread ring"]` | Cancel phrases. |
 | `DcsIntelThreatCircleNoPilotReply` | `"Unable to set the threat circle, cannot locate your aircraft."` | |
 | `DcsIntelThreatCircleBusyReply` | `"Unable, too many threat circles active at the moment."` | |
 | `DcsIntelThreatCircleCancelledReply` | `"Threat circle cancelled."` | |
@@ -655,20 +655,22 @@ check on **CH6 Phrases**, the fixed phrases in `phrases.json`.
 |---|---|---|
 | Bogey dope | The nearest hostile group: BRAA from your own aircraft, with aspect and type. | `bogey dope`, `bogie dope`, `bogey dobe`, `boogie dope`, `nearest bandit`, `closest contact` |
 | Picture | The whole hostile air picture, grouped, from the bullseye. | `picture`, `request picture`, `say picture` |
-| Threat check | The single nearest threat, short. | `threat check`, `any threats`, `threats` |
+| Threat check | The single nearest threat, short. | `threat check`, `any threats`, `threats`, `thread check`, `any threads`, `threads` |
 | Declare *bullseye B for R* | What sits at that point: hostile, friendly, **furball** or clean. | `declare` |
 | Spike *bearing* | What is on that bearing, including **buddy spike** when it is one of ours. | `spike`, `spiked`, `nails` |
 | Alpha check | **Your own** position from the bullseye — a navigation cross-check. | `alpha check`, `position check`, `say my position` |
 | Where is *callsign* | The position of a **human** player on your own side. Off by default. | `where is`, `where's`, `position of`, `say position of`, `posit on`, `locate` |
-| Threat circle *N* miles | Arms a standing watch around your aircraft; it warns when a hostile enters. | `threat circle`, `threat ring`, `set threat circle` |
-| Cancel threat circle | Ends it. | `cancel threat circle`, `stop threat circle`, `threat circle off`, `cancel threat ring` |
+| Threat circle *N* miles | Arms a standing watch around your aircraft; it warns when a hostile enters. | `threat circle`, `threat ring`, `set threat circle`, `thread circle`, `thread ring`, `set thread circle` |
+| Cancel threat circle | Ends it. | `cancel threat circle`, `stop threat circle`, `threat circle off`, `cancel threat ring`, `cancel thread circle`, `stop thread circle`, `thread circle off`, `cancel thread ring` |
 | Check in / check out | Coming on station and leaving it. Checking out also ends any threat circle of yours. | `check in`, `checking in`, `on station` / `check out`, `checking out`, `off station`, `returning to base` |
 | Say again | The last thing you were told, repeated. Works on every radio, with or without DCS. | `say again`, `repeat last`, `repeat that` |
 | …*bullseye* | Not a call of its own: added to one of the above, it forces the answer to be given from the bullseye instead of from your aircraft. | `bullseye` |
 
-Three of the bogey-dope triggers are not English — `bogey dobe`, `boogie dope`, `bogie dope` are
-what the speech model regularly *hears*. They are in the list on purpose; see
-[chapter 12.5](#125-accents-accepting-how-the-word-is-really-heard).
+Some triggers are not English at all — `bogey dobe`, `boogie dope`, `bogie dope`, and every
+`thread` spelling of `threat`. They are what the speech model regularly *hears*, and they are in
+the list on purpose: `thread` is the commoner English word, so a transcriber offered the same vowel
+prefers it, and a pilot who said "threat circle forty miles" perfectly correctly should not have to
+say it twice. See [chapter 12.5](#125-accents-accepting-how-the-word-is-really-heard).
 
 **Airfield — needs DCS-gRPC and `DcsAirfieldEnabled`**
 

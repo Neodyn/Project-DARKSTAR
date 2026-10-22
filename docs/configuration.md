@@ -282,7 +282,7 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 | `DcsIntelTimeoutSeconds` | `5` | Per-call timeout for the DCS-gRPC queries behind a reply. |
 | `DcsIntelBogeyDopeTriggers` | `["bogey dope", "bogie dope", "bogey dobe", "boogie dope", "nearest bandit", "closest contact"]` | Matched case-insensitively anywhere in the transcription. The deliberate misspellings catch common speech-recognition errors. |
 | `DcsIntelPictureTriggers` | `["picture", "request picture", "say picture"]` | |
-| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
+| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats", "thread check", "any threads", "threads"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reports the caller's *own* position from the bullseye. Answered before the contact query, so it still works when the sensor source is unusable. |
 | `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check, declare from own position, spike or divert when the caller cannot be matched to a unit. |
@@ -449,8 +449,8 @@ The radius may be spoken as digits or as words ("forty", "twenty five", "one hun
 | `DcsIntelThreatCircleDurationMinutes` | `30` | A circle expires automatically after this long. |
 | `DcsIntelThreatCircleMaxActive` | `8` | How many pilots can have a circle at the same time. |
 | `DcsIntelThreatCircleMaxAlertsPerSweep` | `2` | Warnings transmitted per circle and sweep; the rest follow on later sweeps instead of occupying the frequency all at once. |
-| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle"]` | Start phrases. |
-| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring"]` | Cancel phrases, checked before the start phrases. |
+| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle", "thread circle", "thread ring", "set thread circle"]` | Start phrases. |
+| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring", "cancel thread circle", "stop thread circle", "thread circle off", "cancel thread ring"]` | Cancel phrases, checked before the start phrases. |
 | `DcsIntelThreatCircleNoPilotReply` | `"Unable to set the threat circle, cannot locate your aircraft."` | The circle follows the pilot, so it can't be armed without finding their aircraft. |
 | `DcsIntelThreatCircleBusyReply` | `"Unable, too many threat circles active at the moment."` | |
 | `DcsIntelThreatCircleCancelledReply` | `"Threat circle cancelled."` | |

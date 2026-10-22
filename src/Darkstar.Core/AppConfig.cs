@@ -258,7 +258,12 @@ public sealed class AppConfig
     /// <summary>Phrases that request a short "anything near me?" answer.</summary>
     public List<string> DcsIntelThreatTriggers { get; set; } = new()
     {
-        "threat check", "any threats", "threats"
+        // "thread" is what a transcriber reliably hears for "threat" - same vowel, and "thread"
+        // is the commoner English word, so the language model prefers it. Shipped as variants
+        // for the same reason "boogie dope" is: the pilot said it correctly and should not have
+        // to say it twice. Reported from a live mission, not guessed at.
+        "threat check", "any threats", "threats",
+        "thread check", "any threads", "threads"
     };
 
     /// <summary>
@@ -373,13 +378,15 @@ public sealed class AppConfig
     /// <summary>Phrases that start a threat circle. A number in the same transmission sets the radius.</summary>
     public List<string> DcsIntelThreatCircleTriggers { get; set; } = new()
     {
-        "threat circle", "threat ring", "set threat circle"
+        "threat circle", "threat ring", "set threat circle",
+        "thread circle", "thread ring", "set thread circle"
     };
 
     /// <summary>Phrases that cancel the pilot's own threat circle. Checked before the start triggers.</summary>
     public List<string> DcsIntelThreatCircleCancelTriggers { get; set; } = new()
     {
-        "cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring"
+        "cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring",
+        "cancel thread circle", "stop thread circle", "thread circle off", "cancel thread ring"
     };
 
     /// <summary>Spoken when a circle could not be set up because the pilot's aircraft wasn't found.</summary>
