@@ -11,6 +11,13 @@
     <AssemblyTitle>D.A.R.K.S.T.A.R. Config Editor</AssemblyTitle>
 
     <!--
+      One icon for both executables, kept in src\ rather than copied into each project so the two
+      cannot drift apart. This is what Windows shows in Explorer, the taskbar and Alt-Tab; a WPF
+      window with no Icon of its own falls back to it, so MainWindow needs nothing.
+    -->
+    <ApplicationIcon>..\Darkstar.ico</ApplicationIcon>
+
+    <!--
       Which build is this? Answered by VersionInfo (Darkstar.Core), shown in the bot's startup log,
       in the config editor's title bar and by the version switch of Darkstar.exe.
 

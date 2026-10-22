@@ -38,10 +38,15 @@ stray `.cs` in the root is how the old arrangement crept back once before.
 
 ```
 Darkstar.sln   README.md   README.de.md   LICENSE
-src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/
+src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/  Darkstar.ico
 docs/    the manuals, the configuration reference, images/, kneeboard/
 installer/   Setup.iss and what it needs
 ```
+
+`src/Darkstar.ico` sits beside the projects rather than inside one because both embed it through
+`<ApplicationIcon>`, and two copies would drift. It holds seven sizes and two crops — tighter for
+16–48 px so the rotodome reads at taskbar size, wider above that for the wings and engines. See
+[docs/images/README.md](images/README.md) for where it came from.
 
 The bot (`src/Darkstar.Bot/`):
 

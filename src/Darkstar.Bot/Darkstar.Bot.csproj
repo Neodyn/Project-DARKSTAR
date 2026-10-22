@@ -8,6 +8,11 @@
     <RootNamespace>Darkstar</RootNamespace>
     <AssemblyName>Darkstar</AssemblyName>
     <AssemblyTitle>D.A.R.K.S.T.A.R.</AssemblyTitle>
+
+    <!-- The same icon the editor uses; see the comment in Darkstar.Gui.csproj. A console
+         application carries one too: it is what the console window, the taskbar and the
+         service's entry in "Apps & features" show. -->
+    <ApplicationIcon>..\Darkstar.ico</ApplicationIcon>
     <Product>D.A.R.K.S.T.A.R. - Digital Assistant for Radio Keyword-activated Speech Transcription And Response</Product>
 
     <!--
