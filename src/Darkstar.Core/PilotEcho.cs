@@ -120,6 +120,6 @@ public static class PilotEcho
 
         return $"[Menu] No second voice is installed{which}, so the pilot read-back is switched off " +
                "for this radio - both halves in one voice would be worse than none. " +
-               "Installing another SAPI5 voice turns it on (CH3 Speech lists where they come from).";
+               "Installing another SAPI5 voice turns it on (CH5 Speech lists where they come from).";
     }
 }

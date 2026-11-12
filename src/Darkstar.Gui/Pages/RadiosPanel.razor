@@ -49,12 +49,12 @@
                 How the recognizer really hears it. A German speaker's "Overlord" often arrives as
                 <code>over lord</code> — which fails the whole-word match on the space, so the bot stays
                 silent. Every entry here also raises the false-trigger rate, so fill it from measurements:
-                turn on <code>SaveRecordings</code> (CH3), fly a session, then run
+                turn on <code>SaveRecordings</code> (CH5), fly a session, then run
                 <code>Darkstar.exe --test-hotword recordings --suggest-variants</code>, which reads out what
                 the model heard on the transmissions it missed and proposes the list.
                 @if (string.IsNullOrWhiteSpace(radio.Keyword))
                 {
-                    <text>Empty here means this radio uses the global variants from CH3.</text>
+                    <text>Empty here means this radio uses the global variants from CH5.</text>
                 }
                 else
                 {
@@ -196,7 +196,7 @@
         it speaks through SAPI5, so Windows' own "natural" voices are usually invisible to it even
         though the system settings show them. A name that isn't here fails silently — no audio, no
         error. Azure or Google voice names won't appear either; type those in by hand and set the
-        credentials in <code>ExternalAudioExtraArgs</code> on CH3.
+        credentials in <code>ExternalAudioExtraArgs</code> on CH5.
     </div>
 </div>
 

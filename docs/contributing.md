@@ -17,7 +17,17 @@ See the [README](../README.md#project-structure) for the folder layout. The thre
 
 - **`Darkstar.Bot`** (`src/Darkstar.Bot/`, builds `Darkstar.exe`) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
 - **`Darkstar.Core`** (`src/Darkstar.Core/`) — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
-- **`Darkstar.Gui`** (`src/Darkstar.Gui/`) — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry. Two rules the test suite enforces: a panel's **channel number never changes** (the documentation is full of "on CH2 Radios"), and CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel` — a mismatch there shows a blank page and fails nowhere.
+- **`Darkstar.Gui`** (`src/Darkstar.Gui/`) — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry.
+
+  Four rules the test suite enforces here:
+
+  - A panel's **channel number never changes** — the documentation is full of "on CH4 Radios".
+  - CH8's three sidebar entries must match the three `Section*` constants in `DcsGrpcPanel`. A mismatch shows a blank page and fails nowhere.
+  - The **whole sidebar order** is asserted verbatim, so a panel cannot change place by accident.
+  - Every path setting sits in a `path-row` with a Browse button wired to the right picker, folder or file.
+  - Nothing bound in a panel may be a local field holding a setting: Save would never see it.
+
+  The pickers go through `IPathPicker`, implemented by `WindowsPathPicker` over WPF's `OpenFolderDialog`/`OpenFileDialog`. An interface rather than a direct call, because the offline harness compiles the panels against plain `net8.0` with no WPF — a panel that opened a dialog itself could not be checked there at all.
 - **`Darkstar.Tests`** (`src/Darkstar.Tests/`) — the test suite. References `Darkstar.Core` only; see below.
 
 ### Where things live
@@ -28,10 +38,15 @@ stray `.cs` in the root is how the old arrangement crept back once before.
 
 ```
 Darkstar.sln   README.md   README.de.md   LICENSE
-src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/
+src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/  Darkstar.ico
 docs/    the manuals, the configuration reference, images/, kneeboard/
 installer/   Setup.iss and what it needs
 ```
+
+`src/Darkstar.ico` sits beside the projects rather than inside one because both embed it through
+`<ApplicationIcon>`, and two copies would drift. It holds seven sizes and two crops — tighter for
+16–48 px so the rotodome reads at taskbar size, wider above that for the wings and engines. See
+[docs/images/README.md](images/README.md) for where it came from.
 
 The bot (`src/Darkstar.Bot/`):
 

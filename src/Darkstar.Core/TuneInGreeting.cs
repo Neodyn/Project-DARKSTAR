@@ -51,27 +51,52 @@ public static class TuneInGreeting
         private readonly HashSet<string> _greeted = new(StringComparer.Ordinal);
         private readonly Dictionary<long, DateTime> _lastGreetingPerFrequency = new();
 
+        /// <summary>
+        /// How many pilot/frequency pairs are remembered before the greeting gives up and stays
+        /// quiet. Unreachable on any real server - it is there so a session running for weeks
+        /// cannot grow this set without bound, and the quiet is deliberate: forgetting somebody
+        /// in order to make room would greet them a second time, which is the one outcome this
+        /// whole class exists to prevent.
+        /// </summary>
+        public const int MaxRemembered = 500;
+
         /// <summary>How many greetings have been sent, for the log.</summary>
         public int Sent { get; private set; }
 
         /// <summary>
         /// Whether to greet this client on this frequency now.
         /// </summary>
+        /// <param name="pilotName">
+        /// The SRS player name. This, not the client id, is what makes the memory last: SRS issues
+        /// a NEW ClientGuid every time a client reconnects, and in DCS that happens whenever a
+        /// pilot changes slot, respawns or their SRS client blips - so a guid-keyed memory greeted
+        /// the same person again and again during one mission, which is exactly what this class
+        /// documents that it does not do.
+        /// </param>
+        /// <param name="separator">
+        /// <c>PlayerNameCallsignSeparator</c>. With the "CALLSIGN 1-1 | handle" convention the
+        /// handle is the stable half - a pilot moving from Enfield 1-1 to Springfield 2-1 is the
+        /// same human and must not be greeted twice.
+        /// </param>
         /// <param name="minimumGap">
         /// Minimum time between greetings on the same frequency. A flight of four checking in
         /// together must hear one greeting, not four.
         /// </param>
-        public bool ShouldGreet(string clientGuid, double frequencyHz, DateTime now, TimeSpan minimumGap)
+        public bool ShouldGreet(string clientGuid, string? pilotName, string? separator,
+            double frequencyHz, DateTime now, TimeSpan minimumGap)
         {
-            if (string.IsNullOrWhiteSpace(clientGuid)) return false;
+            var who = Identify(pilotName, separator, clientGuid);
+            if (who.Length == 0) return false;
 
-            var key = $"{clientGuid}@{(long)Math.Round(frequencyHz)}";
+            var frequencyKey = (long)Math.Round(frequencyHz);
+            var key = $"{who}@{frequencyKey}";
 
             // Checked before the gap on purpose: a client that was already greeted must never reset
             // the gap for everybody else by tuning in again.
             if (_greeted.Contains(key)) return false;
 
-            var frequencyKey = (long)Math.Round(frequencyHz);
+            if (_greeted.Count >= MaxRemembered) return false;
+
             if (_lastGreetingPerFrequency.TryGetValue(frequencyKey, out var last) && now - last < minimumGap)
                 return false;
 
@@ -86,17 +111,34 @@ public static class TuneInGreeting
         /// Their guid changes on reconnect anyway; this is about not growing forever on a server
         /// that runs for weeks.
         /// </summary>
-        public void Forget(string clientGuid)
-        {
-            if (string.IsNullOrWhiteSpace(clientGuid)) return;
-
-            var prefix = clientGuid + "@";
-            foreach (var key in _greeted.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList())
-                _greeted.Remove(key);
-        }
-
-        /// <summary>How many clients are being remembered, for the log.</summary>
+        /// <summary>How many pilot/frequency pairs are being remembered, for the log.</summary>
         public int Tracked => _greeted.Count;
+    }
+
+    /// <summary>
+    /// Who this is, for the purpose of "have we greeted them already" - stable across the
+    /// reconnects SRS reports during one mission.
+    ///
+    /// The handle wins when the "CALLSIGN 1-1 | handle" convention is in use, because that is the
+    /// half that survives a slot change. Without a separator the whole name is the identity, which
+    /// is also stable - a player's SRS name does not change when they re-slot. The client id is
+    /// the last resort and the reason the old behaviour was wrong: it changes on every reconnect.
+    ///
+    /// Returns "" when there is nothing to key on at all, which the caller treats as "do not
+    /// greet" - a greeting nobody can be credited with is a greeting that repeats.
+    /// </summary>
+    internal static string Identify(string? pilotName, string? separator, string? clientGuid)
+    {
+        var parts = PilotNames.Split(pilotName, separator);
+
+        var handle = PilotNames.CanonicalKey(parts.Handle);
+        if (handle.Length > 0) return "h:" + handle;
+
+        var callsign = PilotNames.CanonicalKey(parts.Callsign);
+        if (callsign.Length > 0) return "n:" + callsign;
+
+        var guid = (clientGuid ?? "").Trim();
+        return guid.Length > 0 ? "g:" + guid : "";
     }
 
     /// <summary>

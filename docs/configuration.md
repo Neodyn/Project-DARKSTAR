@@ -74,7 +74,7 @@ The voice is resolved once at startup and travels with the radio that answers, s
 | `AnnounceFrequenciesMessage` | `true` | One on-screen message at startup. |
 | `AnnounceFrequenciesMessageSeconds` | `20` | Display time for that message. |
 
-`TowerPlan` in `Darkstar.Core` turns the running mission's airfield list into one `RadioConfig` per airfield; the GUI's CH2 button applies it. Two constraints shape the whole design, and both are limits rather than preferences:
+`TowerPlan` in `Darkstar.Core` turns the running mission's airfield list into one `RadioConfig` per airfield; the GUI's CH4 button applies it. Two constraints shape the whole design, and both are limits rather than preferences:
 
 - **DCS-gRPC does not expose an airfield's radio frequency.** The `Airbase` message carries a name, a callsign, a coalition and a position — nothing else, and those frequencies never reach the scripting environment. So the plan *assigns* frequencies from a base and a step. The bot transmits over SRS rather than DCS's own ATIS, so it needs its own plan anyway — but the numbers then exist nowhere a pilot can look, which is why `AnnounceFrequenciesEnabled` defaults to on rather than off like the other features that reach into a mission.
 - **The generated towers share the global wake word.** An airfield name as a wake word puts the pronunciation problem that position-based resolution was built to avoid back on the critical path, where a miss means no reaction at all. The frequency identifies the airfield; `ToRadios` therefore leaves `Keyword` empty, and the tests assert that it stays empty.
@@ -212,7 +212,7 @@ Vosk keeps doing the wake word under either engine. That runs continuously on ev
 | `VoiceName` | `""` | TTS voice for any radio that doesn't set its own, e.g. `"Microsoft David Desktop"`. Empty means no `--voice` flag is passed at all, so ExternalAudio picks. |
 | `ExternalAudioExtraArgs` | `""` | Extra command-line arguments appended to every transmission, for options this bot doesn't set itself. Whether your SRS build has a speaking-rate flag (and what it's called) depends on its version — check `DCS-SR-ExternalAudio.exe --help`, then put it here, e.g. `--speed=-1`. A wrong flag surfaces as an `[ExternalAudio]` error in the log. |
 
-**Which voices exist** is not a question about Windows but about ExternalAudio: it speaks through SAPI5, and the modern "natural" Windows 11 voices (Aria, Guy, Ryan…) are OneCore voices that SAPI5 usually cannot see. The authoritative list is what the tool itself prints, which `TtsVoices` in `Darkstar.Core` reads for the **List available voices** button on CH2 and CH3. Note that the tool prints that list from its *argument-error* handler rather than from a dedicated switch, so it is obtained by calling it with `--help` — a non-zero exit code and a page of usage text are therefore the normal, expected case there.
+**Which voices exist** is not a question about Windows but about ExternalAudio: it speaks through SAPI5, and the modern "natural" Windows 11 voices (Aria, Guy, Ryan…) are OneCore voices that SAPI5 usually cannot see. The authoritative list is what the tool itself prints, which `TtsVoices` in `Darkstar.Core` reads for the **List available voices** button on CH4 and CH5. Note that the tool prints that list from its *argument-error* handler rather than from a dedicated switch, so it is obtained by calling it with `--help` — a non-zero exit code and a page of usage text are therefore the normal, expected case there.
 
 **Azure and Google voices** work today through `ExternalAudioExtraArgs` — `--azureCredentials="KEY;region"` or `--googleCredentials="path\to.json"` — with the provider's own voice name in `VoiceName` or per radio (e.g. `en-US-AndrewNeural`, `en-US-Wavenet-D`). They sound far better than anything installed locally, cost money per character, and never appear in the button's list, which asks this machine. `--gender=male` and `--culture=en-GB` are the alternative when you'd rather request a kind of voice than a specific one — safer on machines whose voice list you don't know.
 
@@ -282,7 +282,7 @@ Bearings are read digit by digit ("zero niner zero") so TTS doesn't turn `090` i
 | `DcsIntelTimeoutSeconds` | `5` | Per-call timeout for the DCS-gRPC queries behind a reply. |
 | `DcsIntelBogeyDopeTriggers` | `["bogey dope", "bogie dope", "bogey dobe", "boogie dope", "nearest bandit", "closest contact"]` | Matched case-insensitively anywhere in the transcription. The deliberate misspellings catch common speech-recognition errors. |
 | `DcsIntelPictureTriggers` | `["picture", "request picture", "say picture"]` | |
-| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats"]` | |
+| `DcsIntelThreatTriggers` | `["threat check", "any threats", "threats", "thread check", "any threads", "threads"]` | |
 | `DcsIntelBullseyeTriggers` | `["bullseye"]` | Forces the bullseye format instead of BRAA. |
 | `DcsIntelAlphaCheckTriggers` | `["alpha check", "position check", "say my position"]` | Reports the caller's *own* position from the bullseye. Answered before the contact query, so it still works when the sensor source is unusable. |
 | `DcsIntelNoPositionReply` | `"Negative, no radar contact on you."` | Alpha check, declare from own position, spike or divert when the caller cannot be matched to a unit. |
@@ -449,8 +449,8 @@ The radius may be spoken as digits or as words ("forty", "twenty five", "one hun
 | `DcsIntelThreatCircleDurationMinutes` | `30` | A circle expires automatically after this long. |
 | `DcsIntelThreatCircleMaxActive` | `8` | How many pilots can have a circle at the same time. |
 | `DcsIntelThreatCircleMaxAlertsPerSweep` | `2` | Warnings transmitted per circle and sweep; the rest follow on later sweeps instead of occupying the frequency all at once. |
-| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle"]` | Start phrases. |
-| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring"]` | Cancel phrases, checked before the start phrases. |
+| `DcsIntelThreatCircleTriggers` | `["threat circle", "threat ring", "set threat circle", "thread circle", "thread ring", "set thread circle"]` | Start phrases. |
+| `DcsIntelThreatCircleCancelTriggers` | `["cancel threat circle", "stop threat circle", "threat circle off", "cancel threat ring", "cancel thread circle", "stop thread circle", "thread circle off", "cancel thread ring"]` | Cancel phrases, checked before the start phrases. |
 | `DcsIntelThreatCircleNoPilotReply` | `"Unable to set the threat circle, cannot locate your aircraft."` | The circle follows the pilot, so it can't be armed without finding their aircraft. |
 | `DcsIntelThreatCircleBusyReply` | `"Unable, too many threat circles active at the moment."` | |
 | `DcsIntelThreatCircleCancelledReply` | `"Threat circle cancelled."` | |

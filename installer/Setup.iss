@@ -87,6 +87,10 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+; The icon the setup executable itself carries, so the download looks like the application it
+; installs. The shortcuts and the uninstall entry need no icon of their own: they point at
+; Darkstar.exe and Darkstar.ConfigEditor.exe, which both embed the same file via ApplicationIcon.
+SetupIconFile=..\src\Darkstar.ico
 ; Prefilled with wherever this is already installed, and only falling back to Program Files when
 ; it is not - see DefaultInstallDir in [Code]. UsePreviousAppDir below covers an installation made
 ; by this installer; the code constant also catches one whose uninstall entry is gone but whose
@@ -734,7 +738,7 @@ begin
       WizardForm.StatusLabel.Caption := 'Starting the D.A.R.K.S.T.A.R. service...';
       if not StartDarkstarService() then
         MsgBox('The update is installed, but the D.A.R.K.S.T.A.R. service could not be started again.' + #13#10 + #13#10 +
-               'Start it by hand in services.msc, or from the config editor on CH9 Service.',
+               'Start it by hand in services.msc, or from the config editor on CH2 Service.',
                mbInformation, MB_OK);
     end;
   end;

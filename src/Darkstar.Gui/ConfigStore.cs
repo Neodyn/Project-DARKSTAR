@@ -21,7 +21,7 @@ public sealed class ConfigStore
     /// Folder containing config.json/phrases.json/vocabulary.json. A folder the operator has
     /// chosen before wins; otherwise it is found by searching near the editor's own location
     /// (see ResolveDefaultConfigFolder), so the GUI and the bot service see the same files out of
-    /// the box with no manual setup. Change it on CH10 Profiles if the bot lives elsewhere.
+    /// the box with no manual setup. Change it on CH3 Profiles if the bot lives elsewhere.
     ///
     /// Settable directly for the "not loaded" screen's text box; UseFolder is what remembers it.
     /// </summary>
@@ -252,7 +252,7 @@ public sealed class ConfigStore
     }
 
     // ---------------------------------------------------------------------------------------
-    // Profiles (CH10)
+    // Profiles (CH3)
     // ---------------------------------------------------------------------------------------
 
     /// <summary>The profile activated last, as a label. Null when none ever was.</summary>

@@ -1595,8 +1595,11 @@ public sealed class BotService : BackgroundService
         {
             var greetingGap = TimeSpan.FromSeconds(Math.Max(5, config.TuneInGreetingGapSeconds));
 
-            srs.OnClientDisconnected += guid => greetings.Forget(guid);
-
+            // Deliberately NOT subscribed to OnClientDisconnected any more. Forgetting a client on
+            // disconnect sounded tidy and was the bug: SRS issues a new ClientGuid on every
+            // reconnect, and in DCS a slot change, a respawn or a brief client blip is a
+            // reconnect - so the same pilot was greeted over and over during one mission. The
+            // memory is keyed on the pilot's name now and is capped instead of pruned.
             srs.OnClientRadiosChanged += client =>
             {
                 // Fire and forget: this runs on the TCP receive loop, and blocking it to speak would
@@ -1614,7 +1617,8 @@ public sealed class BotService : BackgroundService
                             if (config.RestrictToOwnCoalition && client.Coalition != 0 &&
                                 client.Coalition != config.Coalition) continue;
 
-                            if (!greetings.ShouldGreet(client.ClientGuid, frequency, DateTime.UtcNow, greetingGap))
+                            if (!greetings.ShouldGreet(client.ClientGuid, client.Name,
+                                    config.PlayerNameCallsignSeparator, frequency, DateTime.UtcNow, greetingGap))
                                 continue;
 
                             var text = TuneInGreeting.Build(

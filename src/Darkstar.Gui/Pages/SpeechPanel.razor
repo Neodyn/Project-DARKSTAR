@@ -1,5 +1,6 @@
 @namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
+@inject IPathPicker Picker
 
 <h1>SPEECH — TRANSCRIPTION &amp; REPLY</h1>
 
@@ -37,8 +38,11 @@
 
         <div class="field" style="margin-top:10px">
             <label>WHISPER MODEL FILE (ggml-*.bin)</label>
-            <input type="text" @bind="Store.Config.WhisperModelPath"
-                   placeholder="e.g. models\ggml-small.en.bin" />
+            <div class="path-row">
+                <input type="text" @bind="Store.Config.WhisperModelPath"
+                       placeholder="e.g. models\ggml-small.en.bin" />
+                <button class="browse" @onclick="BrowseWhisperModel">Browse...</button>
+            </div>
         </div>
 
         <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -191,7 +195,7 @@
                 <span style="color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">@Store.TtsVoiceStatus</span>
             }
         </div>
-        @* Unambiguous here, unlike on CH2: there is exactly one field on this panel, so a chip can
+        @* Unambiguous here, unlike on CH4: there is exactly one field on this panel, so a chip can
            simply write into it. Clicking the field drops the same list down, but an <input list>
            gives no sign of that, and a voice name typed from memory fails silently. *@
         @if (Store.TtsVoiceList.Count > 0)
@@ -216,7 +220,7 @@
         }
 
         <div class="hint">
-            A per-radio voice on <strong>CH2</strong> overrides this, which is how the AWACS, the tanker
+            A per-radio voice on <strong>CH4</strong> overrides this, which is how the AWACS, the tanker
             and the tower end up sounding like three different people.
         </div>
     </div>
@@ -250,7 +254,10 @@
 
 <div class="field">
     <label>VOSK MODEL FOLDER</label>
-    <input type="text" @bind="Store.Config.VoskModelPath" placeholder="(empty = volume-based fallback, no real wake word)" />
+    <div class="path-row">
+        <input type="text" @bind="Store.Config.VoskModelPath" placeholder="(empty = volume-based fallback, no real wake word)" />
+        <button class="browse" @onclick="BrowseVoskModel">Browse...</button>
+    </div>
 </div>
 
 <div class="row2">
@@ -274,7 +281,7 @@
             <code>Darkstar.exe --test-hotword recordings --suggest-variants</code>: it reads what the
             model heard on the transmissions it missed, proposes only the candidates that never turned
             up when nobody called, and prints a line ready to paste here. Radios with their own wake
-            word don't inherit these — set theirs on CH2.
+            word don't inherit these — set theirs on CH4.
         </div>
     </div>
     <div class="field">
@@ -395,6 +402,26 @@
 </div>
 
 @code {
+
+    private void BrowseWhisperModel()
+    {
+        var picked = Picker.PickFile("Select a Whisper model file",
+            Store.Config.WhisperModelPath, IPathPicker.Filters.WhisperModels);
+
+        if (picked != null) Store.Config.WhisperModelPath = picked;
+    }
+
+    /// <summary>
+    /// A folder, not a file: a Vosk model is a directory holding am\, conf\, graph\ and
+    /// ivector\, and the commonest way to get this setting wrong is to point it at a file inside
+    /// that directory - or at the zip's outer folder, which holds only the model folder.
+    /// </summary>
+    private void BrowseVoskModel()
+    {
+        var picked = Picker.PickFolder("Select the Vosk model folder", Store.Config.VoskModelPath);
+        if (picked != null) Store.Config.VoskModelPath = picked;
+    }
+
     /// <summary>
     /// Whether the Whisper half of this panel is shown. Hidden entirely under Gemini rather than
     /// greyed out: it is a whole second engine's worth of fields, and nobody running the default
