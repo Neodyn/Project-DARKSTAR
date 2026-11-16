@@ -373,6 +373,11 @@ public sealed class SrsConnection : IAsyncDisposable
         // The bot's own client is in this list too. Reporting it would have the bot greet itself.
         if (string.Equals(guid, _clientGuid, StringComparison.Ordinal)) return;
 
+        // So is DCS-SR-ExternalAudio.exe: it connects as a client of its own, under the bot's name,
+        // for every reply it transmits, tuned to the frequency it speaks on - which looked exactly
+        // like a pilot tuning in, and the bot greeted its own transmitter once per frequency.
+        if (string.Equals(name, _clientName, StringComparison.OrdinalIgnoreCase)) return;
+
         var tuned = ReadTunedFrequencies(clientElement);
 
         // Only when the set actually changed. SRS sends radio updates for things this bot does not

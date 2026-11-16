@@ -106,11 +106,6 @@ public static class TuneInGreeting
             return true;
         }
 
-        /// <summary>
-        /// Forgets a client that has disconnected, so somebody who rejoins later is greeted again.
-        /// Their guid changes on reconnect anyway; this is about not growing forever on a server
-        /// that runs for weeks.
-        /// </summary>
         /// <summary>How many pilot/frequency pairs are being remembered, for the log.</summary>
         public int Tracked => _greeted.Count;
     }

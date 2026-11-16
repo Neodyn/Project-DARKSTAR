@@ -10,7 +10,7 @@ namespace Darkstar.Tests;
 /// Both are read off the source. There is no way to click this editor from a test - it is a WPF
 /// window hosting a WebView - so what can be checked is that the markup says what it is supposed
 /// to say. That is enough for the two mistakes that actually happen: a panel quietly changing
-/// place in the sidebar, and a new path field shipping without a Browse button beside the five
+/// place in the sidebar, and a new path field shipping without a Browse button beside the others
 /// that have one.
 /// </summary>
 internal static class EditorPanelTests
@@ -83,6 +83,9 @@ internal static class EditorPanelTests
 
         // CH3: filled in only - loading it is a separate decision, made by its own button.
         ("_folder", "PickFolder", "_folder = picked"),
+
+        // CH8: the folder the chat bridge hook and the bot share - a folder, each puts files in it.
+        ("Store.Config.ChatBridgeFolder", "PickFolder", "Store.Config.ChatBridgeFolder = picked"),
 
         // The "not loaded" screen, where there is nothing on screen to lose, so it loads at once.
         ("Store.ConfigFolder", "PickFolder", "Store.UseFolder(picked)"),
@@ -161,7 +164,7 @@ internal static class EditorPanelTests
 
         Section("Every path field can be browsed to");
 
-        // The five path settings are the ones nobody can type from memory - an SRS install folder,
+        // The path settings are the ones nobody can type from memory - an SRS install folder,
         // a model folder several levels down. A field without a Browse button is the one that gets
         // a wrong path typed into it, which is how most of CH1's and CH5's support questions start.
         var browsable = new List<string>();

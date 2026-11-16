@@ -10,9 +10,14 @@
 {
     <p style="color:#8CA0A8;font-size:12px">
         No entries in "Radios" yet - the bot falls back to the legacy single-radio fields
-        (@Store.Config.FrequencyHz Hz, @Store.Config.Modulation). Add a radio below to switch to
+        (@FrequencyText.ToMhz(Store.Config.FrequencyHz) MHz, @Store.Config.Modulation). Add a radio below to switch to
         the multi-radio mode.
     </p>
+}
+
+@if (_frequencyError != null)
+{
+    <div class="hint" style="color:#F2A93B;margin-bottom:10px">@_frequencyError</div>
 }
 
 @for (var i = 0; i < Store.Config.Radios.Count; i++)
@@ -20,7 +25,10 @@
     var radio = Store.Config.Radios[i];
     <div class="card">
         <div class="card-head">
-            <input type="number" step="1000" @bind="radio.FrequencyHz" class="freq" style="background:transparent;border:none;width:130px;padding:0" />
+            <input type="text" inputmode="decimal" class="freq" title="Frequency in MHz, e.g. 251.000"
+                   value="@FrequencyText.ToMhz(radio.FrequencyHz)" @onchange="e => SetFrequency(radio, e.Value)"
+                   style="background:transparent;border:none;width:90px;padding:0" />
+            <span style="font-size:11px;color:#5A6A70;margin-right:8px">MHz</span>
             <select @bind="radio.Modulation" style="background:#161F24;border:1px solid #2A363C;border-radius:3px;color:#4FD1C5;font-size:11px;padding:3px 6px">
                 <option value="AM">AM</option>
                 <option value="FM">FM</option>
@@ -421,8 +429,8 @@
     <div class="hint" style="margin-bottom:10px">Only used when the list above is empty.</div>
     <div class="row2">
         <div class="field" style="margin-bottom:0">
-            <label>FREQUENCY (HZ)</label>
-            <input type="number" @bind="Store.Config.FrequencyHz" />
+            <label>FREQUENCY (MHZ)</label>
+            <input type="text" inputmode="decimal" @bind="LegacyFrequencyMhz" placeholder="251.000" />
         </div>
         <div class="field" style="margin-bottom:0">
             <label>MODULATION</label>
@@ -612,7 +620,7 @@
             {
                 Store.Config.Radios.AddRange(TowerPlan.ToRadios(plan));
                 _planNotes.Insert(0, $"Added {plan.Towers.Count} tower(s): " +
-                    string.Join(", ", plan.Towers.Select(t => $"{t.Callsign} {t.FrequencyHz / 1_000_000:0.000}")));
+                    string.Join(", ", plan.Towers.Select(t => $"{t.Callsign} {FrequencyText.ToMhz(t.FrequencyHz)}")));
                 _planNotes.Add("Not saved yet - review the list above, then press Save changes.");
             }
         }
@@ -624,6 +632,43 @@
         finally
         {
             _planning = false;
+        }
+    }
+
+    /// <summary>
+    /// What went wrong with the last frequency typed, or null. Shown above the radios: the field
+    /// itself keeps showing what was typed, and without a line saying so a rejected value looks
+    /// like a saved one.
+    /// </summary>
+    private string? _frequencyError;
+
+    /// <summary>
+    /// A radio's frequency, typed in MHz ("252.000"). config.json keeps hertz - only the editor
+    /// changed. Something that is not a frequency leaves the old value in place and says so.
+    /// </summary>
+    private void SetFrequency(RadioConfig radio, object? typed)
+    {
+        var hz = FrequencyText.ParseToHz(typed?.ToString());
+        if (hz == null)
+        {
+            _frequencyError = $"\"{typed}\" is not a frequency - type it in MHz, e.g. 251.000. " +
+                              $"The radio stays on {FrequencyText.ToMhz(radio.FrequencyHz)}.";
+            return;
+        }
+
+        radio.FrequencyHz = hz.Value;
+        _frequencyError = null;
+    }
+
+    /// <summary>The legacy single-radio frequency, shown and typed in MHz like the radios above.</summary>
+    private string LegacyFrequencyMhz
+    {
+        get => FrequencyText.ToMhz(Store.Config.FrequencyHz);
+        set
+        {
+            var hz = FrequencyText.ParseToHz(value);
+            if (hz != null) Store.Config.FrequencyHz = hz.Value;
+            _frequencyError = hz == null ? $"\"{value}\" is not a frequency - type it in MHz, e.g. 251.000." : null;
         }
     }
 

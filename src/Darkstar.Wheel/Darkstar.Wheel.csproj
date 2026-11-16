@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The radio wheel: a small tray program for the PLAYER's PC. It draws a wheel of the bot's calls
+    over DCS, and a pick becomes a line in the DCS chat that the server hands to Darkstar. Nothing in
+    here talks to SRS, DCS-gRPC or the server - the client hook dcs\Scripts\Hooks\Darkstar-Wheel.lua
+    does the sending, inside DCS.
+
+    Windows Forms rather than WPF: one borderless, click-through, never-focused window drawn with
+    GDI+, which is exactly what a layered window is and what WPF makes awkward. It is also small
+    enough to hand to a squadron as a zip.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Darkstar.Wheel</RootNamespace>
+    <AssemblyName>Darkstar.Wheel</AssemblyName>
+    <AssemblyTitle>D.A.R.K.S.T.A.R. Radio Wheel</AssemblyTitle>
+    <ApplicationIcon>..\Darkstar.ico</ApplicationIcon>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>0.0.0</Version>
+    <InformationalVersion>0.0.0-dev</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Darkstar.Core\Darkstar.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The client hook travels with the wheel, so a player has both halves in one folder. -->
+  <ItemGroup>
+    <None Include="..\..\dcs\Scripts\Hooks\Darkstar-Wheel.lua"
+          Link="dcs\Scripts\Hooks\Darkstar-Wheel.lua"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -90,4 +90,17 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
   </ItemGroup>
 
+  <!--
+    The chat bridge's server hook travels with the bot, so whoever installed Darkstar has it next to
+    Darkstar.exe (dcs\Scripts\Hooks\) instead of having to fetch it from the repository. It is Lua
+    for DCS, not for the bot: it goes into the Saved Games folder of the DCS server by hand - see the
+    manual, chapter 8.7. Linked rather than copied, so the repository holds it once.
+  -->
+  <ItemGroup>
+    <None Include="..\..\dcs\Scripts\Hooks\Darkstar-ChatBridge.lua"
+          Link="dcs\Scripts\Hooks\Darkstar-ChatBridge.lua"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

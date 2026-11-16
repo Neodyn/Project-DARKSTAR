@@ -290,7 +290,7 @@ Jedes Radio reagiert **ausschließlich** auf sein eigenes Hotword. Leere `Keywor
 | Feld | Vorgabe | Beschreibung |
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Rufzeichen, mit dem sich der Bot meldet (global, pro Radio überschreibbar). |
-| `PlayerNameCallsignSeparator` | `"\|"` | Schneidet das Rufzeichen aus dem SRS-Namen: `Enfield 1-1 \| neodym` → der Bot sagt „Enfield 1-1“. `/`, `\`, `:`, `;`, `~` gehen auch; `-` nie (das gehört zu `1-1`). Squadron-Tags wie `[ISAF]` werden entfernt und nie vorgelesen. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Schneidet das Rufzeichen aus dem SRS-Namen: `Enfield 1-1 \| maverick` → der Bot sagt „Enfield 1-1“. `/`, `\`, `:`, `;`, `~` gehen auch; `-` nie (das gehört zu `1-1`). Squadron-Tags wie `[ISAF]` werden entfernt und nie vorgelesen. |
 | `Radios[].AnswerTacticalRequests` | `null` | Ob dieses Radio taktische Anfragen beantwortet. `null` = dem globalen Schalter folgen. |
 | `Radios[].AnswerAirfieldRequests` | `null` | Dasselbe für Bahn-/ATIS-Anfragen. So entsteht eine Tower-Frequenz. |
 
@@ -1252,6 +1252,69 @@ Die Pilotenstimme wird gewählt, wenn `F10EchoVoice` leer ist: eine mit anderem 
 
 Menüs werden neu gebaut statt ergänzt: ein Wurzeleintrag, entfernt und neu geschrieben, sobald sich sein Inhalt ändert — ein Pilot, der zweimal den Slot wechselt, hat also nicht drei davon. Nur die tatsächlich veränderten Menüs werden neu geschrieben; das Intervall ist damit die Verzögerung, bis ein gerade gestarteter Pilot die taktischen Calls oben sieht, keine Arbeit pro Takt.
 
+### 8.7 Anfragen über den Chat
+
+Das F10-Menü braucht fünf Tastendrücke, der Chat eine Zeile: Ein Pilot tippt **`@Overlord picture`** in den DCS-Chat und bekommt genau die Antwort, die der F10-Eintrag *Picture* liefert — über Funk, vorher in der Pilotenstimme zurückgelesen, und auf dem Bildschirm, wenn auch das F10-Menü an ist. Auf demselben Weg schickt später das Radialmenü seine Befehle, nur dass es die Zeile für dich tippt.
+
+Nötig ist eine kleine Datei **auf dem Server**, auf den Rechnern der Piloten nichts:
+
+1. `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` — liegt neben `Darkstar.exe` und im Repository — nach `Scripts\Hooks` im Saved-Games-Ordner **des Servers** kopieren und den Server neu starten. Ein Dedicated Server ohne `-w` nimmt meist `Saved Games\DCS.dcs_serverrelease` — maßgeblich ist der Name in der Titelleiste des Server-Fensters.
+2. **`ChatBridgeFolder`** (CH8 → Antworten, *Requests typed into the chat*) auf den Ordner setzen, in den der Hook schreibt: `Darkstar\ChatBridge` neben diesem `Scripts`-Ordner, zum Beispiel `…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge`. Den Saved-Games-Ordner des Servers oder den `Scripts\Hooks`-Ordner, in den du den Hook gerade kopiert hast, zu wählen, geht auch — der Bot macht daraus diesen Ordner und schreibt das ins Log.
+3. **`ChatBridgeEnabled`** einschalten und den Bot neu starten.
+
+| Einstellung | Standard | Was sie entscheidet |
+|---|---|---|
+| `ChatBridgeEnabled` | `false` | Ob Anfragen aus dem Chat überhaupt beantwortet werden. |
+| `ChatBridgeFolder` | `""` | Der Ordner, den Server-Hook und Bot sich teilen. Wird nicht geraten — siehe unten. |
+| `ChatBridgeMaxAgeSeconds` | `15` | Eine Anfrage, die älter ist, wenn der Bot sie sieht, wird verworfen statt beantwortet. |
+
+**Was ein Pilot tippt:** ein Zeichen — `@`, `>>` oder `»` —, dann eines der Rufzeichen des Bots (das globale oder das eigene eines Funkgeräts), dann den Namen eines F10-Eintrags: *picture*, *bogey dope*, *threat check*, *alpha check*, *runway in use*, *ATIS*, *divert*, *radio check*. Groß- und Kleinschreibung und Satzzeichen spielen keine Rolle, `@overlord bogey dope` und `>> Overlord: Bogey dope` sind dieselbe Anfrage. Alles andere nach dem Rufzeichen wird über Funk mit der `FallbackResponse` beantwortet, damit der Pilot wenigstens weiß, dass es angekommen ist.
+
+**Alle anderen sehen nichts, der Absender sieht seine eigene Zeile.** Der Hook versteckt die Nachricht vor allen anderen Spielern. DCS zeigt den eigenen Chat aber auf dem eigenen Bildschirm an, bevor der Server gefragt wird, und das kann kein Hook zurücknehmen. Deshalb ist die Anfrage lesbar gedacht — ihr Absender liest sie. Eine Zeile, die *nicht* mit Zeichen und Rufzeichen beginnt, bleibt immer unangetastet.
+
+**Läuft der Bot nicht, wird nichts versteckt.** Der Bot schreibt `callsigns.txt` in diesem Ordner alle zehn Sekunden neu; ist die Datei älter als eine Minute, lässt der Hook jede Nachricht durch. Eine Anfrage, die niemand beantwortet, ist besser sichtbar als verschluckt. Über dieselbe Datei weiß der Hook, welche Rufzeichen zählen — ein umbenanntes Funkgerät braucht also keine Änderung am Hook.
+
+**Der Ordner wird nicht geraten**, weil der Bot nicht erkennen kann, welcher von mehreren Saved-Games-Ordnern zum laufenden Server gehört, und ein falscher Tipp still scheitert: Der Hook schreibt in den einen Ordner, der Bot liest den anderen. Beim Start warnt der Bot, wenn der Hook nicht zwei Ebenen über `ChatBridgeFolder` liegt, wo er sein müsste. Der Editor zeigt dieselbe Warnung, läuft aber womöglich auf einem anderen PC als der Server.
+
+Es gelten dieselben Regeln wie über Funk: `RestrictToOwnCoalition`, das Ratenlimit und die Rollen der Funkgeräte — geantwortet wird auf dem Funkgerät mit dem getippten Rufzeichen, wenn es den Call bedient, sonst auf dem ersten, das ihn bedient. Jeder Call außer dem Radio Check braucht DCS-gRPC, genau wie im F10-Menü. Jede Anfrage ist eine `[Chat]`-Zeile im Log.
+
+### 8.8 Das Funkrad, für den PC des Piloten
+
+Das Funkrad ist ein kleines Programm auf dem PC des **Piloten**. Es zeigt die Calls des Bots als Rad über DCS; eine Auswahl geht genau so raus wie eine Anfrage, die in den Chat getippt wird ([8.7](#87-anfragen-über-den-chat)). Auf dem Server muss also zuerst die Chat-Brücke laufen. Am Server selbst ändert das Funkrad nichts.
+
+**Einrichten auf dem PC eines Piloten:**
+
+1. Den Ordner des Funkrads auf den PC kopieren — der Serverbetreiber baut ihn einmal und gibt ihn als Zip weiter (siehe unten).
+2. `dcs\Scripts\Hooks\Darkstar-Wheel.lua` aus diesem Ordner nach `Saved Games\DCS\Scripts\Hooks\` kopieren — der Saved-Games-Ordner des DCS, mit dem der Pilot fliegt — und DCS neu starten.
+3. `Darkstar.Wheel.exe` starten. Das Symbol sitzt im Infobereich; Rechtsklick, *Learn the wheel key or joystick button…* wählen und die gewünschte Taste oder HOTAS-Taste drücken. Ohne das öffnet **Rollen** (Scroll Lock) das Rad.
+4. Heißt der Bot auf dem Server nicht *Overlord*: Rechtsklick → *Open the settings file* und `Callsign` ändern.
+
+DCS muss **im Fenster oder randlos** laufen (Standard). Ein exklusives Vollbild-DCS verdeckt jedes andere Fenster, das Rad eingeschlossen.
+
+| Eingabe | Was sie tut |
+|---|---|
+| Rad-Taste oder Rad-Knopf | Öffnet das Rad. Nochmal gedrückt: sendet das markierte Segment oder schließt das Rad, wenn keines markiert ist. |
+| `1`–`8` (Zahlenreihe oder Ziffernblock) | Sendet dieses Segment sofort. |
+| Coolie-Hat oder ← / → | Markiert ein Segment — der Hat nach Richtung, Segment 1 oben. `Enter` oder der Rad-Knopf sendet es. |
+| `Esc` | Schließt das Rad. |
+
+Die acht Segmente sind die Calls des F10-Menüs, immer an derselben Stelle, damit der Daumen sie ohne Hinsehen findet: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Runway in use*, *ATIS*, *Divert*, *Radio check*. Tasten erreichen das Rad nur, solange DCS im Vordergrund ist, und nur bei offenem Rad — überall sonst tippen sie ganz normal.
+
+**Was der Pilot sieht:** die Anfrage im eigenen Chat, als `» Overlord: Picture` — sonst sieht sie niemand, wie in 8.7. Wurde eine Auswahl nicht gesendet, meldet das Symbol im Infobereich das innerhalb von drei Sekunden: DCS muss in einer Mehrspielermission sein, **als Client mit einem Server verbunden**, und der Hook muss installiert sein. Wer die Mission selbst hostet, ist der Server und kann das Rad so nicht nutzen.
+
+| Einstellung in `wheel.json` | Standard | Was sie entscheidet |
+|---|---|---|
+| `Callsign` | `Overlord` | Welches Rufzeichen des Bots das Rad anspricht. Eines genügt: Der Bot antwortet auf dem Funkgerät, das den Call bedient. |
+| `Marker` | `»` | Womit die Zeile beginnt. `>>` und `@` gehen auch. |
+| `KeyCode`, `KeyName` | Rollen | Die Rad-Taste. Wird von *Learn…* gesetzt. |
+| `JoystickId`, `JoystickButton` | keiner | Der Rad-Knopf. Wird von *Learn…* gesetzt. |
+| `UseHat` | `true` | Ob der erste Hat dieses Joysticks ein Segment wählt. Ein Hat, den auch DCS benutzt, bewegt dort ebenfalls etwas. |
+| `Size` | `0.5` | Größe des Rads als Anteil der Höhe des DCS-Fensters. |
+
+Die Datei liegt auf dem PC des Piloten unter `%LOCALAPPDATA%\Darkstar\wheel.json`. Der Joystick wird über die Gamecontroller-Schnittstelle von Windows gelesen; sie sieht die ersten 32 Knöpfe und den ersten Hat eines Geräts.
+
+**Für die Staffel bauen:** auf dem Build-PC `dotnet publish src\Darkstar.Wheel -c Release -r win-x64 --self-contained true -o publish\wheel`, dann `publish\wheel` zippen. Eigenständig, die Piloten müssen also nichts weiter installieren; der Client-Hook ist schon drin, unter `dcs\Scripts\Hooks`.
+
 ---
 
 ## 9. Betrieb als Windows-Dienst
@@ -1318,7 +1381,7 @@ Connected. Waiting for hotword...
 Und während einer Anfrage:
 
 ```
-[Hotword Detected] 251.000 MHz: starting recording (sender: "Enfield 1-1 | neodym" -> callsign "Enfield 1-1", ...)
+[Hotword Detected] 251.000 MHz: starting recording (sender: "Enfield 1-1 | maverick" -> callsign "Enfield 1-1", ...)
 [Recording finished] 251.000 MHz: 96000 bytes of PCM, transcribing...
 [STT] "overlord bogey dope"
 [Intel] 251.000 MHz: BogeyDope request answered from mission data (source=..., contacts=3, reference=unit 'Enfield-1-1')
@@ -1366,6 +1429,7 @@ Jede Zeile trägt das Kennzeichen des Teils, aus dem sie stammt. Eine Startzeile
 | `[Phrase Match]` | Eine bekannte Auslösephrase hat die Antwort bestimmt, oder keine und es wurde die Fallback-Antwort benutzt | |
 | `[Intel]` | Taktische Antworten: der Zustand beim Start, pro Anfrage Art, Auslöser und Datenquelle | Sagt auch, wenn `DcsIntelEnabled` an ist, während DCS-gRPC aus ist — das beantwortet diese Frage, bevor sie gestellt wird. |
 | `[Menu]` | Das F10-Menü: wie viele Menüs geschrieben, entfernt oder wegen der Obergrenze übersprungen wurden, und jeder Klick mit Call, Flight und der Frequenz, auf der geantwortet wurde | Schweigt, solange sich nichts ändert — eine Zeile hier heißt also, dass ein Menü neu gebaut oder benutzt wurde. |
+| `[Chat]` | Anfragen aus dem Chat: Ordner und Rufzeichen beim Start, jede Anfrage mit Call und der Frequenz, auf der geantwortet wurde, und verworfene Anfragen, weil zu alt oder keine Anfrage | Eine Anfrage, die hier nie auftaucht, hat den Bot nie erreicht — prüfen, ob der Hook installiert ist und `ChatBridgeFolder` der Ordner ist, in den er schreibt. |
 | `[Speech]` | Welche Engine transkribiert, bei Whisper zusätzlich die Modellprüfung samt Hinweisen | Eine Zeile beim Start. Hier nachsehen, wenn der Bot hört, aber nichts beantwortet. |
 | `[Privacy]` | Eine Zeile bei jedem Start, die nennt, was mit den aktuellen Einstellungen ins Internet geht, plus eine Zeile je Posten | Keine Posten heißt, dass nichts hinausgeht. Hier nachsehen, bevor du deiner Staffel sagst, der Server laufe offline. |
 | `[Airfield]` | Bahn in Benutzung und ATIS: Zustand beim Start, jede Anfrage, und gRPC-Fehler darunter | |

@@ -1481,11 +1481,20 @@ public sealed class BotService : BackgroundService
             }, stoppingToken);
                 }
 
-        // Answers one F10 click and sends the reply the way F10ReplyMode asks for.
+        // Answers one F10 click and sends the reply the way F10ReplyMode asks for. A request typed
+        // into the chat comes through here too: it names the same call and carries the same group,
+        // plus the player's name and side, which an F10 click does not have.
         async Task AnswerMenuCallAsync(CallDefinition call, string groupName, uint groupId,
-            RadioSession session, CancellationToken token)
+            RadioSession session, CancellationToken token,
+            string rawPlayerName = "", int requesterCoalition = 0, string logTag = "Menu", string? echoPilot = null)
         {
             string? reply = null;
+
+            // A click is attributed to a group, always; a chat request from a spectator has none,
+            // and an empty name must not be passed on as if it were one.
+            var knownGroup = string.IsNullOrWhiteSpace(groupName) ? null : groupName;
+            var coalition = requesterCoalition is 1 or 2 ? requesterCoalition : config.Coalition;
+            var who = knownGroup ?? rawPlayerName;
 
             try
             {
@@ -1509,8 +1518,8 @@ public sealed class BotService : BackgroundService
                     // path - which is the one the airfield lookup prefers anyway. The group DCS
                     // attributed the click to is what identifies the pilot; without it there is
                     // no SRS name and no transcript either, and the lookup cannot locate them.
-                    var result = await airfields.AnswerAsync(kind, "", "", config.Coalition, token,
-                        knownGroupName: groupName);
+                    var result = await airfields.AnswerAsync(kind, "", rawPlayerName, coalition, token,
+                        knownGroupName: knownGroup);
                     reply = result.Handled ? result.Reply : config.DcsAirfieldUnavailableReply;
                 }
                 else if (intel != null)
@@ -1530,15 +1539,15 @@ public sealed class BotService : BackgroundService
                         // what identifies the pilot, and it cannot be wrong the way a matched name
                         // can. This path gets BRAA where a spoken call sometimes falls back to the
                         // bullseye.
-                        var result = await intel.AnswerAsync(kind, "", "", config.Coalition, token,
-                            knownGroupName: groupName);
+                        var result = await intel.AnswerAsync(kind, "", rawPlayerName, coalition, token,
+                            knownGroupName: knownGroup);
                         reply = result.Handled ? result.Reply : config.DcsIntelUnavailableReply;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Log($"[Menu] \"{call.Id}\" from \"{groupName}\" failed: {ex.Message}");
+                Logger.Log($"[{logTag}] \"{call.Id}\" from \"{who}\" failed: {ex.Message}");
                 reply = config.DcsIntelUnavailableReply;
             }
 
@@ -1548,7 +1557,7 @@ public sealed class BotService : BackgroundService
             var overRadio = !mode.Equals("Text", StringComparison.OrdinalIgnoreCase);
             var onScreen = !mode.Equals("Radio", StringComparison.OrdinalIgnoreCase);
 
-            Logger.Log($"[Menu] \"{call.Id}\" from \"{groupName}\" -> " +
+            Logger.Log($"[{logTag}] \"{call.Id}\" from \"{who}\" -> " +
                        $"{session.FrequencyHz / 1_000_000:0.000} MHz ({mode}): {reply}");
 
             if (overRadio)
@@ -1559,7 +1568,7 @@ public sealed class BotService : BackgroundService
                 // voice sounds like the controller talking to themselves.
                 if (config.F10EchoEnabled && session.EchoVoice != null)
                 {
-                    var echo = PilotEcho.Build(session.Callsign, groupName, call.EchoPhrase);
+                    var echo = PilotEcho.Build(session.Callsign, echoPilot ?? groupName, call.EchoPhrase);
 
                     if (echo.Length > 0)
                         await TransmitAsync(session, ForSpeech(echo), token, voiceOverride: session.EchoVoice);
@@ -1568,7 +1577,8 @@ public sealed class BotService : BackgroundService
                 await TransmitAsync(session, $"This is {ForSpeech(session.Callsign)}... {ForSpeech(reply)}", token);
             }
 
-            if (onScreen && menus != null)
+            // Needs the group's id to address; a spectator typing into the chat has no group.
+            if (onScreen && menus != null && groupId != 0)
             {
                 try
                 {
@@ -1581,9 +1591,81 @@ public sealed class BotService : BackgroundService
                 {
                     // The radio half may well have gone out fine, so this is a note rather than a
                     // failure - and if it didn't, the log line above already recorded the attempt.
-                    Logger.Debug($"[Menu] On-screen reply to group {groupId} failed: {ex.Message}");
+                    Logger.Debug($"[{logTag}] On-screen reply to group {groupId} failed: {ex.Message}");
                 }
             }
+        }
+
+        // One request typed into the DCS chat ("@Overlord picture"), filed by the server hook - see
+        // ChatBridge. Answered like an F10 click, on the radio the player addressed when that radio
+        // serves the call, otherwise on the first one that does - which is what a click gets too.
+        async Task AnswerChatRequestAsync(ChatRequest request, CancellationToken token)
+        {
+            var label = $"\"{request.Player}\" ({request.Callsign}: \"{request.Text}\")";
+
+            // The same rule as on the radio: the opposing coalition is not served. A spectator is.
+            if (config.RestrictToOwnCoalition && request.Side is 1 or 2 && request.Side != config.Coalition)
+            {
+                Logger.Log($"[Chat] {label} ignored - {CoalitionLabel(request.Side)} coalition, " +
+                           $"the bot is {CoalitionLabel(config.Coalition)}.");
+                return;
+            }
+
+            // Typing is cheaper than talking, so the limit matters here at least as much.
+            if (rateLimiter.Check(request.Player, DateTime.UtcNow) != RateLimiter.Verdict.Allow)
+            {
+                Logger.Log($"[Chat] {label} ignored - over the rate limit.");
+                return;
+            }
+
+            var named = sessions.Values
+                .Where(s => string.Equals(s.Callsign, request.Callsign, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var matched = ChatBridge.MatchCall(request.Text);
+            if (matched == null)
+            {
+                // Silence would leave the pilot wondering whether anything arrived at all; the
+                // fallback reply at least says it did. On the radio they addressed, if it exists.
+                var anyRadio = named.FirstOrDefault() ?? sessions.Values.FirstOrDefault();
+                Logger.Log($"[Chat] {label} is not a call the bot answers from the chat - replying with FallbackResponse.");
+
+                if (anyRadio != null && !string.IsNullOrWhiteSpace(config.FallbackResponse))
+                {
+                    var pilot = PilotNames.DisplayCallsign(request.Player, config.PlayerNameCallsignSeparator);
+                    var opening = string.IsNullOrWhiteSpace(pilot)
+                        ? $"This is {ForSpeech(anyRadio.Callsign)}..."
+                        : $"{ForSpeech(pilot)}, this is {ForSpeech(anyRadio.Callsign)}...";
+                    await TransmitAsync(anyRadio, $"{opening} {ForSpeech(config.FallbackResponse)}", token);
+                }
+
+                return;
+            }
+
+            CallDefinition call = matched;
+
+            bool Serves(RadioSession radio) => call.Capability switch
+            {
+                RadioCapability.Tactical => radio.AnswersTactical,
+                RadioCapability.Airfield => radio.AnswersAirfield,
+                _ => true,
+            };
+
+            var answering = named.FirstOrDefault(Serves) ?? sessions.Values.FirstOrDefault(Serves);
+            if (answering == null)
+            {
+                Logger.Log($"[Chat] {label} - no radio serves \"{call.Id}\".");
+                return;
+            }
+
+            Logger.Log($"[Chat] {label} -> \"{call.Id}\" on {answering.FrequencyHz / 1_000_000:0.000} MHz" +
+                       (string.IsNullOrWhiteSpace(request.Group)
+                           ? ", no group (a spectator cannot be located)."
+                           : $", group \"{request.Group}\"."));
+
+            await AnswerMenuCallAsync(call, request.Group, request.GroupId, answering, token,
+                rawPlayerName: request.Player, requesterCoalition: request.Side, logTag: "Chat",
+                echoPilot: PilotNames.DisplayCallsign(request.Player, config.PlayerNameCallsignSeparator));
         }
 
         var radioSummary = string.Join(", ", radioConfigs.Select(r => $"{r.FrequencyHz / 1_000_000:0.000} MHz ({r.Modulation})"));
@@ -1698,6 +1780,104 @@ public sealed class BotService : BackgroundService
                     Logger.Log($"[Announce] Failed: {ex.Message}");
                 }
             }, stoppingToken);
+        }
+
+        // Requests typed into the DCS chat, filed by the server hook. Started after the SRS
+        // connection, like everything else that transmits: a request answered into a radio that is
+        // not connected yet is a request lost.
+        if (config.ChatBridgeEnabled)
+        {
+            // The folder the hook really writes to - the operator may have picked its Saved Games
+            // folder or the Hooks folder the hook was copied to. See ChatBridge.ResolveFolder.
+            var bridgeFolder = ChatBridge.ResolveFolder(config.ChatBridgeFolder);
+
+            if (bridgeFolder.Length == 0)
+            {
+                Logger.Log("[Chat] ChatBridgeEnabled is true, but ChatBridgeFolder is empty - " +
+                           "requests typed into the chat are not picked up.");
+            }
+            else
+            {
+                var bridgeCallsigns = ChatBridge.CallsignsFor(config);
+                var bridgeMaxAge = TimeSpan.FromSeconds(Math.Max(2, config.ChatBridgeMaxAgeSeconds));
+
+                if (!string.Equals(bridgeFolder, (config.ChatBridgeFolder ?? "").Trim().TrimEnd('\\', '/'),
+                        StringComparison.OrdinalIgnoreCase))
+                    Logger.Log($"[Chat] ChatBridgeFolder is {config.ChatBridgeFolder} - using {bridgeFolder}, " +
+                               "the folder the hook writes to.");
+
+                Logger.Log($"[Chat] Picking up chat requests from {bridgeFolder} - addressed as " +
+                           $"{string.Join(", ", bridgeCallsigns.Select(c => "@" + c))}, " +
+                           $"dropped when older than {bridgeMaxAge.TotalSeconds:0}s.");
+
+                _ = Task.Run(async () =>
+                {
+                    var nextBeat = DateTime.MinValue;
+                    string? lastBeatError = null;
+
+                    while (!stoppingToken.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            var now = DateTime.UtcNow;
+
+                            // The heartbeat first: it is what tells the hook the bot is running.
+                            // Logged when it starts failing and when it recovers, not on every beat.
+                            if (now >= nextBeat)
+                            {
+                                var beatError = ChatBridge.WriteCallsigns(bridgeFolder, bridgeCallsigns);
+
+                                if (beatError != null && beatError != lastBeatError)
+                                    Logger.Log($"[Chat] Cannot write {ChatBridge.CallsignFileName} in {bridgeFolder}: {beatError} - " +
+                                               "the hook treats the bot as stopped and hides nothing.");
+                                else if (beatError == null && lastBeatError != null)
+                                    Logger.Log($"[Chat] {ChatBridge.CallsignFileName} is being written again.");
+
+                                lastBeatError = beatError;
+                                nextBeat = now + ChatBridge.HeartbeatInterval;
+                            }
+
+                            var batch = ChatBridge.Collect(bridgeFolder, now, bridgeMaxAge);
+
+                            foreach (var file in batch.Stale)
+                                Logger.Log($"[Chat] Dropped {file}: older than {bridgeMaxAge.TotalSeconds:0}s when the bot got to it.");
+
+                            foreach (var file in batch.Broken)
+                                Logger.Log($"[Chat] Dropped {file}: not a request file.");
+
+                            // One task per request, like the F10 clicks: answering takes seconds,
+                            // and the next pilot's request should not wait behind it. TransmitAsync
+                            // keeps two answers on one radio from talking over each other.
+                            foreach (var request in batch.Fresh)
+                            {
+                                var current = request;
+                                _ = Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        await AnswerChatRequestAsync(current, stoppingToken);
+                                    }
+                                    catch (OperationCanceledException)
+                                    {
+                                        // Shutting down mid-answer is not worth a line.
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Logger.Log($"[Chat] Answering \"{current.Player}\" failed: {ex.Message}");
+                                    }
+                                }, stoppingToken);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Debug($"[Chat] Looking into {bridgeFolder} failed, will try again: {ex.Message}");
+                        }
+
+                        try { await Task.Delay(ChatBridge.PollInterval, stoppingToken); }
+                        catch (OperationCanceledException) { break; }
+                    }
+                }, stoppingToken);
+            }
         }
 
         DiscordNotifier.Notify(

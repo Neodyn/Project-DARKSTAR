@@ -152,7 +152,7 @@ public sealed class AppConfig
 
     /// <summary>
     /// Separator used to parse the pilot's callsign out of their SRS player name, e.g. with the
-    /// default "|": a player named "Enfield 1-1 | neodym" is addressed as "Enfield 1-1" in
+    /// default "|": a player named "Enfield 1-1 | maverick" is addressed as "Enfield 1-1" in
     /// replies - the part after the separator (typically the player's real name/handle) is
     /// ignored entirely. If the separator isn't found in a given player's name, the full name is
     /// used as-is, so players not following this naming convention still get addressed normally.
@@ -763,6 +763,41 @@ public sealed class AppConfig
     /// </summary>
     public string F10EchoVoice { get; set; } = "";
 
+    /// <summary>
+    /// Lets pilots type a request into the DCS chat - <c>@Overlord picture</c> - and have it answered
+    /// over the radio like an F10 menu click. The way in for the radio wheel, and for anybody whose
+    /// microphone is not working.
+    ///
+    /// Needs the server hook <c>dcs\Scripts\Hooks\Darkstar-ChatBridge.lua</c> in the Saved Games
+    /// folder of the DCS server and <see cref="ChatBridgeFolder"/> pointing at the folder it writes
+    /// to. Nothing is installed on any pilot's machine. Every call except the radio check also needs
+    /// <see cref="DcsGrpcEnabled"/>, exactly as in the F10 menu.
+    ///
+    /// The hook hides such a line from everybody else; the pilot who typed it still sees it, because
+    /// DCS shows a player's own chat before the server is asked. Off by default.
+    /// </summary>
+    public bool ChatBridgeEnabled { get; set; } = false;
+
+    /// <summary>
+    /// The folder the server hook and the bot share: <c>&lt;Saved Games of the DCS server&gt;\Darkstar\ChatBridge</c>.
+    /// For a dedicated server started without <c>-w</c> that is usually
+    /// <c>…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge</c>.
+    ///
+    /// Not guessed, because the bot cannot tell which of several Saved Games folders belongs to the
+    /// server that is running - and a wrong guess fails silently: the hook writes into one folder,
+    /// the bot reads another, and the pilot hears nothing. The bot does warn at startup when the
+    /// hook is not where this folder says it should be.
+    /// </summary>
+    public string ChatBridgeFolder { get; set; } = "";
+
+    /// <summary>
+    /// A request the bot gets to later than this, in seconds, is dropped instead of answered. Keeps a
+    /// bot restarted after a crash from answering a minute's worth of requests in one burst, most of
+    /// them from pilots who have long since asked again. Measured on the server's own clock - the
+    /// clock of a pilot's PC is never involved.
+    /// </summary>
+    public int ChatBridgeMaxAgeSeconds { get; set; } = 15;
+
 
 
     /// <summary>
@@ -823,7 +858,7 @@ public sealed class AppConfig
     /// <summary>
     /// Text of the acknowledgement. Placeholders: {pilot} = the requesting pilot's callsign
     /// (parsed out of their SRS player name using PlayerNameCallsignSeparator, so "Enfield 1-1 |
-    /// neodym" becomes "Enfield 1-1"), {callsign} = the replying radio's own callsign. If the
+    /// maverick" becomes "Enfield 1-1"), {callsign} = the replying radio's own callsign. If the
     /// pilot's name is unknown, "{pilot}, " is dropped from the text automatically.
     /// </summary>
     public string AckMessage { get; set; } = "{pilot}, this is {callsign}, message received, standby.";
@@ -1419,6 +1454,30 @@ public sealed class AppConfig
                 if ((config.DcsIntelThreatCircleTriggers?.Count ?? 0) == 0)
                     Warn("DcsIntelThreatCircleEnabled is true but no trigger phrases are configured - a threat circle can never be requested.");
             }
+        }
+
+        if (config.ChatBridgeEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(config.ChatBridgeFolder))
+            {
+                Warn("ChatBridgeEnabled is true, but ChatBridgeFolder is empty - requests typed into the chat will not be picked up. " +
+                     "Set it to <Saved Games of the DCS server>\\Darkstar\\ChatBridge.");
+            }
+            else
+            {
+                // The one mistake this feature cannot report any other way: hook and bot looking at
+                // two different folders. Both run happily, and the pilot simply hears nothing.
+                var problem = ChatBridge.FolderProblem(config.ChatBridgeFolder);
+                if (problem != null)
+                    Warn($"ChatBridgeFolder is {config.ChatBridgeFolder}: {problem}");
+            }
+
+            if (!config.DcsGrpcEnabled)
+                Warn("ChatBridgeEnabled is true, but DcsGrpcEnabled is false - only the radio check can be answered from the chat; " +
+                     "every other call needs mission data.");
+
+            if (config.ChatBridgeMaxAgeSeconds < 2)
+                Warn($"ChatBridgeMaxAgeSeconds ({config.ChatBridgeMaxAgeSeconds}) is below 2 and will be raised to 2.");
         }
 
         if (config.AckEnabled)

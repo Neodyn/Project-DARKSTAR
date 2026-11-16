@@ -945,7 +945,7 @@ public class DcsIntelService
     /// <summary>
     /// Finds the DCS unit the requesting pilot is flying. SRS names and DCS player names usually
     /// match exactly, but not always - so this also tries the part after the callsign separator
-    /// ("Enfield 1-1 | neodym" -> "neodym") and finally the unit's own callsign/name.
+    /// ("Enfield 1-1 | maverick" -> "maverick") and finally the unit's own callsign/name.
     /// </summary>
     internal Task<Unit?> FindRequesterUnitAsync(GrpcChannel channel, Metadata headers, DateTime deadline,
         string rawPlayerName, Coalition friendly, CancellationToken token) =>

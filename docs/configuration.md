@@ -115,7 +115,7 @@ It defaults to **off** because an unprompted transmission to everybody on a freq
 | `BotCallsign` | `"Overlord"` | Callsign the bot uses to identify itself in replies (global default; overridable per radio, see above). |
 | `Radios[].AnswerTacticalRequests` | `null` | Whether this radio answers bogey dope, picture, threat check and the threat circle. `null` follows `DcsIntelEnabled`; `true`/`false` decide for this radio alone. The global switch stays the master — a radio can narrow what the bot does, never widen it. |
 | `Radios[].AnswerAirfieldRequests` | `null` | The same for "runway in use" and ATIS, against `DcsAirfieldEnabled`. Setting one radio to airfield-only and another to tactical-only is how you get a separate tower frequency. |
-| `PlayerNameCallsignSeparator` | `"\|"` | Separator used to parse a pilot's callsign out of their SRS player name. With the default `"\|"`, a player named `Enfield 1-1 | neodym` is addressed as `Enfield 1-1` — everything after the separator (typically the player's real name/handle) is ignored. If the separator isn't found, `/`, `\`, `:`, `;` and `~` are tried as well, and failing that the full name is used. `-` is never treated as a separator, since it belongs to flight numbers like `1-1`. Squadron tags in brackets (`[ISAF] Mobius 1`, `Mobius 1 (VF-1)`) are stripped, so the bot doesn't read them out. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Separator used to parse a pilot's callsign out of their SRS player name. With the default `"\|"`, a player named `Enfield 1-1 | maverick` is addressed as `Enfield 1-1` — everything after the separator (typically the player's real name/handle) is ignored. If the separator isn't found, `/`, `\`, `:`, `;` and `~` are tried as well, and failing that the full name is used. `-` is never treated as a separator, since it belongs to flight numbers like `1-1`. Squadron tags in brackets (`[ISAF] Mobius 1`, `Mobius 1 (VF-1)`) are stripped, so the bot doesn't read them out. |
 
 ### Coalition security
 
@@ -426,6 +426,18 @@ Two calls stay spoken-only. Asking where another pilot is needs their name, and 
 > An F10 request identifies the aircraft **outright**, because DCS reports which group clicked. These answers therefore give BRAA from the pilot's own aircraft even in the cases where a spoken call falls back to the bullseye — the menu is not only the fallback, it is the more reliable route for position-based answers.
 
 Each sweep rewrites only the menus whose contents actually changed, so `F10MenuRefreshSeconds` is the delay before a pilot who just took off sees the tactical calls move up, not a cost paid every tick.
+
+### Requests typed into the chat
+
+The same calls once more, typed into the DCS chat: `@Overlord picture`. Needs the server hook `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` (shipped next to `Darkstar.exe`) in `Scripts\Hooks` of the **server's** Saved Games folder; nothing goes on any pilot's machine. The answer goes out exactly like an F10 click's — read back in the pilot voice, `F10ReplyMode` decides radio or screen, and the screen half only when the F10 menu is on. The manual's chapter 8.7 covers what pilots can type.
+
+| Field | Default | Description |
+|---|---|---|
+| `ChatBridgeEnabled` | `false` | Master switch. Every call except the radio check also needs `DcsGrpcEnabled`; with it off the bot says so at startup. |
+| `ChatBridgeFolder` | `""` | The folder the hook and the bot share: `<Saved Games of the server>\Darkstar\ChatBridge`, for a dedicated server without `-w` usually `…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge`. The server's Saved Games folder, its `Scripts` or `Scripts\Hooks` folder and its `Darkstar` folder are accepted too and turned into that folder. Not guessed — a wrong guess fails silently. The bot warns at startup when the hook is not two levels above it, in `Scripts\Hooks`. |
+| `ChatBridgeMaxAgeSeconds` | `15` | A request older than this when the bot gets to it is dropped instead of answered, so a bot restarted after a crash does not answer a minute of old requests in one burst. Measured on the server's clock, never a pilot's. Below 2 is raised to 2. |
+
+The bot rewrites `callsigns.txt` in that folder every ten seconds. The hook only hides a message while that file is less than a minute old, so a stopped bot means nothing is hidden — and the file is also how the hook learns which callsigns count.
 
 ### Threat circle (standing watch)
 

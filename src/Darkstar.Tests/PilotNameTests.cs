@@ -19,9 +19,9 @@ internal static class PilotNameTests
 
         Console.WriteLine("Split: callsign, handle and the tags in between");
 
-        var p = PilotNames.Split("Enfield 1-1 | neodym", Sep);
-        Check("the documented form splits as before", p.Callsign == "Enfield 1-1" && p.Handle == "neodym", $"{p.Callsign} / {p.Handle}");
-        Eq("the raw name is kept untouched", p.Raw, "Enfield 1-1 | neodym");
+        var p = PilotNames.Split("Enfield 1-1 | maverick", Sep);
+        Check("the documented form splits as before", p.Callsign == "Enfield 1-1" && p.Handle == "maverick", $"{p.Callsign} / {p.Handle}");
+        Eq("the raw name is kept untouched", p.Raw, "Enfield 1-1 | maverick");
 
         p = PilotNames.Split("[ISAF] Mobius 1 | Reaper", Sep);
         Check("a squadron tag is removed from the callsign", p.Callsign == "Mobius 1" && p.Handle == "Reaper", $"{p.Callsign} / {p.Handle}");

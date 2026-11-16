@@ -470,11 +470,13 @@ function Show-PublishInventory($path, $label) {
     Write-Info "$label`: $($files.Count) file(s), $totalMb MB"
 
     # Everything a framework-dependent app legitimately needs at runtime: its own assemblies and
-    # their symbols, the dependency/runtime manifests, and the GUI's web assets under wwwroot.
+    # their symbols, the dependency/runtime manifests, the GUI's web assets under wwwroot, and the
+    # DCS hooks the bot ships for the server (Lua).
     $expected = @(".exe", ".dll", ".pdb", ".json", ".config",
                   ".html", ".htm", ".css", ".js", ".mjs", ".map",
                   ".woff", ".woff2", ".ttf", ".eot", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico",
-                  ".wasm", ".dat", ".br", ".gz", ".txt")
+                  ".wasm", ".dat", ".br", ".gz", ".txt",
+                  ".lua")   # the DCS hooks that travel with the bot, dcs\Scripts\Hooks
 
     $unexpected = $files | Where-Object { $expected -notcontains $_.Extension.ToLowerInvariant() }
     if ($unexpected) {

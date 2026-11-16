@@ -74,7 +74,9 @@ src/
   ├── Darkstar.Bot/          The bot: SRS connection, audio, wake word, replies (builds Darkstar.exe)
   ├── Darkstar.Core/         Shared library: config, phrases, logging, DCS-gRPC, service management
   ├── Darkstar.Gui/          Config editor (Blazor Hybrid over WPF)
-  └── Darkstar.Tests/        The test suite - dotnet run --project src/Darkstar.Tests
+  ├── Darkstar.Tests/        The test suite - dotnet run --project src/Darkstar.Tests
+  └── Darkstar.Wheel/        The radio wheel for the player's PC (builds Darkstar.Wheel.exe)
+dcs/Scripts/Hooks/           DCS hooks: the chat bridge for the server, the wheel's for the player
 installer/                   Inno Setup script for the distributable Setup.exe
 docs/                        All documentation, with images/ and the kneeboard/
 .github/workflows/           Builds and tests every push

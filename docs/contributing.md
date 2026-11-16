@@ -13,7 +13,7 @@ Thanks for your interest in contributing! This is a small hobby project, so the 
 
 ## Project layout
 
-See the [README](../README.md#project-structure) for the folder layout. The three projects:
+See the [README](../README.md#project-structure) for the folder layout. The projects:
 
 - **`Darkstar.Bot`** (`src/Darkstar.Bot/`, builds `Darkstar.exe`) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
 - **`Darkstar.Core`** (`src/Darkstar.Core/`) — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
@@ -28,6 +28,7 @@ See the [README](../README.md#project-structure) for the folder layout. The thre
   - Nothing bound in a panel may be a local field holding a setting: Save would never see it.
 
   The pickers go through `IPathPicker`, implemented by `WindowsPathPicker` over WPF's `OpenFolderDialog`/`OpenFileDialog`. An interface rather than a direct call, because the offline harness compiles the panels against plain `net8.0` with no WPF — a panel that opened a dialog itself could not be checked there at all.
+- **`Darkstar.Wheel`** (`src/Darkstar.Wheel/`, builds `Darkstar.Wheel.exe`) — the radio wheel for the **player's** PC: a tray program that draws the bot's calls as a wheel over DCS and turns a pick into a chat line for the client hook `dcs/Scripts/Hooks/Darkstar-Wheel.lua`. Windows Forms, because a click-through layered window is what it is. Its logic lives in `RadioWheel` in `Darkstar.Core`; the window, the keyboard hook and the joystick poll here cannot be tested without a desktop and are kept thin for that reason.
 - **`Darkstar.Tests`** (`src/Darkstar.Tests/`) — the test suite. References `Darkstar.Core` only; see below.
 
 ### Where things live
@@ -38,9 +39,11 @@ stray `.cs` in the root is how the old arrangement crept back once before.
 
 ```
 Darkstar.sln   README.md   README.de.md   LICENSE
-src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/  Darkstar.ico
+src/     Darkstar.Bot/  Darkstar.Core/  Darkstar.Gui/  Darkstar.Tests/  Darkstar.Wheel/  Darkstar.ico
 docs/    the manuals, the configuration reference, images/, kneeboard/
 installer/   Setup.iss and what it needs
+dcs/     files that go into a DCS Saved Games folder - Scripts/Hooks/Darkstar-ChatBridge.lua (server),
+         Scripts/Hooks/Darkstar-Wheel.lua (player)
 ```
 
 `src/Darkstar.ico` sits beside the projects rather than inside one because both embed it through
@@ -104,6 +107,9 @@ The bot (`src/Darkstar.Bot/`):
 | `DcsMenuService.cs` | The F10 menu: building it per flight over DCS-gRPC, reading the clicks back out of the event stream, and the on-screen reply. The decisions are pure and sit at the top of the file; only the connection handling is below. |
 | `CallCatalog.cs` | Every call a pilot can make, as one list, and which of them make sense right now. Deliberately knows nothing about *how* the request arrived — spoken, F10 menu, or a radio wheel later — so a second input path is a new front end rather than a second catalogue that drifts from this one. |
 | `SpeechQuality.cs` | What the bot works out about its own listening: how many transmissions it understood, how many it guessed at, and how often a pilot simply said it again. That last one is the only figure here that is not the bot grading its own work — the pilot keying up four seconds later is them saying the answer was no good. Pure, so every count can be stated as "these transmissions, that number". |
+| `ChatBridge.cs` | The bot's half of the chat bridge: reads the request files the server hook `dcs/Scripts/Hooks/Darkstar-ChatBridge.lua` drops, matches the typed text to a call, and keeps the heartbeat file that tells the hook the bot is running. The two halves never meet in one process, so the format between them is pinned down in `ChatBridgeTests` against the hook's own source. |
+| `FrequencyText.cs` | Frequencies as pilots read them, `252.000`, for the editor - shown and parsed with a point on every machine, while `config.json` keeps hertz. A German Windows formats "252,000" otherwise. |
+| `RadioWheel.cs` | The radio wheel's logic and the player's `wheel.json`: which slices it has (the F10 menu's calls, always in the same place), the chat line a pick types, which slice a hat direction points at, and the file it hands to the client hook. The window in `src/Darkstar.Wheel` only draws and reads keys; everything it decides is here, where it can be tested without a desktop. |
 | `PilotEcho.cs` | The sentence a menu click is read back with, and which voice speaks it. Both are decisions that only show up as "the radio chatter is confusing" after a mission, so both are pure functions here rather than inline in the transmit path — the voice choice in particular prefers a different *gender* over merely a different name, because two male voices in the same accent do not read as two people. |
 | `PilotRoster.cs` | Who is on station and what they were last told — the state behind `check in`, `check out` and `say again`. Keyed by SRS name, capped so a server running for weeks does not grow a dictionary per pilot who ever spoke. Knows nothing about DCS, which is why "say again" still works on an installation with no mission connection at all. |
 | `TacticalCalls.cs` | The arithmetic and the word choice behind `declare`, `spike` and the picture: reading a bearing and range out of what the pilot said, the cone that decides whether a contact is on a called bearing, and the formation words. Has its own number parser because `PilotNames.NormalizeSpokenNumbers` maps "for" to 4 — correct for callsigns, fatal for "zero three zero **for** four five". |

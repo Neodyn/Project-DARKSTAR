@@ -2,6 +2,7 @@
 @using Microsoft.JSInterop
 @inject ConfigStore Store
 @inject IJSRuntime JS
+@inject IPathPicker Picker
 @implements IDisposable
 
 @if (Section == SectionServer)
@@ -790,6 +791,88 @@
                 where a spoken call falls back to the bullseye.
             </div>
         </div>
+
+        <div class="card">
+            <div class="card-head">
+                <span style="font-size:12.5px;color:#E7EDEF">Requests typed into the chat — and the radio wheel</span>
+                <span class="spacer"></span>
+                <label class="switch">
+                    <input type="checkbox" @bind="Store.Config.ChatBridgeEnabled" />
+                    <span>Answer requests from the chat</span>
+                </label>
+            </div>
+
+            <div class="hint" style="margin-bottom:10px">
+                A pilot types <em>@@Overlord picture</em> into the DCS chat, and the bot answers it like an F10
+                click — over the radio, read back in the pilot voice, on screen when the F10 menu is on. The
+                radio wheel uses the same way in. A small hook on the <strong>server</strong> hides the line
+                from everybody else; the pilot who typed it still sees it, because DCS shows your own chat
+                before the server is asked. Nothing is installed on any pilot's machine.
+            </div>
+
+            <div class="hint" style="margin-bottom:10px">
+                <strong>Install once:</strong> copy <code>dcs\Scripts\Hooks\Darkstar-ChatBridge.lua</code> from the bot's folder into
+                <code>Scripts\Hooks</code> of the <em>server's</em> Saved Games folder and restart the server. The
+                hook writes to <code>Darkstar\ChatBridge</code> next to it — that is the folder to pick below.
+            </div>
+
+            @if (Store.Config.ChatBridgeEnabled && !Store.Config.DcsGrpcEnabled)
+            {
+                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                    DCS-gRPC is switched off on the server page, so the chat can only answer a radio check —
+                    every other call needs mission data.
+                </div>
+            }
+
+            <div class="field">
+                <label>CHAT BRIDGE FOLDER</label>
+                <div class="path-row">
+                    <input type="text" @bind="Store.Config.ChatBridgeFolder" placeholder="…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge" />
+                    <button class="browse" @onclick="BrowseChatBridgeFolder">Browse...</button>
+                </div>
+                <div class="hint">
+                    A dedicated server started without <code>-w</code> usually uses <code>DCS.dcs_serverrelease</code>;
+                    the name in the server window's title bar is the one that counts.
+                </div>
+            </div>
+
+            @if (ResolvedChatBridgeFolder() is { } resolvedBridge)
+            {
+                <div class="hint" style="margin-bottom:10px">
+                    Darkstar uses <code>@resolvedBridge</code> — the folder the hook writes to. Picking the
+                    server's Saved Games folder, or the <code>Scripts\Hooks</code> folder the hook was copied to,
+                    is fine: it is turned into this one.
+                </div>
+            }
+
+            @if (Store.Config.ChatBridgeEnabled && ChatBridgeFolderProblem() is { } bridgeProblem)
+            {
+                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                    @bridgeProblem As seen from this PC, which may not be the server — the bot repeats the
+                    check at startup, on the server.
+                </div>
+            }
+
+            <div class="row2">
+                <div class="field" style="margin-bottom:0">
+                    <label>DROP A REQUEST OLDER THAN (SECONDS)</label>
+                    <input type="number" min="2" @bind="Store.Config.ChatBridgeMaxAgeSeconds" />
+                    <div class="hint">
+                        Keeps a bot restarted after a crash from answering a minute of old requests in one
+                        burst. Measured on the server's clock, never the pilot's.
+                    </div>
+                </div>
+                <div class="field" style="margin-bottom:0">
+                    <label>WHAT A PILOT CAN TYPE</label>
+                    <div class="hint" style="margin-top:4px">
+                        <em>@@Overlord</em>, <em>&gt;&gt; Overlord:</em> or <em>» Overlord:</em>, followed by the name
+                        of an F10 entry — <em>picture</em>, <em>bogey dope</em>, <em>threat check</em>,
+                        <em>alpha check</em>, <em>runway in use</em>, <em>ATIS</em>, <em>divert</em>,
+                        <em>radio check</em>. Any of the bot's callsigns works in place of Overlord.
+                    </div>
+                </div>
+            </div>
+        </div>
 </div>
 }
 
@@ -1006,6 +1089,45 @@ else
 }
 
 @code {
+    /// <summary>
+    /// Picks the folder the chat bridge hook writes to. A folder, not a file: the hook and the bot
+    /// meet in it, each with files of its own.
+    /// </summary>
+    private void BrowseChatBridgeFolder()
+    {
+        var picked = Picker.PickFolder("Select the chat bridge folder (<server Saved Games>\\Darkstar\\ChatBridge)",
+            Store.Config.ChatBridgeFolder);
+        if (picked != null) Store.Config.ChatBridgeFolder = picked;
+    }
+
+    /// <summary>
+    /// What is wrong with the chat bridge folder, or null. Only a hint: the editor may well run on a
+    /// different PC from the server, so "not found" here proves nothing on its own - which is why
+    /// the bot repeats the check at startup, on the server.
+    /// </summary>
+    private string? ChatBridgeFolderProblem()
+    {
+        try { return ChatBridge.FolderProblem(Store.Config.ChatBridgeFolder); }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// The folder the bot will really use, when it differs from what was picked - the Saved Games
+    /// folder or the Hooks folder are accepted and turned into Darkstar\ChatBridge. Null when the
+    /// pick is already the right folder, or empty.
+    /// </summary>
+    private string? ResolvedChatBridgeFolder()
+    {
+        var configured = (Store.Config.ChatBridgeFolder ?? "").Trim().TrimEnd('\\', '/');
+        if (configured.Length == 0) return null;
+
+        string resolved;
+        try { resolved = ChatBridge.ResolveFolder(configured); }
+        catch { return null; }
+
+        return string.Equals(resolved, configured, StringComparison.OrdinalIgnoreCase) ? null : resolved;
+    }
+
     /// <summary>
     /// The three parts of this panel, each its own entry in the sidebar.
     ///

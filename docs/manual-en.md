@@ -290,7 +290,7 @@ Each radio reacts **only** to its own wake word. Empty `Keyword`/`Callsign` fall
 | Field | Default | Description |
 |---|---|---|
 | `BotCallsign` | `"Overlord"` | Callsign the bot identifies with (global default, per radio overridable). |
-| `PlayerNameCallsignSeparator` | `"\|"` | Cuts the pilot's callsign out of their SRS name: `Enfield 1-1 \| neodym` → the bot says "Enfield 1-1". `/`, `\`, `:`, `;`, `~` work too; `-` never does (it belongs to `1-1`). Squadron tags like `[ISAF]` are stripped and never spoken. |
+| `PlayerNameCallsignSeparator` | `"\|"` | Cuts the pilot's callsign out of their SRS name: `Enfield 1-1 \| maverick` → the bot says "Enfield 1-1". `/`, `\`, `:`, `;`, `~` work too; `-` never does (it belongs to `1-1`). Squadron tags like `[ISAF]` are stripped and never spoken. |
 | `Radios[].AnswerTacticalRequests` | `null` | Whether this radio answers tactical requests. `null` = follow the global switch. |
 | `Radios[].AnswerAirfieldRequests` | `null` | The same for runway/ATIS requests. This is how a tower frequency is made. |
 
@@ -1249,6 +1249,69 @@ The pilot voice is picked for you (`F10EchoVoice` empty): one of a different gen
 
 Menus are rebuilt rather than added to: one root entry, removed and written again whenever its contents change, so a pilot who changes slot twice does not end up with three of them. Only the menus that actually changed are rewritten, so the refresh interval is the delay before a pilot who just took off sees the tactical calls move up — not work done every tick.
 
+### 8.7 Requests typed into the chat
+
+The F10 menu takes five keypresses. The chat takes one line: a pilot types **`@Overlord picture`** into the DCS chat and gets exactly the answer the F10 entry *Picture* gives — over the radio, read back in the pilot voice first, and on screen when the F10 menu is on as well. It is also the way in for the radio wheel, which sends the same line for you.
+
+It needs one small file **on the server**, and nothing on any pilot's machine:
+
+1. Copy `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` — it sits next to `Darkstar.exe`, and in the repository — into `Scripts\Hooks` of the **server's** Saved Games folder and restart the server. A dedicated server started without `-w` usually uses `Saved Games\DCS.dcs_serverrelease` — the name in the server window's title bar is the one that counts.
+2. Point **`ChatBridgeFolder`** (CH8 → Replies, *Requests typed into the chat*) at the folder the hook writes to: `Darkstar\ChatBridge` next to that `Scripts` folder, for example `…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge`. Picking the server's Saved Games folder, or the `Scripts\Hooks` folder you just copied the hook into, works too — the bot turns either into that folder and says so in the log.
+3. Switch on **`ChatBridgeEnabled`** and restart the bot.
+
+| Setting | Default | What it decides |
+|---|---|---|
+| `ChatBridgeEnabled` | `false` | Whether requests from the chat are answered at all. |
+| `ChatBridgeFolder` | `""` | The folder the server hook and the bot share. Not guessed — see below. |
+| `ChatBridgeMaxAgeSeconds` | `15` | A request older than this when the bot gets to it is dropped, not answered. |
+
+**What a pilot types:** a marker — `@`, `>>` or `»` — then one of the bot's callsigns (the global one or any radio's own), then the name of an F10 entry: *picture*, *bogey dope*, *threat check*, *alpha check*, *runway in use*, *ATIS*, *divert*, *radio check*. Case and punctuation do not matter, so `@overlord bogey dope` and `>> Overlord: Bogey dope` are the same request. Anything else after the callsign gets the `FallbackResponse` over the radio, so the pilot at least knows it arrived.
+
+**Everybody else sees nothing; the pilot who typed it sees their own line.** The hook hides the message from all other players, but DCS shows a player's own chat on their screen before the server is asked, and no hook can take that back. That is why the request is meant to be readable — its author is going to read it. A line that does *not* start with a marker and a callsign is never touched.
+
+**When the bot is not running, nothing is hidden.** The bot rewrites `callsigns.txt` in that folder every ten seconds; once it is more than a minute old, the hook lets every message through. A request nobody will answer is better shown than swallowed. The same file is how the hook knows which callsigns count, so renaming a radio needs no change to the hook.
+
+**The folder is not guessed**, because the bot cannot tell which of several Saved Games folders belongs to the server that is running, and a wrong guess fails silently: the hook writes into one folder, the bot reads another. The bot warns at startup when the hook is not two levels above `ChatBridgeFolder`, where it would have to be — the editor shows the same warning, but it may be running on a different PC from the server.
+
+The same rules as on the radio apply: `RestrictToOwnCoalition`, the rate limit, and the radio roles — the request is answered on the radio whose callsign was typed when that radio serves the call, otherwise on the first one that does. Every call except the radio check needs DCS-gRPC, exactly as in the F10 menu. Each request is one `[Chat]` line in the log.
+
+### 8.8 The radio wheel, for the pilot's PC
+
+The radio wheel is a small program on the **pilot's** PC. It shows the bot's calls as a wheel over DCS; a pick goes out exactly like a request typed into the chat ([8.7](#87-requests-typed-into-the-chat)), so the chat bridge has to be running on the server first. Nothing about the wheel touches the server.
+
+**Setting it up on a pilot's PC:**
+
+1. Copy the wheel's folder onto the PC — the server operator builds it once and hands it out as a zip (see below).
+2. Copy `dcs\Scripts\Hooks\Darkstar-Wheel.lua` from that folder into `Saved Games\DCS\Scripts\Hooks\` — the Saved Games folder of the DCS the pilot flies with — and restart DCS.
+3. Start `Darkstar.Wheel.exe`. Its icon sits in the notification area; right-click it and choose *Learn the wheel key or joystick button…*, then press the key or HOTAS button you want. Without that, **Scroll Lock** opens the wheel.
+4. If the server's bot is not called *Overlord*, right-click → *Open the settings file* and change `Callsign`.
+
+DCS has to run **windowed or borderless** (the default). An exclusive full-screen DCS covers every other window, the wheel included.
+
+| Input | What it does |
+|---|---|
+| Wheel key or wheel button | Opens the wheel. Pressed again: sends the highlighted slice, or closes the wheel when none is highlighted. |
+| `1`–`8` (top row or numpad) | Sends that slice at once. |
+| Hat, or ← / → | Highlights a slice — the hat by direction, slice 1 at the top. `Enter` or the wheel button sends it. |
+| `Esc` | Closes the wheel. |
+
+The eight slices are the F10 menu's calls, always in the same place so a thumb finds them without looking: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Runway in use*, *ATIS*, *Divert*, *Radio check*. Keys only reach the wheel while DCS is in front, and only while the wheel is open — everywhere else they type normally.
+
+**What the pilot sees:** the request in their own chat, as `» Overlord: Picture` — nobody else sees it, as in 8.7. When a pick was not sent, a notification from the tray icon says so within three seconds: DCS has to be in a multiplayer mission, **connected to a server as a client**, with the hook installed. A pilot hosting the mission is the server and cannot use the wheel that way.
+
+| Setting in `wheel.json` | Default | What it decides |
+|---|---|---|
+| `Callsign` | `Overlord` | Which of the bot's callsigns the wheel addresses. One is enough: the bot answers on the radio that serves the call. |
+| `Marker` | `»` | What the line starts with. `>>` and `@` work too. |
+| `KeyCode`, `KeyName` | Scroll Lock | The wheel key. Set by *Learn…*. |
+| `JoystickId`, `JoystickButton` | none | The wheel button. Set by *Learn…*. |
+| `UseHat` | `true` | Whether that joystick's first hat picks a slice. A hat DCS also uses moves in DCS as well. |
+| `Size` | `0.5` | The wheel's size as a share of the DCS window's height. |
+
+The file is `%LOCALAPPDATA%\Darkstar\wheel.json` on the pilot's PC. The joystick is read through Windows' own game controller interface, which sees the first 32 buttons and the first hat of a device.
+
+**Building it for a squadron:** on the build PC, `dotnet publish src\Darkstar.Wheel -c Release -r win-x64 --self-contained true -o publish\wheel`, then zip `publish\wheel`. Self-contained, so pilots need nothing else installed; the client hook is already in it, under `dcs\Scripts\Hooks`.
+
 ---
 
 ## 9. Running as a Windows Service
@@ -1315,7 +1378,7 @@ Connected. Waiting for hotword...
 And during a request:
 
 ```
-[Hotword Detected] 251.000 MHz: starting recording (sender: "Enfield 1-1 | neodym" -> callsign "Enfield 1-1", ...)
+[Hotword Detected] 251.000 MHz: starting recording (sender: "Enfield 1-1 | maverick" -> callsign "Enfield 1-1", ...)
 [Recording finished] 251.000 MHz: 96000 bytes of PCM, transcribing...
 [STT] "overlord bogey dope"
 [Intel] 251.000 MHz: BogeyDope request answered from mission data (source=..., contacts=3, reference=unit 'Enfield-1-1')
@@ -1362,6 +1425,7 @@ Each line is tagged with the part of the bot it came from. A startup line says w
 | `[Phrase Match]` | A known trigger decided the answer, or none did and the fallback was used | |
 | `[Intel]` | Tactical replies: the startup state, and per request the kind, trigger and data source | Also says when `DcsIntelEnabled` is on while DCS-gRPC is off, which answers that question before it is asked. |
 | `[Menu]` | The F10 menu: how many menus were written, removed or skipped at the cap, and every click with the call, the flight and the frequency it was answered on | Silent while nothing changes, so a line here means a menu was rebuilt or a pilot used one. |
+| `[Chat]` | Requests typed into the chat: the folder and callsigns at startup, every request with the call and the frequency it was answered on, and requests dropped for being too old or not a request | A request that never shows up here never reached the bot — check that the hook is installed and that `ChatBridgeFolder` is the folder it writes to. |
 | `[Speech]` | Which engine transcribes, and with Whisper selected the model check plus its hints | One line at startup. The place to look when the bot hears but answers nothing. |
 | `[Privacy]` | One line at every start naming what reaches the internet with the current settings, and a line per item | Empty of items means nothing does. The place to look before telling your squadron the server is offline. |
 | `[Airfield]` | Runway in use and ATIS: the startup state, each request, and gRPC errors underneath | |

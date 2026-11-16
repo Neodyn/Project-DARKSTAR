@@ -74,7 +74,9 @@ src/
   ├── Darkstar.Bot/          Der Bot: SRS-Verbindung, Audio, Hotword, Antworten (ergibt Darkstar.exe)
   ├── Darkstar.Core/         Gemeinsame Bibliothek: Konfiguration, Phrasen, Logging, DCS-gRPC, Dienstverwaltung
   ├── Darkstar.Gui/          Konfigurationseditor (Blazor Hybrid über WPF)
-  └── Darkstar.Tests/        Die Testsuite — dotnet run --project src/Darkstar.Tests
+  ├── Darkstar.Tests/        Die Testsuite — dotnet run --project src/Darkstar.Tests
+  └── Darkstar.Wheel/        Das Funkrad für den PC des Piloten (baut Darkstar.Wheel.exe)
+dcs/Scripts/Hooks/           DCS-Hooks: die Chat-Brücke für den Server, der des Funkrads für den Piloten
 installer/                   Inno-Setup-Skript für die auslieferbare Setup.exe
 docs/                        Die gesamte Dokumentation, mit images/ und kneeboard/
 .github/workflows/           Baut und testet jeden Push

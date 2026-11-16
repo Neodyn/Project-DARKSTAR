@@ -50,11 +50,12 @@ jobs:
       - name: Check the installer would find what it packs
         shell: pwsh
         run: |
+          # .lua is the chat bridge's server hook (dcs\Scripts\Hooks), which travels with the bot.
           # Mirrors the inventory in build-installer.ps1: the two settings that keep localized
           # resource folders and XML documentation out of the installer are easy to lose in a merge,
           # and nothing else would notice.
           $unexpected = Get-ChildItem publish-check -Recurse -File |
-            Where-Object { $_.Extension -notin '.exe', '.dll', '.pdb', '.json', '.config' }
+            Where-Object { $_.Extension -notin '.exe', '.dll', '.pdb', '.json', '.config', '.lua' }
           $languages = Get-ChildItem publish-check -Directory |
             Where-Object { $_.Name -match '^[a-z]{2}(-[A-Za-z]{2,4})?$' -and $_.Name -ne 'en' }
 

@@ -79,6 +79,7 @@ Every setting that holds a path has **Browse…** beside it, opening Windows' ow
 | CH5 | Vosk model folder | a **folder** |
 | CH2 | Bot executable | a file, filtered to `*.exe` |
 | CH3 | Config folder | a **folder** |
+| CH8 | Chat bridge folder | a **folder** |
 
 Which of the two it is matters: a Vosk model is a directory containing `am\`, `conf\`, `graph\`
 and `ivector\`, and the usual way to get that setting wrong is to point it at a file inside the
@@ -210,7 +211,7 @@ Manages the `Radios` list. Each radio is a card:
 
 | Field | Notes |
 |---|---|
-| Frequency, modulation | Hz, and AM/FM. |
+| Frequency, modulation | MHz as a pilot reads it — `251.000`, typed with a point or a comma — and AM/FM. `config.json` keeps hertz, so nothing changes for an existing installation; a value that is not a frequency is refused with a line above the radios. |
 | Wake word, callsign | Per radio. Empty shows the global default as a placeholder. |
 | Three role switches | **Default / On / Off** for tactical requests, airfield requests and friendly positions, with a line underneath stating what this radio ends up answering. |
 | Also accept as the wake word | Extra spellings for how the recognizer really hears it. |
@@ -417,6 +418,13 @@ machine — the whole feature rides the DCS-gRPC connection already there, and s
 reasonably assume a menu means a mod. Second, that two calls stay spoken-only: asking where
 another pilot is needs a name, and a threat circle is keyed by SRS name while a click identifies a
 DCS group.
+
+**Requests typed into the chat** sits right under it, because it is the same calls once more: a
+pilot types `@Overlord picture` into the DCS chat and gets the F10 answer. The card has the master
+switch, the folder the server hook writes to — a path row with a folder picker — and how old a
+request may be before it is dropped. It says where the hook goes, warns in amber when DCS-gRPC is
+off, and when the hook is not where the folder says it must be. That last check runs from the PC
+the editor is on, which may not be the server, so the bot repeats it at startup.
 
 **Friendly positions** turns on "where is Springfield 2-1?": the master switch, the trigger
 phrases, the three refusal replies (pilot not found, nobody named, caller's coalition unknown) and

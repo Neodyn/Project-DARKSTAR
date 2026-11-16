@@ -79,6 +79,14 @@ Console.WriteLine("======== The pilot read-back on a menu click ========");
 PilotEchoTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== Requests typed into the chat ========");
+ChatBridgeTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The radio wheel ========");
+RadioWheelTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== What the bot knows about its own listening ========");
 SpeechQualityTests.Run();
 

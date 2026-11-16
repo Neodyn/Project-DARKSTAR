@@ -131,7 +131,12 @@ internal static class HousekeepingTests
                 System.IO.File.SetLastWriteTime(path, DateTime.Now - TimeSpan.FromDays(ageDays));
             }
 
-            Write("2026-09-27_10-00-00.000_fresh.wav", 0, 8);
+            // The name carries its own timestamp and Prune trusts it over the file system, so a fixed
+            // date here turns into a stale file a month later. It stood at 2026-09-27 and failed on
+            // 2026-11-15; the name is built from today now.
+            var freshName = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss.fff",
+                System.Globalization.CultureInfo.InvariantCulture) + "_fresh.wav";
+            Write(freshName, 0, 8);
             Write("old-by-mtime.wav", 400, 8);
             Write("keep.txt", 400, 8);
 
@@ -140,7 +145,7 @@ internal static class HousekeepingTests
 
             Check("the search pattern is respected", System.IO.File.Exists(Path.Combine(temp, "keep.txt")));
             Check("an old file goes", !System.IO.File.Exists(Path.Combine(temp, "old-by-mtime.wav")));
-            Check("a fresh one stays", System.IO.File.Exists(Path.Combine(temp, "2026-09-27_10-00-00.000_fresh.wav")));
+            Check("a fresh one stays", System.IO.File.Exists(Path.Combine(temp, freshName)));
             Check("the count is reported", deleted == 1 && freed == 8 * 1024, $"{deleted} file(s), {freed} bytes");
 
             var missing = FileRetention.Prune(Path.Combine(temp, "nope"), "*.wav", 1, 1, 0, "recording");
@@ -1352,6 +1357,27 @@ internal static class HousekeepingTests
         Check("the suite is running under a comma-decimal culture, or this proves nothing",
             (1.5).ToString("0.0") == "1,5", $"1.5 formats as {(1.5).ToString("0.0")}");
 
+        // The editor shows frequencies in MHz the way a pilot reads them, and config.json keeps
+        // hertz. Under de-DE a plain ToString gives "252,000" - this is the check that it does not.
+        Eq("a frequency is shown in MHz with a point", FrequencyText.ToMhz(252_000_000), "252.000");
+        Eq("with three decimals", FrequencyText.ToMhz(251_100_000), "251.100");
+        Check("typed with a point", FrequencyText.ParseToHz("252.000") == 252_000_000);
+        Check("or with a comma, which is the same frequency and not 252000",
+            FrequencyText.ParseToHz("252,000") == 252_000_000);
+        Check("whole MHz, and a unit typed out", FrequencyText.ParseToHz("252") == 252_000_000
+            && FrequencyText.ParseToHz("252.000 MHz") == 252_000_000);
+        Check("rounded to the hertz, not left at 251099999.99...", FrequencyText.ParseToHz("251.1") == 251_100_000);
+        Check("hertz pasted from an old config.json still work", FrequencyText.ParseToHz("252000000") == 252_000_000);
+        Check("and nonsense is refused rather than stored",
+            FrequencyText.ParseToHz("abc") == null && FrequencyText.ParseToHz("") == null &&
+            FrequencyText.ParseToHz("-5") == null && FrequencyText.ParseToHz("50000") == null &&
+            FrequencyText.ParseToHz("1.234,5") == null);
+
+        var radiosPanel = ReadSource("src/Darkstar.Gui/Pages/RadiosPanel.razor");
+        Check("the radios page shows MHz, not the hertz config.json stores",
+            !radiosPanel.Contains("@bind=\"radio.FrequencyHz\"", StringComparison.Ordinal)
+            && radiosPanel.Contains("FrequencyText.ToMhz(radio.FrequencyHz)", StringComparison.Ordinal));
+
         // The pilot-facing strings above are invariant in the library itself, so they hold wherever
         // they are hosted. Everything else - log lines, diagnostics, the editor's own output - is
         // covered by both applications setting the culture once at startup, which is cheaper than
@@ -1423,9 +1449,16 @@ internal static class HousekeepingTests
 
         var menuCallsWithoutGroup = menuCalls
             .Select(m => m.Value)
-            .Where(call => call.Contains("config.Coalition", StringComparison.Ordinal)
+            // "config.Coalition" was the only shape until the chat bridge; a chat request passes the
+            // player's own side instead, through the same answer, and has to pass the group just the same.
+            .Where(call => (call.Contains("config.Coalition", StringComparison.Ordinal)
+                            || call.Contains("coalition, token", StringComparison.Ordinal))
                            && !call.Contains("knownGroupName:", StringComparison.Ordinal))
             .ToList();
+
+        Check("the menu-driven requests were found",
+            menuCalls.Count(m => m.Value.Contains("knownGroupName:", StringComparison.Ordinal)) >= 2,
+            $"{menuCalls.Count} AnswerAsync call(s) in all");
 
         Check("every menu-driven request passes the clicking group along",
             menuCallsWithoutGroup.Count == 0,
@@ -1543,16 +1576,16 @@ internal static class HousekeepingTests
         var sep = "|";
 
         Check("greeted on arrival",
-            reslotting.ShouldGreet("guid-1", "Enfield 1-1 | neodym", sep, 251_000_000, tuneIn, gap));
+            reslotting.ShouldGreet("guid-1", "Enfield 1-1 | maverick", sep, 251_000_000, tuneIn, gap));
 
         // Same human, new aircraft: new guid from SRS, and the callsign half of the name changed
         // too. Only the handle is the same, which is why the handle is what is keyed on.
         Check("not greeted again after changing slot",
-            !reslotting.ShouldGreet("guid-2", "Springfield 2-1 | neodym", sep, 251_000_000,
+            !reslotting.ShouldGreet("guid-2", "Springfield 2-1 | maverick", sep, 251_000_000,
                 tuneIn.AddMinutes(20), gap));
 
         Check("nor after a reconnect with the name unchanged",
-            !reslotting.ShouldGreet("guid-3", "Enfield 1-1 | neodym", sep, 251_000_000,
+            !reslotting.ShouldGreet("guid-3", "Enfield 1-1 | maverick", sep, 251_000_000,
                 tuneIn.AddMinutes(40), gap));
 
         // A different pilot behind the same callsign is somebody else and does get a greeting.
@@ -1688,6 +1721,9 @@ internal static class HousekeepingTests
         var raiseAt = srsSource.IndexOf("OnClientRadiosChanged?.Invoke", StringComparison.Ordinal);
         Check("the bot's own client is filtered out before the event, so it cannot greet itself",
             ownGuidAt > 0 && raiseAt > 0 && ownGuidAt < raiseAt, $"own guid at {ownGuidAt}, event at {raiseAt}");
+        var ownNameAt = srsSource.IndexOf("string.Equals(name, _clientName", StringComparison.Ordinal);
+        Check("and so is the bot's own transmitter, which ExternalAudio connects under the bot's name",
+            ownNameAt > 0 && ownNameAt < raiseAt, $"own name at {ownNameAt}, event at {raiseAt}");
         Check("only a changed frequency set counts as an arrival - SRS sends radio updates for " +
               "volume and encryption too",
             srsSource.Contains("previous.SetEquals(key)) return;", StringComparison.Ordinal));
@@ -2011,7 +2047,7 @@ internal static class HousekeepingTests
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        Check("the solution's projects were found", projectFiles.Count == 4,
+        Check("the solution's projects were found", projectFiles.Count == 5,
             string.Join(", ", projectFiles.Select(System.IO.Path.GetFileName)));
 
         foreach (var projectFile in projectFiles)
