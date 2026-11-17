@@ -810,10 +810,95 @@
                 before the server is asked. Nothing is installed on any pilot's machine.
             </div>
 
-            <div class="hint" style="margin-bottom:10px">
-                <strong>Install once:</strong> copy <code>dcs\Scripts\Hooks\Darkstar-ChatBridge.lua</code> from the bot's folder into
-                <code>Scripts\Hooks</code> of the <em>server's</em> Saved Games folder and restart the server. The
-                hook writes to <code>Darkstar\ChatBridge</code> next to it — that is the folder to pick below.
+            <div class="field">
+                <label>SET UP THE SERVER HOOK</label>
+                <div class="hint">
+                    The hook goes into <code>Scripts\Hooks</code> of the Saved Games folder the <strong>DCS
+                    server</strong> runs with. Search this PC, pick that folder, and the editor puts
+                    <code>@ChatBridge.HookFileName</code> there and points the chat bridge folder below at it.
+                    Run the editor on the server for this — it only sees this PC.
+                </div>
+
+                <div style="display:flex;align-items:center;gap:20px;margin:10px 0">
+                    <button class="link-action" style="margin:0" @onclick="ScanDcsFolders">
+                        <span>@(_dcsScan == null ? "Search this PC for DCS folders" : "Search again")</span>
+                    </button>
+                    <button class="link-action" style="margin:0" @onclick="AddDcsFolder"><span>Pick a folder by hand...</span></button>
+                </div>
+
+                @if (_dcsScan != null)
+                {
+                    @if (_dcsScan.Folders.Count == 0)
+                    {
+                        <div class="hint">
+                            No DCS Saved Games folder on this PC. DCS creates its folder on the first start —
+                            start the server once, or pick the folder by hand.
+                        </div>
+                    }
+                    else
+                    {
+                        var activeBridge = ActiveBridgeFolder();
+                        <table class="phrase-table" style="margin:0">
+                            @foreach (var dcs in _dcsScan.Folders)
+                            {
+                                var inUse = string.Equals(dcs.BridgeFolder, activeBridge, StringComparison.OrdinalIgnoreCase);
+                                <tr>
+                                    <td>
+                                        <span class="strong-text">@dcs.Name</span>
+                                        @if (dcs.DedicatedServer) { <span class="badge" style="margin-left:6px">dedicated server</span> }
+                                        @if (dcs.HasGrpcHook) { <span class="badge" style="margin-left:6px">DCS-gRPC</span> }
+                                        @if (dcs.HasServerSettings && !dcs.DedicatedServer) { <span class="badge muted" style="margin-left:6px">has hosted</span> }
+                                        @if (!dcs.LooksLikeDcs) { <span class="badge amber" style="margin-left:6px">no DCS files</span> }
+                                        @if (inUse) { <span class="badge amber" style="margin-left:6px">in use</span> }
+                                        <div class="quiet" style="font-size:11px;margin-top:3px">
+                                            @(dcs.Path)@(dcs.LastUsedUtc is { } used ? $" · last run {StartupPaths.When(used.ToLocalTime())}" : "")
+                                        </div>
+                                    </td>
+                                    <td style="width:120px">
+                                        @switch (dcs.Hook)
+                                        {
+                                            case HookState.Current:
+                                                <span style="color:var(--ok);font-size:11.5px">✓ hook installed</span>
+                                                break;
+                                            case HookState.Outdated:
+                                                <span style="color:var(--amber);font-size:11.5px">older hook</span>
+                                                break;
+                                            default:
+                                                <span class="quiet" style="font-size:11.5px">no hook</span>
+                                                break;
+                                        }
+                                    </td>
+                                    <td style="width:190px;text-align:right">
+                                        @if (dcs.Hook != HookState.Current || !inUse)
+                                        {
+                                            <button class="icon-btn accent" @onclick="() => InstallHook(dcs)">
+                                                @(dcs.Hook switch { HookState.Missing => "install here", HookState.Outdated => "update", _ => "use this one" })
+                                            </button>
+                                        }
+                                        @if (dcs.Hook != HookState.Missing)
+                                        {
+                                            <button class="icon-btn" @onclick="() => RemoveHook(dcs)">remove</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </table>
+                    }
+
+                    @if (_dcsScan.Unreadable.Count > 0)
+                    {
+                        <div class="hint" style="margin-top:6px">
+                            Windows did not let the editor look into @_dcsScan.Unreadable.Count folder(s), such as
+                            <code>@_dcsScan.Unreadable[0]</code> — another account's profile. If the server runs
+                            under that account, start the editor as administrator, or pick its folder by hand.
+                        </div>
+                    }
+                }
+
+                @if (_hookMessage != null)
+                {
+                    <div class="hint @(_hookMessageIsError ? "bad-text" : "ok-text")" style="margin-top:8px">@_hookMessage</div>
+                }
             </div>
 
             @if (Store.Config.ChatBridgeEnabled && !Store.Config.DcsGrpcEnabled)
@@ -1094,6 +1179,119 @@ else
     /// Picks the folder the chat bridge hook writes to. A folder, not a file: the hook and the bot
     /// meet in it, each with files of its own.
     /// </summary>
+    // --- setting up the server hook -------------------------------------------------------------
+
+    /// <summary>What the last search found; null until the operator searched. Searching every
+    /// profile on the PC is not free, so it happens on request rather than on every render.</summary>
+    private DcsFolderScan? _dcsScan;
+    private string? _hookMessage;
+    private bool _hookMessageIsError;
+
+    private void ScanDcsFolders()
+    {
+        _hookMessage = null;
+        try
+        {
+            _dcsScan = ChatBridgeSetup.Scan();
+        }
+        catch (Exception ex)
+        {
+            Report($"The search failed: {ex.Message}", isError: true);
+        }
+    }
+
+    /// <summary>
+    /// A folder the search did not find: a server started with -w somewhere unusual, or on another
+    /// drive. Its Scripts\Hooks or Darkstar\ChatBridge folder is accepted as well.
+    /// </summary>
+    private void AddDcsFolder()
+    {
+        var picked = Picker.PickFolder("Select the DCS server's Saved Games folder (e.g. Saved Games\\DCS.dcs_serverrelease)", null);
+        if (picked == null) return;
+
+        var folder = ChatBridgeSetup.Inspect(ChatBridgeSetup.SavedGamesFolderOf(picked));
+        var others = (_dcsScan?.Folders ?? Array.Empty<DcsFolder>())
+            .Where(f => !string.Equals(f.Path, folder.Path, StringComparison.OrdinalIgnoreCase));
+
+        _dcsScan = new DcsFolderScan(new[] { folder }.Concat(others).ToList(),
+            _dcsScan?.Unreadable ?? Array.Empty<string>());
+        _hookMessage = null;
+    }
+
+    /// <summary>
+    /// Puts the hook into that folder and points the chat bridge at it - the two halves that have
+    /// to agree, done in one step so they cannot disagree. The setting is saved with Save changes,
+    /// like every other; the hook is written at once, since there is nothing to save about a file.
+    /// </summary>
+    private void InstallHook(DcsFolder dcs)
+    {
+        try
+        {
+            var hook = ChatBridgeSetup.Install(dcs.Path);
+            Store.Config.ChatBridgeFolder = dcs.BridgeFolder;
+            Store.Config.ChatBridgeEnabled = true;
+
+            Report($"{ChatBridge.HookFileName} is in {System.IO.Path.GetDirectoryName(hook)}, and the chat bridge " +
+                   $"folder is {dcs.BridgeFolder}. Press Save changes, then restart the DCS server and the bot.",
+                   isError: false);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Report($"Windows did not allow writing to {dcs.Path} - it belongs to another account. Start the editor " +
+                   $"as administrator, or copy dcs\\Scripts\\Hooks\\{ChatBridge.HookFileName} from the bot's folder there by hand.",
+                   isError: true);
+        }
+        catch (Exception ex)
+        {
+            Report($"The hook could not be installed in {dcs.Path}: {ex.Message}", isError: true);
+        }
+
+        Refresh(dcs);
+    }
+
+    private void RemoveHook(DcsFolder dcs)
+    {
+        try
+        {
+            ChatBridgeSetup.Remove(dcs.Path);
+            var stillPointing = string.Equals(dcs.BridgeFolder, ActiveBridgeFolder(), StringComparison.OrdinalIgnoreCase);
+            Report($"The hook is gone from {dcs.Path}." +
+                   (stillPointing ? " The chat bridge folder still points there - pick another one, or switch the chat bridge off." : "") +
+                   " The DCS server keeps it loaded until it restarts.",
+                   isError: false);
+        }
+        catch (Exception ex)
+        {
+            Report($"The hook could not be removed from {dcs.Path}: {ex.Message}", isError: true);
+        }
+
+        Refresh(dcs);
+    }
+
+    /// <summary>Looks at one folder again after a change, keeping its place in the list.</summary>
+    private void Refresh(DcsFolder dcs)
+    {
+        if (_dcsScan == null) return;
+
+        var updated = _dcsScan.Folders
+            .Select(f => string.Equals(f.Path, dcs.Path, StringComparison.OrdinalIgnoreCase) ? ChatBridgeSetup.Inspect(f.Path, f.Profile) : f)
+            .ToList();
+        _dcsScan = _dcsScan with { Folders = updated };
+    }
+
+    private void Report(string message, bool isError)
+    {
+        _hookMessage = message;
+        _hookMessageIsError = isError;
+    }
+
+    /// <summary>The bridge folder the bot will use as configured now, for the "in use" mark.</summary>
+    private string ActiveBridgeFolder()
+    {
+        try { return ChatBridge.ResolveFolder(Store.Config.ChatBridgeFolder); }
+        catch { return ""; }
+    }
+
     private void BrowseChatBridgeFolder()
     {
         var picked = Picker.PickFolder("Select the chat bridge folder (<server Saved Games>\\Darkstar\\ChatBridge)",

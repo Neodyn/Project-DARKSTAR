@@ -207,7 +207,7 @@ Seine Parameter und der Projektaufbau stehen in [contributing.md](contributing.m
 
 ## 4. Erster Start
 
-1. **Konfigurationseditor öffnen.** Er liegt im Startmenü als *D.A.R.K.S.T.A.R. Config Editor* oder als `Darkstar.ConfigEditor.exe` im Installationsordner. Die `config.json` des Bots findet er selbst.
+1. **Konfigurationseditor öffnen.** Er liegt im Startmenü als *D.A.R.K.S.T.A.R. Config Editor* oder als `Darkstar.ConfigEditor.exe` im Installationsordner. Die `config.json` des Bots findet er selbst. Solange noch etwas fehlt, das der Bot braucht, öffnet er mit der **Setup-Checkliste**, die durch die folgenden Schritte führt und zeigt, was erledigt ist.
 
    *(Du betreibst es aus dem Quellcode? Dann den Bot einmal starten — er legt eine `config.json` neben der EXE an und beendet sich, damit du sie prüfen kannst, bevor sich etwas verbindet.)*
 
@@ -606,6 +606,10 @@ Eine schlichte Liste von Begriffen, die Gemini als Hinweis mitbekommt. Sie ände
 `Darkstar.ConfigEditor.exe` bearbeitet alle drei Dateien grafisch — und benutzt dafür exakt denselben Code wie der Bot, sodass nichts auseinanderlaufen kann. Den Konfigurationsordner findet er automatisch, indem er seinen eigenen Ordner, die darüberliegenden Ordner und deren `bin\`-Unterordner durchsucht.
 
 Zum Ansehen muss der Bot nicht gestoppt werden; geänderte Einstellungen greifen aber erst nach einem Neustart des Bots.
+
+**Eine Einstellung finden:** Das Suchfeld oben in der Seitenleiste (**Strg+K** von überall) findet Karten, Schalter und Felder über die Wörter auf dem Bildschirm, über ihren Namen in `config.json` (`ChatBridgeFolder`) und über gängige deutsche Begriffe (*Stimme*, *Funkrad*, *Sicherung*). Solange etwas getippt ist, ersetzen die Treffer die Seitenleiste; ↑ ↓ wählen, **Enter** öffnet die Seite, scrollt zum Feld und lässt es kurz aufleuchten, **Esc** schließt.
+
+**Setup-Checkliste:** der Eintrag über den Kanälen. Zehn Schritte in der Reihenfolge der Arbeit — SRS-Server, ExternalAudio, Sprachmodell, Transkription und Funkgeräte als die fünf nötigen; DCS-gRPC, Chat-Bridge, Windows-Dienst, ein Backup und Discord als optionale. Jeder wird gegen die Einstellungen im Editor und die Dateien auf der Platte geprüft, sagt, was er gefunden hat, und verlinkt die Seite, die ihn löst; darunter stehen alle Warnungen, die der Bot beim Start protokollieren würde. Der Editor öffnet mit der Checkliste, solange ein nötiger Schritt offen ist, danach wieder mit CH1. Die Zahl am Eintrag zählt die offenen nötigen Schritte.
 
 Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer Nummer — **SERVER** (CH1, CH2), **RADIO & SPEECH** (CH4–CH7), **MISSION DATA — CH8** (drei Einträge) und **MONITORING** (CH9, CH10). Die Nummer eines Panels ändert sich nie, alles was dieses Handbuch über CH4 oder CH10 sagt, zeigt also weiterhin an dieselbe Stelle. Ein Eintrag mit der Markierung *off* ist in der Konfiguration ausgeschaltet — das heißt nicht, dass etwas nicht erreichbar wäre.
 
@@ -1272,7 +1276,9 @@ Menüs werden neu gebaut statt ergänzt: ein Wurzeleintrag, entfernt und neu ges
 
 Das F10-Menü braucht fünf Tastendrücke, der Chat eine Zeile: Ein Pilot tippt **`@Overlord picture`** in den DCS-Chat und bekommt genau die Antwort, die der F10-Eintrag *Picture* liefert — über Funk, vorher in der Pilotenstimme zurückgelesen, und auf dem Bildschirm, wenn auch das F10-Menü an ist. Auf demselben Weg schickt später das Radialmenü seine Befehle, nur dass es die Zeile für dich tippt.
 
-Nötig ist eine kleine Datei **auf dem Server**, auf den Rechnern der Piloten nichts:
+Nötig ist eine kleine Datei **auf dem Server**, auf den Rechnern der Piloten nichts. **Der Editor installiert sie:** auf dem Server öffnen, CH8 → Antworten, *Requests typed into the chat*, und **Search this PC for DCS folders** drücken. Er listet jeden DCS-Saved-Games-Ordner, den er findet — in jedem Windows-Profil, das er lesen darf, den eines Dedicated Servers zuerst, markiert, wenn dort DCS-gRPC installiert ist — und ob der Hook darin liegt. **install here** beim Ordner des Servers kopiert den Hook nach `Scripts\Hooks`, setzt `ChatBridgeFolder` passend und schaltet die Brücke ein; danach **Save changes** und DCS-Server und Bot neu starten. Einen Ordner, den die Suche nicht findet, holt **Pick a folder by hand…** dazu.
+
+Dasselbe von Hand:
 
 1. `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` — liegt neben `Darkstar.exe` und im Repository — nach `Scripts\Hooks` im Saved-Games-Ordner **des Servers** kopieren und den Server neu starten. Ein Dedicated Server ohne `-w` nimmt meist `Saved Games\DCS.dcs_serverrelease` — maßgeblich ist der Name in der Titelleiste des Server-Fensters.
 2. **`ChatBridgeFolder`** (CH8 → Antworten, *Requests typed into the chat*) auf den Ordner setzen, in den der Hook schreibt: `Darkstar\ChatBridge` neben diesem `Scripts`-Ordner, zum Beispiel `…\Saved Games\DCS.dcs_serverrelease\Darkstar\ChatBridge`. Den Saved-Games-Ordner des Servers oder den `Scripts\Hooks`-Ordner, in den du den Hook gerade kopiert hast, zu wählen, geht auch — der Bot macht daraus diesen Ordner und schreibt das ins Log.

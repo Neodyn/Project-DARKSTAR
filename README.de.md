@@ -44,7 +44,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | ⌨️ **Anfragen über den Chat** | `@Overlord picture` in den DCS-Chat getippt bekommt dieselbe Antwort wie der Funkspruch. Ein kleiner Server-Hook versteckt die Zeile vor allen anderen — der Weg für einen Piloten, bei dem Mikrofon oder Aussprache nicht mitspielen. |
 | 🎡 **Funkrad** | Ein kleines Programm für den PC des Piloten zeigt die Calls als Rad über DCS: mit einer Taste oder einem HOTAS-Knopf öffnen, mit dem Hat oder den Zifferntasten wählen — Radius des Threat Circle und Platz-Calls im eigenen Unterrad —, und die Anfrage geht über den Chat raus. Klickt durch und nimmt nie den Fokus. |
 | 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
-| 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer, Dienstverwaltung per Knopfdruck, Profilen, Backup und Wiederherstellung des ganzen Setups sowie dunklem und hellem Farbschema. |
+| 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit Suche (Strg+K) und Setup-Checkliste, DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer, Dienstverwaltung per Knopfdruck, Profilen, Backup und Wiederherstellung des ganzen Setups sowie dunklem und hellem Farbschema. |
 | 🪶 **Handout für deine Piloten** | Drei Kneeboard-Seiten, deutsch und englisch, mit jedem Call im Wortlaut, was er tut und wie die Antwort klingt — [PNGs für `Saved Games\DCS\Kneeboard\` und ein PDF zum Drucken](docs/kneeboard/README.de.md). |
 | 📦 **Installer in einer Datei** | Eine `Setup.exe`, die auf einem nackten Windows alle Laufzeitabhängigkeiten mitinstalliert. |
 
@@ -52,7 +52,7 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 
 1. **`DARKSTAR-Setup-<Version>.exe`** von der [Releases](../../releases)-Seite herunterladen. (Piloten, die das Funkrad wollen, nehmen stattdessen `DARKSTAR-Wheel-Setup-<Version>.exe`.)
 2. Ausführen — sie installiert Bot, Konfigurationseditor, ein Sprachmodell und jede fehlende Runtime und legt eine `config.json` an, die schon auf das Modell und auf deine SRS-Installation zeigt.
-3. Konfigurationseditor öffnen, SRS-Server, Radios und Gemini-API-Key eintragen, speichern, starten.
+3. Konfigurationseditor öffnen — er startet mit einer Setup-Checkliste —, SRS-Server, Radios und Gemini-API-Key eintragen, speichern, starten.
 
 Schritt für Schritt, samt allem, was schiefgehen kann: **[Handbuch, Kapitel 3](docs/manual-de.md#3-installation)**.
 

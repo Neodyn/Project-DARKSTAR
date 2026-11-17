@@ -431,7 +431,7 @@ Each sweep rewrites only the menus whose contents actually changed, so `F10MenuR
 
 ### Requests typed into the chat
 
-The same calls once more, typed into the DCS chat: `@Overlord picture`. Needs the server hook `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` (shipped next to `Darkstar.exe`) in `Scripts\Hooks` of the **server's** Saved Games folder; nothing goes on any pilot's machine. The answer goes out exactly like an F10 click's — read back in the pilot voice, `F10ReplyMode` decides radio or screen, and the screen half only when the F10 menu is on. The manual's chapter 8.7 covers what pilots can type.
+The same calls once more, typed into the DCS chat: `@Overlord picture`. Needs the server hook `dcs\Scripts\Hooks\Darkstar-ChatBridge.lua` (shipped next to `Darkstar.exe`) in `Scripts\Hooks` of the **server's** Saved Games folder; nothing goes on any pilot's machine. The config editor installs it and sets `ChatBridgeFolder` to match (CH8 → Replies, **Search this PC for DCS folders**). The answer goes out exactly like an F10 click's — read back in the pilot voice, `F10ReplyMode` decides radio or screen, and the screen half only when the F10 menu is on. The manual's chapter 8.7 covers what pilots can type.
 
 | Field | Default | Description |
 |---|---|---|

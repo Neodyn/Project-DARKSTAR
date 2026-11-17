@@ -46,6 +46,13 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <!-- The chat bridge's server hook, built in so the config editor can install it into a DCS
+       Saved Games folder wherever the editor itself was installed (ChatBridgeSetup.cs). The same
+       file still ships next to Darkstar.exe for installing by hand; a test keeps the two equal. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\dcs\Scripts\Hooks\Darkstar-ChatBridge.lua" LogicalName="Darkstar.ChatBridge.lua" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Official DCS-gRPC C# bindings (generated from the DCS-gRPC .proto files) - lets us
          talk to a running DCS-gRPC server for real mission data. Used by the GUI's connection

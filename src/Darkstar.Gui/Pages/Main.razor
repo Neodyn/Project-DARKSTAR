@@ -1,6 +1,8 @@
 @namespace Darkstar.Gui
 @inject ConfigStore Store
 @inject IPathPicker Picker
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
 @implements IDisposable
 
 @* The theme is a class on one element that holds everything, rather than on <html>: the editor
@@ -27,6 +29,47 @@
 
 <div class="body-row">
     <div class="sidebar">
+        @if (Store.IsLoaded)
+        {
+            <div class="search-box">
+                <input id="editor-search" type="text" placeholder="Search settings   Ctrl+K" aria-label="Search settings"
+                       autocomplete="off" spellcheck="false"
+                       value="@_query" @oninput="SearchChanged" @onkeydown="SearchKey" />
+            </div>
+        }
+
+        @if (_query.Trim().Length > 0)
+        {
+            var results = EditorSearch.Find(_query);
+            <div class="heading">@(results.Count == 0 ? "NO RESULTS" : results.Count == 1 ? "1 RESULT" : $"{results.Count} RESULTS")</div>
+            @for (var n = 0; n < results.Count; n++)
+            {
+                var result = results[n];
+                <div class="search-result @(n == _selected ? "selected" : "")" @onclick="() => Go(result)">
+                    <div class="what">@result.Title</div>
+                    <div class="where">@result.Where</div>
+                </div>
+            }
+            @if (results.Count == 0)
+            {
+                <div class="search-empty">Try another word, or a setting's name from config.json — e.g. ChatBridgeFolder.</div>
+            }
+            else
+            {
+                <div class="search-empty">↑ ↓ to choose, Enter to open, Esc to close.</div>
+            }
+        }
+        else
+        {
+        <div class="navitem checklist-entry @(_active == "checklist" ? "active" : "")" @onclick="OpenChecklist">
+            <span class="ch">✓</span>
+            <span class="navlabel">SETUP CHECKLIST</span>
+            @if (_openRequired > 0)
+            {
+                <span class="navcount" title="Required steps not done yet">@_openRequired</span>
+            }
+        </div>
+
         @foreach (var group in _groups)
         {
             <div class="heading">@group.Title</div>
@@ -46,6 +89,7 @@
                     }
                 </div>
             }
+        }
         }
     </div>
 
@@ -68,6 +112,9 @@
         {
             @switch (_active)
             {
+                case "checklist":
+                    <ChecklistPanel OnGo="GoToStep" />
+                    break;
                 case "connection":
                     <ConnectionPanel />
                     break;
@@ -188,8 +235,14 @@
 
     protected override void OnInitialized()
     {
-        Store.OnChange += StateHasChanged;
+        Store.OnChange += StoreChanged;
         Store.Load();
+
+        // A setup with a required step open starts where the work is; a working one starts where
+        // the editor always did. Checked once here, so finishing a step does not move the page
+        // away from under the person doing it.
+        CountOpenSteps();
+        if (Store.IsLoaded && _openRequired > 0) _active = "checklist";
 
         // Built here rather than in a field initializer so the lambdas read the config that is
         // loaded at the time they run - Store.Config is replaced wholesale by a reload.
@@ -235,5 +288,107 @@
 
     private void Reload() => Store.Load();
 
-    public void Dispose() => Store.OnChange -= StateHasChanged;
+    // --- setup checklist ----------------------------------------------------------------------
+
+    /// <summary>Required steps not done - the number on the checklist's sidebar entry.</summary>
+    private int _openRequired;
+
+    private void CountOpenSteps()
+    {
+        try
+        {
+            _openRequired = Store.IsLoaded
+                ? SetupChecklist.OpenRequired(SetupChecklist.Evaluate(Store.Config, Store.ConfigFolder))
+                : 0;
+        }
+        catch
+        {
+            _openRequired = 0;
+        }
+    }
+
+    private void OpenChecklist() => _active = "checklist";
+
+    private void GoToStep(SetupStep step)
+    {
+        _active = step.Page;
+        if (step.Section != null) _grpcSection = step.Section;
+    }
+
+    private void StoreChanged()
+    {
+        CountOpenSteps();
+        StateHasChanged();
+    }
+
+    // --- search ------------------------------------------------------------------------------
+
+    /// <summary>What is typed into the search box. While it holds anything, the sidebar shows results.</summary>
+    private string _query = "";
+
+    /// <summary>Which result Enter opens; the arrow keys move it.</summary>
+    private int _selected;
+
+    /// <summary>
+    /// The result just opened, to be scrolled to and flashed once its page has rendered. The
+    /// scrolling is the one thing Blazor cannot do by itself - wwwroot/js/editor.js does it.
+    /// </summary>
+    private SearchTarget? _reveal;
+
+    private void SearchChanged(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _selected = 0;
+    }
+
+    private void SearchKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        var results = EditorSearch.Find(_query);
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (results.Count > 0) _selected = Math.Min(_selected + 1, results.Count - 1);
+                break;
+            case "ArrowUp":
+                _selected = Math.Max(_selected - 1, 0);
+                break;
+            case "Enter":
+                if (results.Count > 0) Go(results[Math.Min(_selected, results.Count - 1)]);
+                break;
+            case "Escape":
+                _query = "";
+                _selected = 0;
+                break;
+        }
+    }
+
+    private void Go(SearchTarget target)
+    {
+        _active = target.Page;
+        if (target.Section != null) _grpcSection = target.Section;
+
+        _reveal = target;
+        _query = "";
+        _selected = 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_reveal == null) return;
+
+        var target = _reveal;
+        _reveal = null;
+
+        try
+        {
+            await JS.InvokeVoidAsync("darkstarEditor.reveal", target.Label, target.Card);
+        }
+        catch
+        {
+            // The page is open either way; only the scrolling to the field is lost.
+        }
+    }
+
+    public void Dispose() => Store.OnChange -= StoreChanged;
 }

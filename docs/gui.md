@@ -68,6 +68,35 @@ An entry is marked **off** when the thing it configures is switched off in the c
 means "you turned this off", never "this is unreachable right now" — a connection that cannot be
 reached is a different problem, reported on the panel itself.
 
+## Search
+
+The box on top of the sidebar, focused from anywhere with **Ctrl+K** (`wwwroot/js/editor.js`, the
+editor's one script). Typing replaces the sidebar with up to ten results, each with the page and
+card it is on; ↑ ↓ and **Enter**, or a click, open the page, and the script scrolls to the field and
+flashes it — found by the text the panel shows, inside the named card, since labels like
+*MODULATION* occur twice on a page. A field hidden behind a switch that is off falls back to its card.
+
+The index is `EditorSearch` in `Darkstar.Core`: a table of every heading, card title, switch and
+field label, generated from the panels, with the `config.json` names each one edits, plus German
+synonyms (*Stimme* → voice, *Funkrad* → wheel). Every word typed must match; a setting's exact name
+ranks its field first. `EditorSearchTests` holds the table against the panels — every label must be
+on its page, and every setting a panel uses must be findable there by its name — so a field added
+without an entry fails the suite.
+
+## Setup checklist
+
+The entry above the channels, and the start page while a required step is open
+(`SetupChecklist` in `Darkstar.Core`, `ChecklistPanel.razor`). Ten steps, the first five required:
+SRS server, `DCS-SR-ExternalAudio.exe`, the Vosk model, transcription (Gemini key or Whisper model),
+radios (with a frequency, and a voice this PC has); then DCS-gRPC, the chat bridge hook, the Windows
+service, a backup and Discord. Each is judged from the settings on screen and the files on disk with
+the same checks the bot makes at startup, and links to the page that fixes it.
+
+What `config.json`
+does not say — service installed, voices on this PC, backups — is gathered when the page opens; a
+fact that cannot be found out is said to be unknown, not guessed. Below the steps: every warning
+`AppConfig` would log at startup. The sidebar entry carries the count of required steps still open.
+
 ## Colours: dark and light
 
 **☾ DARK** and **☀ LIGHT** in the title bar switch the whole editor; the choice is remembered in
@@ -464,8 +493,22 @@ DCS group.
 
 **Requests typed into the chat** sits right under it, because it is the same calls once more: a
 pilot types `@Overlord picture` into the DCS chat and gets the F10 answer. The card has the master
-switch, the folder the server hook writes to — a path row with a folder picker — and how old a
-request may be before it is dropped. It says where the hook goes, warns in amber when DCS-gRPC is
+switch, the setup for the server hook, the folder the hook writes to — a path row with a folder
+picker — and how old a request may be before it is dropped.
+
+**Setting up the server hook** (`ChatBridgeSetup` in `Darkstar.Core`): **Search this PC for DCS
+folders** looks into the Saved Games folder of every Windows profile it may read — this user's
+asked from Windows, since it can be moved — and lists each DCS folder, recognised by DCS's own
+files rather than by name, because a server started with `-w Anything` uses `Saved Games\Anything`.
+The likeliest server comes first: a dedicated server's folder name, then DCS-gRPC's hook, then a
+`serverSettings.lua`, then the most recent `dcs.log`.
+
+Each row says whether the hook is there,
+current or older, and which one `ChatBridgeFolder` points at. **install here** writes the hook
+(embedded in `Darkstar.Core`, so the bot-only setup has it too) and sets `ChatBridgeFolder` and
+`ChatBridgeEnabled` in the same step — the two halves that have to agree, and the ones that did not
+when this was done by hand. Profiles Windows does not let the editor read are named, with the hint
+to start it as administrator. The search runs on request only and sees only this PC. It says where the hook goes, warns in amber when DCS-gRPC is
 off, and when the hook is not where the folder says it must be. That last check runs from the PC
 the editor is on, which may not be the server, so the bot repeats it at startup.
 

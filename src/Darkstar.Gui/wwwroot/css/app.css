@@ -215,6 +215,8 @@ html, body {
 .card .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .freq { font-family: Consolas, monospace; font-size: 17px; color: var(--accent); }
 .badge { font-size: 10px; color: var(--teal); border: 1px solid var(--ok-line); border-radius: 3px; padding: 2px 6px; }
+.badge.amber { color: var(--amber); border-color: var(--amber-line); }
+.badge.muted { color: var(--faint); border-color: var(--line); }
 .spacer { flex: 1; }
 .icon-btn { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 14px; padding: 2px; }
 .icon-btn:hover { color: var(--bad); }
@@ -281,6 +283,7 @@ table.phrase-table input { background: var(--bg-input); border: 1px solid var(--
 .quiet { color: var(--faint); }
 .strong-text { color: var(--text); }
 .warn-text { color: var(--accent); }
+.ok-text { color: var(--ok); }
 .bad-text { color: var(--bad); font-size: 12px; }
 code { font-family: Consolas, monospace; font-size: 0.95em; }
 
@@ -292,3 +295,40 @@ code { font-family: Consolas, monospace; font-size: 0.95em; }
 .link-action.danger:hover { color: var(--bad); filter: brightness(1.2); }
 .icon-btn.accent { color: var(--teal); }
 .icon-btn.accent:hover { color: var(--teal-hover); }
+
+/* The search box on top of the sidebar, and its results in place of the sidebar entries. */
+.search-box { padding: 0 12px 10px; }
+.search-box input { width: 100%; box-sizing: border-box; background: var(--bg-input); border: 1px solid var(--line); border-radius: 4px; color: var(--text); padding: 7px 9px; font-family: inherit; font-size: 12px; }
+.search-box input:focus { outline: none; border-color: var(--accent); }
+.search-result { padding: 7px 14px 7px 16px; cursor: pointer; border-left: 2px solid transparent; }
+.search-result:hover { background: var(--bg-raised); }
+.search-result.selected { background: var(--bg-raised); border-left-color: var(--accent); }
+.search-result .what { font-size: 12.5px; color: var(--text); }
+.search-result .where { font-size: 10.5px; color: var(--faint); margin-top: 2px; }
+.search-empty { padding: 8px 16px; font-size: 11px; color: var(--faint); }
+
+/* Where the search took you: the field or card flashes once. */
+@keyframes search-hit { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.search-hit { animation: search-hit 2.2s ease-out; border-radius: 4px; }
+
+/* The checklist's sidebar entry, and the count of required steps still open. */
+.navitem.checklist-entry { margin-bottom: 4px; }
+.navitem .navcount { flex-shrink: 0; font-size: 9.5px; font-weight: 600; color: var(--bg); background: var(--amber); border-radius: 8px; padding: 1px 6px; }
+
+/* The setup checklist. */
+.checklist-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 12px; color: var(--muted); }
+.checklist-progress .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--bg-raised); overflow: hidden; }
+.checklist-progress .bar div { height: 100%; background: var(--ok); }
+.checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.checklist .step { display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-bar); padding: 10px 14px; }
+.checklist .step.problem, .checklist .step.todo { border-color: var(--amber-line); }
+.checklist .step .mark { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: var(--faint); }
+.checklist .step.done .mark { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+.checklist .step.problem .mark, .checklist .step.todo .mark { border-color: var(--amber); color: var(--amber); }
+.checklist .step.problem .mark { background: var(--amber); color: var(--bg); }
+.checklist .step .body { flex: 1; min-width: 0; }
+.checklist .step .title { font-size: 13px; color: var(--text); font-weight: 600; }
+.checklist .step .detail { font-size: 12px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+.checklist .step.problem .detail, .checklist .step.todo .detail { color: var(--amber); }
+.warning-list { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--amber); }
+.warning-list li { margin-bottom: 4px; overflow-wrap: anywhere; }

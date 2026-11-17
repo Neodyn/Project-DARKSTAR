@@ -83,6 +83,10 @@ Console.WriteLine("======== Requests typed into the chat ========");
 ChatBridgeTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== Setting up the chat bridge hook ========");
+ChatBridgeSetupTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== The radio wheel ========");
 RadioWheelTests.Run();
 
@@ -97,6 +101,14 @@ StartupPathTests.Run();
 Console.WriteLine();
 Console.WriteLine("======== Config profiles ========");
 ConfigProfileTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The editor's search ========");
+EditorSearchTests.Run();
+
+Console.WriteLine();
+Console.WriteLine("======== The setup checklist ========");
+SetupChecklistTests.Run();
 
 Console.WriteLine();
 Console.WriteLine("======== Backup and restore ========");

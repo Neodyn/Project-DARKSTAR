@@ -1,0 +1,147 @@
+@inject ConfigStore Store
+@implements IDisposable
+
+<h1>SETUP CHECKLIST</h1>
+
+<div class="hint" style="margin:-8px 0 14px">
+    From a fresh install to a bot that answers, in the order it has to happen. Every step is checked
+    against the settings as they are in the editor right now — save to make them the bot's.
+</div>
+
+@{
+    var steps = SetupChecklist.Evaluate(Store.Config, Store.ConfigFolder, _facts);
+    var required = steps.Count(s => s.Required);
+    var requiredDone = steps.Count(s => s.Required && s.State == StepState.Done);
+    var percent = required == 0 ? 100 : requiredDone * 100 / required;
+}
+
+<div class="checklist-progress">
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="@required" aria-valuenow="@requiredDone" aria-label="Required steps done">
+        <div style="width:@(percent)%"></div>
+    </div>
+    <span>@requiredDone of @required required steps done</span>
+</div>
+
+@if (requiredDone == required)
+{
+    <div class="hint ok-text" style="margin-bottom:12px">
+        Everything the bot needs is in place. The editor now opens on CH1 again; the checklist stays here.
+    </div>
+}
+
+<ol class="checklist">
+    @foreach (var step in steps)
+    {
+        <li class="step @StateClass(step.State)">
+            <span class="mark" aria-label="@StateWord(step.State)">@Mark(step.State)</span>
+            <div class="body">
+                <div class="title">
+                    @step.Title
+                    @if (!step.Required)
+                    {
+                        <span class="badge muted" style="margin-left:6px">optional</span>
+                    }
+                </div>
+                <div class="detail">@step.Detail</div>
+            </div>
+            <button class="link-action" style="margin:0" @onclick="() => OnGo.InvokeAsync(step)">
+                <span>@EditorSearch.PageName(step.Page, step.Section) ›</span>
+            </button>
+        </li>
+    }
+</ol>
+
+@{
+    var warnings = SetupChecklist.StartupWarnings(Store.Config);
+}
+
+<div class="card" style="margin-top:14px">
+    <div class="card-head">
+        <span class="card-title">WHAT THE BOT WOULD WARN ABOUT AT STARTUP</span>
+        <span class="spacer"></span>
+        <span class="quiet" style="font-size:11.5px">@warnings.Count</span>
+    </div>
+    @if (warnings.Count == 0)
+    {
+        <div class="hint ok-text">Nothing. The bot would start without a single warning.</div>
+    }
+    else
+    {
+        <ul class="warning-list">
+            @foreach (var warning in warnings)
+            {
+                <li>@warning</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    /// <summary>Opens the page a step points at. Main does the navigating, the sidebar being its.</summary>
+    [Parameter] public EventCallback<SetupStep> OnGo { get; set; }
+
+    /// <summary>
+    /// What config.json does not say: is the service installed, which voices does this PC have,
+    /// are there backups. Gathered once when the page opens; until then the steps that need them
+    /// say what they can without them.
+    /// </summary>
+    private SetupFacts? _facts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.OnChange += Changed;
+
+        bool? serviceInstalled = null;
+        try
+        {
+            if (WindowsServiceManager.IsSupported)
+                serviceInstalled = await WindowsServiceManager.FindInstalledServiceNameAsync() != null;
+        }
+        catch
+        {
+            // Unknown is an answer the step can give; a failed query is no reason to fail the page.
+        }
+
+        IReadOnlyCollection<string>? voices = null;
+        try
+        {
+            await Store.LoadTtsVoicesAsync();
+            if (!Store.TtsVoiceStatusIsError && Store.TtsVoiceList.Count > 0)
+                voices = Store.TtsVoiceList.Select(v => v.Name).ToList();
+        }
+        catch
+        {
+            // As above: without the list, the radio step simply does not check voices.
+        }
+
+        _facts = new SetupFacts
+        {
+            ServiceInstalled = serviceInstalled,
+            InstalledVoices = voices,
+            Backups = Store.Backups().Count(b => !b.BeforeRestore),
+        };
+    }
+
+    private static string Mark(StepState state) => state switch
+    {
+        StepState.Done => "✓",
+        StepState.Problem => "!",
+        StepState.Off => "–",
+        _ => "",
+    };
+
+    private static string StateWord(StepState state) => state switch
+    {
+        StepState.Done => "done",
+        StepState.Problem => "needs attention",
+        StepState.Todo => "to do",
+        StepState.Off => "switched off",
+        _ => "optional",
+    };
+
+    private static string StateClass(StepState state) => state.ToString().ToLowerInvariant();
+
+    private void Changed() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Store.OnChange -= Changed;
+}
