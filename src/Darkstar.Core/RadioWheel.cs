@@ -37,6 +37,15 @@ public sealed class WheelSettings
     /// <summary>The wheel's diameter as a share of the DCS window's height.</summary>
     public double Size { get; set; } = 0.5;
 
+    /// <summary>
+    /// The radii the threat circle's sub-wheel offers, in nautical miles. At most six, so that
+    /// together with "Off" every one of them still has a hat direction of its own.
+    /// </summary>
+    public List<int> ThreatCircleRadii { get; set; } = new() { 20, 30, 40, 60, 80 };
+
+    /// <summary>The radii offered when the file names none that can be used.</summary>
+    internal static readonly int[] DefaultRadii = { 20, 30, 40, 60, 80 };
+
     /// <summary>Where the settings live on this PC.</summary>
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Darkstar", "wheel.json");
@@ -98,7 +107,60 @@ public sealed class WheelSettings
         if (JoystickId is < -1 or > 15) JoystickId = -1;
         if (JoystickButton is < 0 or > 32) JoystickButton = 0;
         Size = double.IsFinite(Size) ? Math.Clamp(Size, 0.25, 0.95) : 0.5;
+
+        // 1-150: the bot clamps to its own maximum anyway, but a 0 or a 4000 is a typing mistake.
+        var radii = (ThreatCircleRadii ?? new List<int>())
+            .Where(r => r is >= 1 and <= 150)
+            .Distinct()
+            .OrderBy(r => r)
+            .Take(6)
+            .ToList();
+        ThreatCircleRadii = radii.Count > 0 ? radii : DefaultRadii.ToList();
     }
+}
+
+/// <summary>Which job a slice belongs to - the wheel colours its slices and its rim by it.</summary>
+public enum WheelGroup
+{
+    Tactical,
+    Airfield,
+    Radio,
+}
+
+/// <summary>The little picture on a slice. Drawn by the window from lines and circles, no image files.</summary>
+public enum WheelIcon
+{
+    None,
+    Crosshair,
+    Shield,
+    Radar,
+    Pin,
+    ThreatCircle,
+    Tower,
+    Runway,
+    Windsock,
+    Turn,
+    Radio,
+    Off,
+}
+
+/// <summary>One slice of the wheel: a request, or a door to a sub-wheel.</summary>
+/// <param name="Label">What the slice says: "Picture", "40 NM", "Airfield".</param>
+/// <param name="Group">Which job it belongs to, for its colour.</param>
+/// <param name="Icon">Its picture; <see cref="WheelIcon.None"/> shows the label large instead.</param>
+/// <param name="ChatText">What follows "Overlord:" in the chat. Null for a door to a sub-wheel.</param>
+/// <param name="Spoken">What the pilot voice reads back on the frequency, for the preview in the hub.</param>
+/// <param name="Children">The sub-wheel this slice opens, if it is a door.</param>
+public sealed record WheelItem(
+    string Label,
+    WheelGroup Group,
+    WheelIcon Icon,
+    string? ChatText = null,
+    string? Spoken = null,
+    IReadOnlyList<WheelItem>? Children = null)
+{
+    /// <summary>Whether picking this slice opens another wheel instead of sending.</summary>
+    public bool OpensSubWheel => Children is { Count: > 0 };
 }
 
 /// <summary>
@@ -109,20 +171,60 @@ public sealed class WheelSettings
 /// the chat: it puts a line like <c>» Overlord: Picture</c> into a folder, the client hook
 /// <c>dcs\Scripts\Hooks\Darkstar-Wheel.lua</c> sends it as chat, and from there it is a chat
 /// request like any other (<see cref="ChatBridge"/>).
+///
+/// Seven slices at the top, so that every one has a direction on an eight-way hat: the four
+/// tactical calls, the threat circle and the airfield calls as two sub-wheels, and the radio check.
+/// A sub-wheel never has more than seven slices either, for the same reason.
 /// </summary>
 public static class RadioWheel
 {
+    /// <summary>The most slices one wheel may have and still give each a hat direction.</summary>
+    public const int MaxSlices = 7;
+
     /// <summary>
-    /// The slices, clockwise from the top. Exactly the calls the F10 menu offers, in the
-    /// catalogue's order - and always all of them, in the same place: a wheel is used by direction,
-    /// without looking, and a slice that moves depending on the situation is one the thumb misses.
+    /// The top level, clockwise from the top. Always the same slices in the same places - a wheel
+    /// is used by direction, without looking, and a slice that moves depending on the situation is
+    /// one the thumb misses.
     /// </summary>
-    public static IReadOnlyList<CallDefinition> Slices { get; } =
-        CallCatalog.All.Where(CallCatalog.MenuOffers).ToList();
+    public static IReadOnlyList<WheelItem> Build(WheelSettings settings)
+    {
+        WheelItem Call(string id, WheelGroup group, WheelIcon icon)
+        {
+            var call = CallCatalog.ById(id)
+                       ?? throw new InvalidOperationException($"The call catalogue has no \"{id}\".");
+            return new WheelItem(call.MenuLabel, group, icon, call.MenuLabel, call.EchoPhrase);
+        }
+
+        var radii = (settings.ThreatCircleRadii is { Count: > 0 } configured ? configured : WheelSettings.DefaultRadii.ToList())
+            .Take(MaxSlices - 1)
+            .Select(r => new WheelItem(
+                $"{r} NM", WheelGroup.Tactical, WheelIcon.None,
+                $"Threat circle {r}", $"threat circle {r} miles"))
+            .Append(new WheelItem("Off", WheelGroup.Tactical, WheelIcon.Off, "Cancel threat circle", "cancel threat circle"))
+            .ToList();
+
+        var airfield = new List<WheelItem>
+        {
+            Call("runway_in_use", WheelGroup.Airfield, WheelIcon.Runway),
+            Call("atis", WheelGroup.Airfield, WheelIcon.Windsock),
+            Call("divert", WheelGroup.Airfield, WheelIcon.Turn),
+        };
+
+        return new List<WheelItem>
+        {
+            Call("bogey_dope", WheelGroup.Tactical, WheelIcon.Crosshair),
+            Call("threat_check", WheelGroup.Tactical, WheelIcon.Shield),
+            Call("picture", WheelGroup.Tactical, WheelIcon.Radar),
+            Call("alpha_check", WheelGroup.Tactical, WheelIcon.Pin),
+            new("Threat circle", WheelGroup.Tactical, WheelIcon.ThreatCircle, Children: radii),
+            new("Airfield", WheelGroup.Airfield, WheelIcon.Tower, Children: airfield),
+            Call("radio_check", WheelGroup.Radio, WheelIcon.Radio),
+        };
+    }
 
     /// <summary>The line typed into the chat: <c>» Overlord: Picture</c>.</summary>
-    public static string ChatLine(WheelSettings settings, CallDefinition call) =>
-        $"{settings.Marker} {settings.Callsign}: {call.MenuLabel}";
+    public static string ChatLine(WheelSettings settings, WheelItem item) =>
+        $"{settings.Marker} {settings.Callsign}: {item.ChatText}";
 
     /// <summary>
     /// Which slice a hat direction points at, for a wheel of <paramref name="count"/> slices with the

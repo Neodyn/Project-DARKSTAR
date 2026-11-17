@@ -321,6 +321,11 @@ internal static class ChatBridgeTests
             && handler.Contains("rawPlayerName: request.Player", StringComparison.Ordinal)
             && handler.Contains("requesterCoalition: request.Side", StringComparison.Ordinal));
 
+        Check("a threat circle from the chat goes through the same service as the spoken one",
+            handler.Contains("threatCircles.StartAsync(request.Player", StringComparison.Ordinal)
+            && handler.Contains("threatCircles.Cancel(request.Player", StringComparison.Ordinal)
+            && handler.Contains("intel.Classify(request.Text", StringComparison.Ordinal));
+
         Check("the inbox is emptied by the bot's polling loop", bot.Contains("ChatBridge.Collect(bridgeFolder", StringComparison.Ordinal));
         Check("and the heartbeat is written in it", bot.Contains("ChatBridge.WriteCallsigns(bridgeFolder", StringComparison.Ordinal));
         Check("into the folder the hook writes to, not simply the one that was typed",

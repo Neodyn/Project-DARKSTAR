@@ -1267,6 +1267,8 @@ It needs one small file **on the server**, and nothing on any pilot's machine:
 
 **What a pilot types:** a marker — `@`, `>>` or `»` — then one of the bot's callsigns (the global one or any radio's own), then the name of an F10 entry: *picture*, *bogey dope*, *threat check*, *alpha check*, *runway in use*, *ATIS*, *divert*, *radio check*. Case and punctuation do not matter, so `@overlord bogey dope` and `>> Overlord: Bogey dope` are the same request. Anything else after the callsign gets the `FallbackResponse` over the radio, so the pilot at least knows it arrived.
 
+**Threat circle by chat:** `@Overlord threat circle 40` asks for a threat circle of 40 NM, `@Overlord cancel threat circle` ends it. It works like the spoken request: the bot answers on the first radio that gives tactical calls, and the pilot voice reads the request back there first.
+
 **Everybody else sees nothing; the pilot who typed it sees their own line.** The hook hides the message from all other players, but DCS shows a player's own chat on their screen before the server is asked, and no hook can take that back. That is why the request is meant to be readable — its author is going to read it. A line that does *not* start with a marker and a callsign is never touched.
 
 **When the bot is not running, nothing is hidden.** The bot rewrites `callsigns.txt` in that folder every ten seconds; once it is more than a minute old, the hook lets every message through. A request nobody will answer is better shown than swallowed. The same file is how the hook knows which callsigns count, so renaming a radio needs no change to the hook.
@@ -1291,11 +1293,12 @@ DCS has to run **windowed or borderless** (the default). An exclusive full-scree
 | Input | What it does |
 |---|---|
 | Wheel key or wheel button | Opens the wheel. Pressed again: sends the highlighted slice, or closes the wheel when none is highlighted. |
-| `1`–`8` (top row or numpad) | Sends that slice at once. |
-| Hat, or ← / → | Highlights a slice — the hat by direction, slice 1 at the top. `Enter` or the wheel button sends it. |
+| `1`–`7` (top row or numpad) | Picks that slice at once: sends it, or opens its sub-wheel. |
+| Hat, or ← / → | Highlights a slice — the hat by direction, slice 1 at the top. `Enter` or the wheel button picks it. In a sub-wheel the hat has to return to the centre first, so the push that opened it does not pick as well. |
+| `Backspace`, or the wheel button with nothing highlighted in a sub-wheel | Back to the top level. |
 | `Esc` | Closes the wheel. |
 
-The eight slices are the F10 menu's calls, always in the same place so a thumb finds them without looking: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Runway in use*, *ATIS*, *Divert*, *Radio check*. Keys only reach the wheel while DCS is in front, and only while the wheel is open — everywhere else they type normally.
+Seven slices, always in the same place so a thumb finds them without looking, each with a hat direction of its own: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Threat circle ▸*, *Airfield ▸*, *Radio check*. The two with ▸ open a sub-wheel: *Threat circle* offers the radii from `ThreatCircleRadii` (20, 30, 40, 60, 80 NM) and *Off*; *Airfield* offers *Runway in use*, *ATIS* and *Divert*. Tactical slices are amber, airfield slices blue, the radio check grey; the hub shows the highlighted line as it will be typed and what the pilot voice will say. Keys only reach the wheel while DCS is in front and the wheel is open — everywhere else they type normally.
 
 **What the pilot sees:** the request in their own chat, as `» Overlord: Picture` — nobody else sees it, as in 8.7. When a pick was not sent, a notification from the tray icon says so within three seconds: DCS has to be in a multiplayer mission, **connected to a server as a client**, with the hook installed. A pilot hosting the mission is the server and cannot use the wheel that way.
 
@@ -1307,6 +1310,7 @@ The eight slices are the F10 menu's calls, always in the same place so a thumb f
 | `JoystickId`, `JoystickButton` | none | The wheel button. Set by *Learn…*. |
 | `UseHat` | `true` | Whether that joystick's first hat picks a slice. A hat DCS also uses moves in DCS as well. |
 | `Size` | `0.5` | The wheel's size as a share of the DCS window's height. |
+| `ThreatCircleRadii` | `[20, 30, 40, 60, 80]` | The radii the threat circle's sub-wheel offers, in NM. At most six, each 1–150; anything else is dropped, an empty list gives the defaults. |
 
 The file is `%LOCALAPPDATA%\Darkstar\wheel.json` on the pilot's PC. The joystick is read through Windows' own game controller interface, which sees the first 32 buttons and the first hat of a device.
 

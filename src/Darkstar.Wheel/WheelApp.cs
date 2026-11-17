@@ -9,11 +9,11 @@ namespace Darkstar.Wheel;
 /// client hook.
 ///
 /// Driving it:
-/// - the wheel key or the wheel button opens it; pressed again it sends the highlighted slice, or
-///   closes the wheel when nothing is highlighted;
-/// - 1-8 (top row or numpad) send that slice at once;
-/// - the hat, or the left and right arrow keys, highlight a slice; Enter sends it;
-/// - Esc closes.
+/// - the wheel key or the wheel button opens it; pressed again it takes the highlighted slice - sends
+///   it, or opens its sub-wheel - and with nothing highlighted goes back a level, or closes at the top;
+/// - 1-7 (top row or numpad) take that slice at once;
+/// - the hat, or the left and right arrow keys, highlight a slice; Enter takes it;
+/// - Backspace goes back from a sub-wheel, Esc closes.
 /// </summary>
 internal sealed class WheelApp : ApplicationContext
 {
@@ -24,7 +24,9 @@ internal sealed class WheelApp : ApplicationContext
 
     private readonly WheelSettings _settings;
     private readonly string _settingsPath;
-    private readonly IReadOnlyList<CallDefinition> _slices = RadioWheel.Slices;
+    private readonly IReadOnlyList<WheelItem> _top;
+    private IReadOnlyList<WheelItem> _level;
+    private bool _inSubWheel;
     private readonly WheelWindow _wheel;
     private readonly NotifyIcon _tray;
     private readonly ToolStripMenuItem _bindingItem;
@@ -36,6 +38,7 @@ internal sealed class WheelApp : ApplicationContext
     private readonly HashSet<int> _swallowed = new();
 
     private bool _buttonWasDown;
+    private bool _hatWasCentred = true;
     private DateTime _closeAt = DateTime.MaxValue;
     private readonly List<(string Path, string Label, DateTime Written)> _pending = new();
 
@@ -50,7 +53,9 @@ internal sealed class WheelApp : ApplicationContext
     {
         _settings = settings;
         _settingsPath = settingsPath;
-        _wheel = new WheelWindow(_slices);
+        _top = RadioWheel.Build(settings);
+        _level = _top;
+        _wheel = new WheelWindow();
 
         _bindingItem = new ToolStripMenuItem { Enabled = false };
         var menu = new ContextMenuStrip();
@@ -131,9 +136,10 @@ internal sealed class WheelApp : ApplicationContext
 
         if (!_wheel.Visible) return false;
 
-        if (vk is >= 0x31 and <= 0x39) { Send(vk - 0x31); return true; }    // 1-9 on the top row
-        if (vk is >= 0x61 and <= 0x69) { Send(vk - 0x61); return true; }    // numpad 1-9
-        if (vk == 0x0D) { if (_wheel.Highlighted is { } marked) Send(marked); return true; }   // Enter
+        if (vk is >= 0x31 and <= 0x39) { Take(vk - 0x31); return true; }    // 1-9 on the top row
+        if (vk is >= 0x61 and <= 0x69) { Take(vk - 0x61); return true; }    // numpad 1-9
+        if (vk == 0x0D) { if (_wheel.Highlighted is { } marked) Take(marked); return true; }   // Enter
+        if (vk == 0x08) { Back(); return true; }                            // Backspace
         if (vk == 0x1B) { CloseWheel(); return true; }                      // Esc
         if (vk == 0x25) { Step(-1); return true; }                          // left arrow
         if (vk == 0x27) { Step(+1); return true; }                          // right arrow
@@ -148,37 +154,66 @@ internal sealed class WheelApp : ApplicationContext
         if (!_wheel.Visible)
         {
             _closeAt = DateTime.MaxValue;
-            _wheel.Open(DcsArea(), _settings.Size, _settings.Callsign,
-                $"1-{_slices.Count} send · Enter · Esc");
+            _level = _top;
+            _inSubWheel = false;
+            _wheel.Open(DcsArea(), _settings.Size, _settings, _top);
             return;
         }
 
-        if (_wheel.Highlighted is { } marked) Send(marked);
-        else CloseWheel();
+        if (_wheel.Highlighted is { } marked) Take(marked);
+        else Back();
+    }
+
+    /// <summary>Back to the top from a sub-wheel; at the top, closes.</summary>
+    private void Back()
+    {
+        if (_closeAt != DateTime.MaxValue) return;
+
+        if (_inSubWheel)
+        {
+            _level = _top;
+            _inSubWheel = false;
+            _wheel.ShowLevel(_top, null);
+        }
+        else
+        {
+            CloseWheel();
+        }
     }
 
     private void Step(int direction)
     {
-        var count = _slices.Count;
+        var count = _level.Count;
         var next = _wheel.Highlighted is { } current ? (current + direction + count) % count : 0;
         _wheel.Highlight(next);
     }
 
-    private void Send(int slice)
+    /// <summary>Takes a slice: opens its sub-wheel, or sends it.</summary>
+    private void Take(int slice)
     {
-        if (slice < 0 || slice >= _slices.Count) return;
+        if (slice < 0 || slice >= _level.Count) return;
         if (_closeAt != DateTime.MaxValue) return;   // already sent, the wheel is on its way out
 
-        var call = _slices[slice];
-        var line = RadioWheel.ChatLine(_settings, call);
+        var item = _level[slice];
+        if (item.OpensSubWheel)
+        {
+            _level = item.Children!;
+            _inSubWheel = true;
+            _hatWasCentred = false;   // the hat still held from the top level must not pick here at once
+            _wheel.ShowLevel(_level, item.Label);
+            return;
+        }
+
+        var line = RadioWheel.ChatLine(_settings, item);
+        var what = _inSubWheel ? $"{_wheel.Title} {item.Label}" : item.Label;
 
         try
         {
             var path = RadioWheel.Write(RadioWheel.OutboxFolder, line);
-            _pending.Add((path, call.MenuLabel, DateTime.UtcNow));
+            _pending.Add((path, what, DateTime.UtcNow));
             _wheel.Highlight(slice);
-            _wheel.ShowStatus($"Sent: {call.MenuLabel}");
-            _closeAt = DateTime.UtcNow.AddMilliseconds(600);
+            _wheel.ShowStatus($"Sent: {what}");
+            _closeAt = DateTime.UtcNow.AddMilliseconds(700);
         }
         catch (Exception ex)
         {
@@ -224,8 +259,13 @@ internal sealed class WheelApp : ApplicationContext
         _buttonWasDown = down;
 
         // A released hat keeps the highlight, so the slice can be confirmed with the button.
-        if (_wheel.Visible && _settings.UseHat && _closeAt == DateTime.MaxValue &&
-            RadioWheel.SliceForHat(state.Pov, _slices.Count) is { } slice && slice != _wheel.Highlighted)
+        // After a sub-wheel opens, the hat has to come back to the centre once before it picks
+        // there: the thumb that pointed at "Threat circle" is still pointing when the radii appear.
+        var hatSlice = RadioWheel.SliceForHat(state.Pov, _level.Count);
+        if (hatSlice == null) _hatWasCentred = true;
+
+        if (_wheel.Visible && _settings.UseHat && _closeAt == DateTime.MaxValue && _hatWasCentred &&
+            hatSlice is { } slice && slice != _wheel.Highlighted)
             _wheel.Highlight(slice);
     }
 

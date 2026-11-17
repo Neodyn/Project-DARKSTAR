@@ -13,35 +13,83 @@ internal static class RadioWheelTests
     {
         Section("The slices");
 
-        var slices = RadioWheel.Slices;
-        Eq("exactly the F10 menu's calls, in the catalogue's order",
-            string.Join(", ", slices.Select(c => c.Id)),
-            "bogey_dope, threat_check, picture, alpha_check, runway_in_use, atis, divert, radio_check");
-        Check("eight of them, so 1-8 reach every slice and a hat has a direction for each", slices.Count == 8,
-            $"{slices.Count}");
+        var settings = new WheelSettings();
+        var top = RadioWheel.Build(settings);
+
+        Eq("the top level, clockwise from the top",
+            string.Join(", ", top.Select(i => i.Label)),
+            "Bogey dope, Threat check, Picture, Alpha check, Threat circle, Airfield, Radio check");
+        Check("no level has more slices than an eight-way hat has directions, minus one to spare",
+            top.Count <= RadioWheel.MaxSlices && top.All(i => (i.Children?.Count ?? 0) <= RadioWheel.MaxSlices));
+
+        var circle = top.Single(i => i.Label == "Threat circle");
+        Eq("the threat circle opens its distances, then Off",
+            string.Join(", ", circle.Children!.Select(i => i.Label)), "20 NM, 30 NM, 40 NM, 60 NM, 80 NM, Off");
+        var airfield = top.Single(i => i.Label == "Airfield");
+        Eq("the airfield calls sit one level down",
+            string.Join(", ", airfield.Children!.Select(i => i.Label)), "Runway in use, ATIS, Divert");
+        Check("a door to a sub-wheel sends nothing itself", circle.ChatText == null && airfield.ChatText == null);
+
+        // Every slice must be reachable by the hat on every level - the reason the airfield calls
+        // moved into a sub-wheel when the threat circle arrived.
+        foreach (var level in new[] { ("top", top), ("threat circle", circle.Children!), ("airfield", airfield.Children!) })
+        {
+            var reached = Enumerable.Range(0, 8)
+                .Select(d => RadioWheel.SliceForHat(d * 4500, level.Item2.Count))
+                .Where(x => x != null)
+                .Select(x => x!.Value)
+                .Distinct()
+                .Count();
+            Check($"every slice of the {level.Item1} level has a hat direction", reached == level.Item2.Count,
+                $"{reached} of {level.Item2.Count}");
+        }
 
         Section("What a pick types");
 
-        var settings = new WheelSettings();
-        var picture = slices.First(c => c.Kind == CallKind.Picture);
+        var picture = top.Single(i => i.Label == "Picture");
         Eq("marker, callsign, colon, the menu label", RadioWheel.ChatLine(settings, picture), "» Overlord: Picture");
+        Eq("a distance types the threat circle with its radius",
+            RadioWheel.ChatLine(settings, circle.Children![2]), "» Overlord: Threat circle 40");
 
-        // Every slice must come out of the other end as the call it was: the server hook strips the
-        // marker and the callsign, and ChatBridge matches what is left.
-        var lost = slices
-            .Where(call =>
+        // Every leaf must come out of the other end as what it was: the server hook strips the
+        // marker and the callsign, ChatBridge matches a menu call, and the threat circle goes
+        // through the same classifier and radius parser as the spoken call.
+        var intel = new DcsIntelService(new AppConfig());
+        var leaves = top.SelectMany(i => i.OpensSubWheel ? i.Children! : new[] { i }).ToList();
+        Check("there are eight calls and six circle choices to check", leaves.Count == 14, $"{leaves.Count}");
+
+        foreach (var leaf in leaves)
+        {
+            var line = RadioWheel.ChatLine(settings, leaf);
+            var text = line[(line.IndexOf(':') + 1)..].Trim();
+            var call = ChatBridge.MatchCall(text);
+
+            if (leaf.Label.EndsWith(" NM", StringComparison.Ordinal))
             {
-                var line = RadioWheel.ChatLine(settings, call);
-                var text = line[(line.IndexOf(':') + 1)..];
-                return ChatBridge.MatchCall(text)?.Id != call.Id;
-            })
-            .Select(call => call.Id)
-            .ToList();
-        Check("every slice's line is understood as that call by the bot", lost.Count == 0, string.Join(", ", lost));
+                var radius = int.Parse(leaf.Label[..^3]);
+                Check($"\"{text}\" starts a circle of {radius} NM",
+                    call == null && intel.Classify(text) == IntelRequestKind.ThreatCircleStart
+                    && Math.Abs(intel.ParseRequestedRadiusNm(text) - radius) < 0.01,
+                    $"{intel.Classify(text)}, {intel.ParseRequestedRadiusNm(text)}");
+            }
+            else if (leaf.Label == "Off")
+            {
+                Check($"\"{text}\" cancels the circle",
+                    call == null && intel.Classify(text) == IntelRequestKind.ThreatCircleCancel, $"{intel.Classify(text)}");
+            }
+            else
+            {
+                Check($"\"{text}\" is understood as {leaf.Label}", call?.MenuLabel == leaf.Label, call?.Id ?? "no call");
+            }
+        }
 
         Check("the marker is one the server hook accepts",
             ReadSource("dcs/Scripts/Hooks/" + ChatBridge.HookFileName).Contains("'\\194\\187'", StringComparison.Ordinal)
-            && settings.Marker == "»");
+            && settings.Marker == "\u00bb");
+
+        Check("the radii come from the settings",
+            string.Join(",", RadioWheel.Build(new WheelSettings { ThreatCircleRadii = new() { 10, 25 } })
+                .Single(i => i.Label == "Threat circle").Children!.Select(i => i.Label)) == "10 NM,25 NM,Off");
 
         Section("The hat");
 
@@ -117,11 +165,12 @@ internal static class RadioWheelTests
             Check("a broken file still gives a working wheel, and says why",
                 problem != null && broken.Callsign == "Overlord", problem ?? "no problem reported");
 
-            File.WriteAllText(path, "{ \"Callsign\": \"  \", \"Marker\": \"\", \"JoystickId\": 40, \"JoystickButton\": 99, \"Size\": 7 }");
+            File.WriteAllText(path, "{ \"Callsign\": \"  \", \"Marker\": \"\", \"JoystickId\": 40, \"JoystickButton\": 99, \"Size\": 7, \"ThreatCircleRadii\": [0, 500, 40, 40] }");
             var repaired = WheelSettings.Load(path, out _);
             Check("hand-edited nonsense is repaired rather than used",
                 repaired.Callsign == "Overlord" && repaired.Marker == "»" && repaired.JoystickId == -1
-                && repaired.JoystickButton == 0 && repaired.Size <= 0.95,
+                && repaired.JoystickButton == 0 && repaired.Size <= 0.95
+                && string.Join(",", repaired.ThreatCircleRadii) == "40",
                 $"{repaired.Callsign} {repaired.Marker} {repaired.JoystickId} {repaired.JoystickButton} {repaired.Size}");
         }
         finally
@@ -146,6 +195,9 @@ internal static class RadioWheelTests
             window.Contains("WS_EX_NOACTIVATE", StringComparison.Ordinal) && window.Contains("WS_EX_TRANSPARENT", StringComparison.Ordinal)
             && window.Contains("ShowWithoutActivation => true", StringComparison.Ordinal));
         Check("slice 1 is drawn at the top, where the hat's forward points",
-            window.Contains("i * sweep - 90", StringComparison.Ordinal));
+            window.Contains("var mid = i * sweep - 90;", StringComparison.Ordinal));
+        Check("a sub-wheel waits for the hat to come back to the centre before it picks",
+            app.Contains("_hatWasCentred = false;", StringComparison.Ordinal)
+            && app.Contains("if (hatSlice == null) _hatWasCentred = true;", StringComparison.Ordinal));
     }
 }

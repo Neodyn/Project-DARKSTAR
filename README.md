@@ -41,6 +41,8 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 | 💬 **Fixed phrases or free answers** | Known question/answer pairs served directly; anything else goes to Google Gemini, or is refused — your choice. |
 | 🔒 **Transcribe in the cloud or on the machine** | Google Gemini by default; `SpeechEngine = "Whisper"` runs it locally instead — no key, no quota, no player's voice leaving the PC. |
 | 🎯 **Realistic sensor gating** | Report only what a configured AI AWACS actually detects, or everything in the mission. |
+| ⌨️ **Requests from the chat** | `@Overlord picture` typed into the DCS chat gets the same answer as the radio call. A small server hook hides the line from everybody else — the way in for a pilot whose microphone or accent isn't working. |
+| 🎡 **Radio wheel** | A small program for the pilot's PC draws the calls as a wheel over DCS: open it with a key or a HOTAS button, pick with the hat or the number keys — threat circle radius and airfield calls in their own sub-wheel — and the request goes out through the chat. Click-through, never takes the focus. |
 | 🛡️ **Coalition aware** | Can ignore the opposing side entirely, the way a real radio net would. |
 | 🖥️ **Config editor** | Desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer and one-click Windows Service management. |
 | 🪶 **A handout for your pilots** | Three kneeboard pages, English and German, with every call in the words to say it, what it does and what the answer sounds like — [PNGs for `Saved Games\DCS\Kneeboard\` and a PDF to print](docs/kneeboard/README.md). |

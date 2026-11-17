@@ -1623,6 +1623,61 @@ public sealed class BotService : BackgroundService
                 .ToList();
 
             var matched = ChatBridge.MatchCall(request.Text);
+
+            // The threat circle is not an F10 entry - it carries a radius, and it is kept per pilot
+            // under their name, which a click does not have. The chat has both: "threat circle 40"
+            // names the radius, and the player's name is in the request. So it is answered here,
+            // with the same classifier and the same service as the spoken call.
+            if (matched == null && intel != null && threatCircles != null)
+            {
+                var circleKind = intel.Classify(request.Text, out var circleTrigger);
+                if (circleKind is IntelRequestKind.ThreatCircleStart or IntelRequestKind.ThreatCircleCancel)
+                {
+                    var session = named.FirstOrDefault(s => s.AnswersTactical)
+                                  ?? sessions.Values.FirstOrDefault(s => s.AnswersTactical);
+                    if (session == null)
+                    {
+                        Logger.Log($"[Chat] {label} - no radio answers tactical requests, so no threat circle.");
+                        return;
+                    }
+
+                    var pilot = PilotNames.DisplayCallsign(request.Player, config.PlayerNameCallsignSeparator);
+                    var side = request.Side is 1 or 2 ? request.Side : config.Coalition;
+
+                    string circleReply;
+                    if (circleKind == IntelRequestKind.ThreatCircleStart)
+                    {
+                        circleReply = await threatCircles.StartAsync(request.Player, pilot, session.FrequencyHz, side,
+                            request.Text, token);
+
+                        // Same as on the radio: asking for a standing watch puts the pilot on station.
+                        roster.MarkOnStation(request.Player);
+                    }
+                    else
+                    {
+                        circleReply = threatCircles.Cancel(request.Player, session.FrequencyHz);
+                    }
+
+                    Logger.Log($"[Chat] {label} -> {circleKind} (\"{circleTrigger}\") on " +
+                               $"{session.FrequencyHz / 1_000_000:0.000} MHz: {circleReply}");
+
+                    // The pilot's half first, as after a menu click - the frequency did not hear
+                    // the request either.
+                    if (config.F10EchoEnabled && session.EchoVoice != null)
+                    {
+                        var echo = PilotEcho.Build(session.Callsign, pilot, request.Text);
+                        if (echo.Length > 0)
+                            await TransmitAsync(session, ForSpeech(echo), token, voiceOverride: session.EchoVoice);
+                    }
+
+                    var circleOpening = string.IsNullOrWhiteSpace(pilot)
+                        ? $"This is {ForSpeech(session.Callsign)}..."
+                        : $"{ForSpeech(pilot)}, this is {ForSpeech(session.Callsign)}...";
+                    await TransmitAsync(session, $"{circleOpening} {ForSpeech(circleReply)}", token);
+                    return;
+                }
+            }
+
             if (matched == null)
             {
                 // Silence would leave the pilot wondering whether anything arrived at all; the

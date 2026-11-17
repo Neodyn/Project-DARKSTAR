@@ -1270,6 +1270,8 @@ Nötig ist eine kleine Datei **auf dem Server**, auf den Rechnern der Piloten ni
 
 **Was ein Pilot tippt:** ein Zeichen — `@`, `>>` oder `»` —, dann eines der Rufzeichen des Bots (das globale oder das eigene eines Funkgeräts), dann den Namen eines F10-Eintrags: *picture*, *bogey dope*, *threat check*, *alpha check*, *runway in use*, *ATIS*, *divert*, *radio check*. Groß- und Kleinschreibung und Satzzeichen spielen keine Rolle, `@overlord bogey dope` und `>> Overlord: Bogey dope` sind dieselbe Anfrage. Alles andere nach dem Rufzeichen wird über Funk mit der `FallbackResponse` beantwortet, damit der Pilot wenigstens weiß, dass es angekommen ist.
 
+**Threat Circle per Chat:** `@Overlord threat circle 40` fordert einen Threat Circle mit 40 NM an, `@Overlord cancel threat circle` beendet ihn. Das wirkt wie die gesprochene Anfrage: Der Bot antwortet auf dem ersten Funkgerät, das taktische Calls beantwortet, und die Pilotenstimme liest die Anfrage dort vorher vor.
+
 **Alle anderen sehen nichts, der Absender sieht seine eigene Zeile.** Der Hook versteckt die Nachricht vor allen anderen Spielern. DCS zeigt den eigenen Chat aber auf dem eigenen Bildschirm an, bevor der Server gefragt wird, und das kann kein Hook zurücknehmen. Deshalb ist die Anfrage lesbar gedacht — ihr Absender liest sie. Eine Zeile, die *nicht* mit Zeichen und Rufzeichen beginnt, bleibt immer unangetastet.
 
 **Läuft der Bot nicht, wird nichts versteckt.** Der Bot schreibt `callsigns.txt` in diesem Ordner alle zehn Sekunden neu; ist die Datei älter als eine Minute, lässt der Hook jede Nachricht durch. Eine Anfrage, die niemand beantwortet, ist besser sichtbar als verschluckt. Über dieselbe Datei weiß der Hook, welche Rufzeichen zählen — ein umbenanntes Funkgerät braucht also keine Änderung am Hook.
@@ -1294,11 +1296,12 @@ DCS muss **im Fenster oder randlos** laufen (Standard). Ein exklusives Vollbild-
 | Eingabe | Was sie tut |
 |---|---|
 | Rad-Taste oder Rad-Knopf | Öffnet das Rad. Nochmal gedrückt: sendet das markierte Segment oder schließt das Rad, wenn keines markiert ist. |
-| `1`–`8` (Zahlenreihe oder Ziffernblock) | Sendet dieses Segment sofort. |
-| Coolie-Hat oder ← / → | Markiert ein Segment — der Hat nach Richtung, Segment 1 oben. `Enter` oder der Rad-Knopf sendet es. |
+| `1`–`7` (Zahlenreihe oder Ziffernblock) | Wählt dieses Segment sofort: sendet es oder öffnet sein Unterrad. |
+| Coolie-Hat oder ← / → | Markiert ein Segment — der Hat nach Richtung, Segment 1 oben. `Enter` oder der Rad-Knopf wählt es. Im Unterrad muss der Hat erst in die Mitte zurück, damit der Druck, der es geöffnet hat, nicht gleich mitwählt. |
+| `Backspace` oder der Rad-Knopf ohne Markierung im Unterrad | Zurück zur obersten Ebene. |
 | `Esc` | Schließt das Rad. |
 
-Die acht Segmente sind die Calls des F10-Menüs, immer an derselben Stelle, damit der Daumen sie ohne Hinsehen findet: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Runway in use*, *ATIS*, *Divert*, *Radio check*. Tasten erreichen das Rad nur, solange DCS im Vordergrund ist, und nur bei offenem Rad — überall sonst tippen sie ganz normal.
+Sieben Segmente, immer an derselben Stelle, damit der Daumen sie ohne Hinsehen findet, jedes mit eigener Hat-Richtung: *Bogey dope*, *Threat check*, *Picture*, *Alpha check*, *Threat circle ▸*, *Airfield ▸*, *Radio check*. Die beiden mit ▸ öffnen ein Unterrad: *Threat circle* bietet die Radien aus `ThreatCircleRadii` (20, 30, 40, 60, 80 NM) und *Off*; *Airfield* bietet *Runway in use*, *ATIS* und *Divert*. Taktische Segmente sind bernsteinfarben, Platz-Segmente blau, der Radio Check grau; die Mitte zeigt die markierte Zeile, wie sie getippt wird, und was die Pilotenstimme sagt. Tasten erreichen das Rad nur bei DCS im Vordergrund und offenem Rad — sonst tippen sie normal.
 
 **Was der Pilot sieht:** die Anfrage im eigenen Chat, als `» Overlord: Picture` — sonst sieht sie niemand, wie in 8.7. Wurde eine Auswahl nicht gesendet, meldet das Symbol im Infobereich das innerhalb von drei Sekunden: DCS muss in einer Mehrspielermission sein, **als Client mit einem Server verbunden**, und der Hook muss installiert sein. Wer die Mission selbst hostet, ist der Server und kann das Rad so nicht nutzen.
 
@@ -1310,6 +1313,7 @@ Die acht Segmente sind die Calls des F10-Menüs, immer an derselben Stelle, dami
 | `JoystickId`, `JoystickButton` | keiner | Der Rad-Knopf. Wird von *Learn…* gesetzt. |
 | `UseHat` | `true` | Ob der erste Hat dieses Joysticks ein Segment wählt. Ein Hat, den auch DCS benutzt, bewegt dort ebenfalls etwas. |
 | `Size` | `0.5` | Größe des Rads als Anteil der Höhe des DCS-Fensters. |
+| `ThreatCircleRadii` | `[20, 30, 40, 60, 80]` | Die Radien im Unterrad des Threat Circle, in NM. Höchstens sechs, je 1–150; alles andere fällt weg, eine leere Liste ergibt die Vorgaben. |
 
 Die Datei liegt auf dem PC des Piloten unter `%LOCALAPPDATA%\Darkstar\wheel.json`. Der Joystick wird über die Gamecontroller-Schnittstelle von Windows gelesen; sie sieht die ersten 32 Knöpfe und den ersten Hat eines Geräts.
 

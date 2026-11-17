@@ -41,6 +41,8 @@ Nachschlagewerke: [Konfigurationsfelder](docs/configuration.md) · [Konfiguratio
 | 💬 **Feste Phrasen oder freie Antworten** | Bekannte Frage-/Antwortpaare werden direkt bedient; alles andere geht an Google Gemini oder wird abgelehnt — deine Entscheidung. |
 | 🔒 **Transkription in der Cloud oder auf der Maschine** | Standardmäßig Google Gemini; mit `SpeechEngine = "Whisper"` lokal — kein Key, kein Kontingent, keine Spielerstimme verlässt den PC. |
 | 🎯 **Realistische Sensorlogik** | Nur melden, was eine konfigurierte KI-AWACS tatsächlich erfasst — oder alles, was in der Mission fliegt. |
+| ⌨️ **Anfragen über den Chat** | `@Overlord picture` in den DCS-Chat getippt bekommt dieselbe Antwort wie der Funkspruch. Ein kleiner Server-Hook versteckt die Zeile vor allen anderen — der Weg für einen Piloten, bei dem Mikrofon oder Aussprache nicht mitspielen. |
+| 🎡 **Funkrad** | Ein kleines Programm für den PC des Piloten zeigt die Calls als Rad über DCS: mit einer Taste oder einem HOTAS-Knopf öffnen, mit dem Hat oder den Zifferntasten wählen — Radius des Threat Circle und Platz-Calls im eigenen Unterrad —, und die Anfrage geht über den Chat raus. Klickt durch und nimmt nie den Fokus. |
 | 🛡️ **Koalitionsbewusst** | Kann die Gegenseite vollständig ignorieren, so wie es ein echter Funkkreis täte. |
 | 🖥️ **Konfigurationseditor** | Desktop-GUI für jede Einstellung, mit DCS-gRPC-Verbindungstest, nur lesendem Missionsdaten-Explorer und Dienstverwaltung per Knopfdruck. |
 | 🪶 **Handout für deine Piloten** | Drei Kneeboard-Seiten, deutsch und englisch, mit jedem Call im Wortlaut, was er tut und wie die Antwort klingt — [PNGs für `Saved Games\DCS\Kneeboard\` und ein PDF zum Drucken](docs/kneeboard/README.de.md). |
