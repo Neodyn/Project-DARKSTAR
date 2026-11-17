@@ -8,6 +8,8 @@ D.A.R.K.S.T.A.R. reads its settings from three JSON files next to the executable
 - **`phrases.json`** — fixed question/answer pairs
 - **`vocabulary.json`** — transcription hint words
 
+One more file belongs to the project but not to the bot: **`wheel.json`**, the radio wheel's settings on each **pilot's** PC — see [the end of this document](#wheeljson-the-radio-wheel-on-the-pilots-pc).
+
 All three are validated on load (out-of-range or missing values produce a `WARNING` in the log, but never block startup) and are always backed up to a `Backup/` subfolder before any automatic edit. When new fields are added in an update, existing files are merged with the new defaults automatically — your existing values are never overwritten, and you'll see a log line listing what was added.
 
 The GUI editor (`Darkstar.Gui`) provides a graphical front-end for all of this and is generally the easier way to change these files.
@@ -492,6 +494,24 @@ A plain list of terms passed to Gemini as a transcription hint alongside the aud
 ```json
 ["Viggen", "Overlord", "Bullseye", "Texaco", "Enfield"]
 ```
+
+## `wheel.json` (the radio wheel, on the pilot's PC)
+
+Not read by the bot. The radio wheel keeps its own settings in `%LOCALAPPDATA%\Darkstar\wheel.json` on the PC of the pilot using it; it is created at the first start and written whenever a key or button is learnt from the tray menu. Uninstalling the wheel keeps it. Field names are case-insensitive, because the file is meant to be edited by hand; anything unusable is repaired to its default rather than refused, since a pilot in a cockpit cannot fix a JSON file.
+
+| Field | Default | Description |
+|---|---|---|
+| `Callsign` | `Overlord` | Which of the bot's callsigns the wheel addresses. One is enough: the bot answers on the radio that serves the call. Empty means `Overlord`. |
+| `Marker` | `»` | What each line starts with. The server hook accepts `»`, `>>` and `@`. |
+| `KeyCode` | `145` (Scroll Lock) | The key that opens and closes the wheel, as a Windows virtual-key code. `0` = no key. Set by *Learn…*. |
+| `KeyName` | `Scroll Lock` | The key's name, for the tray menu. Written when the key is learnt. |
+| `JoystickId` | `-1` | Which joystick the button and hat belong to (0–15). `-1` = none. Set by *Learn…*. |
+| `JoystickButton` | `0` | The button that opens the wheel and confirms a slice, counted from 1 (up to 32). `0` = none. |
+| `UseHat` | `true` | Whether that joystick's first hat picks a slice while the wheel is open. |
+| `Size` | `0.5` | The wheel's diameter as a share of the DCS window's height, 0.25–0.95. |
+| `ThreatCircleRadii` | `[20, 30, 40, 60, 80]` | The radii the threat circle's sub-wheel offers, in NM. At most six, each 1–150, sorted and without duplicates; an empty list gives the defaults. |
+
+What the wheel types is `<Marker> <Callsign>: <request>`, e.g. `» Overlord: Threat circle 40` — the server side of that is [Requests typed into the chat](#requests-typed-into-the-chat). Setup and controls: [manual, chapter 8.8](manual-en.md#88-the-radio-wheel-for-the-pilots-pc).
 
 ## Backups
 

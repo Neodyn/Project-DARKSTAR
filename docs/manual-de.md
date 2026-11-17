@@ -19,7 +19,7 @@ Dieses Handbuch deckt alles ab: was du brauchst, wie du es installierst, jede Ei
 5. [Konfigurationsreferenz](#5-konfigurationsreferenz)
 6. [Der Konfigurationseditor (GUI)](#6-der-konfigurationseditor-gui)
 7. [Bedienung am Funk](#7-bedienung-am-funk)
-8. [Live-Missionsdaten über DCS-gRPC](#8-live-missionsdaten-über-dcs-grpc)
+8. [Live-Missionsdaten über DCS-gRPC](#8-live-missionsdaten-über-dcs-grpc) — mit F10-Menü, [Anfragen über den Chat](#87-anfragen-über-den-chat) und [dem Funkrad](#88-das-funkrad-für-den-pc-des-piloten)
 9. [Betrieb als Windows-Dienst](#9-betrieb-als-windows-dienst)
 10. [Dateien, Logs und Backups](#10-dateien-logs-und-backups)
 11. [Fehlersuche](#11-fehlersuche)
@@ -66,6 +66,8 @@ Zwei Punkte vorweg:
 
 Jedes konfigurierte Radio ist vollständig eigenständig: eigenes Hotword, eigenes Rufzeichen, eigener Aufnahmezustand. Zwei Piloten können gleichzeitig auf zwei Frequenzen sprechen, ohne sich gegenseitig zu stören.
 
+**Nicht nur per Sprache.** Dieselben Calls gehen auch über das F10-Menü ([8.6](#86-das-f10-menü-wenn-der-funkweg-nicht-funktioniert)), getippt in den DCS-Chat ([8.7](#87-anfragen-über-den-chat)) oder gewählt am **Funkrad** — einem kleinen Programm auf dem PC des Piloten, das die Calls als Rad über DCS legt, geöffnet mit einer Taste oder einem HOTAS-Knopf ([8.8](#88-das-funkrad-für-den-pc-des-piloten)). Die Antwort kommt in jedem Fall über Funk.
+
 ---
 
 ## 2. Was du brauchst
@@ -89,6 +91,7 @@ Jedes konfigurierte Radio ist vollständig eigenständig: eigenes Hotword, eigen
 | **WebView2 Runtime** | Für den GUI-Konfigurationseditor (auf aktuellen Windows-Versionen vorinstalliert; der Installer ergänzt sie bei Bedarf). |
 | **DCS-gRPC-Server** | Ermöglicht die taktischen Antworten („bogey dope“, „picture“, „threat check“) und den Missionsdaten-Explorer. Siehe [Kapitel 8](#8-live-missionsdaten-über-dcs-grpc). |
 | **Discord-Webhook** | Benachrichtigungen bei Start/Stopp und Verbindungsverlust. |
+| **Das Funkrad** *(auf dem PC jedes Piloten)* | Calls aus einem Rad über DCS wählen statt sprechen. Eigenes kleines Setup, ohne Administratorrechte; braucht die Chat-Brücke auf dem Server. Siehe [3](#für-die-piloten-das-funkrad) und [8.8](#88-das-funkrad-für-den-pc-des-piloten). |
 | **Visual Studio 2022** | Nur zum Bauen aus dem Quellcode, mit den Workloads *.NET-Desktopentwicklung* und *ASP.NET und Webentwicklung*. |
 
 ### Welches Vosk-Modell?
@@ -167,6 +170,16 @@ Die Versionsnummer kommt aus dem Build: `.\build-installer.ps1 -Version 1.2` sch
 
 Nach der Installation geht es weiter mit [Kapitel 4](#4-erster-start).
 
+### Für die Piloten: das Funkrad
+
+Alles oben passiert auf dem Server. Ein Pilot, der das Funkrad möchte, installiert stattdessen eine kleine Datei auf seinem eigenen PC: **`DARKSTAR-Wheel-Setup-<Version>.exe`**, die der Serverbetreiber zusammen mit dem Server-Installer baut und weitergibt.
+
+1. Als normaler Benutzer ausführen — es installiert ins eigene Benutzerprofil und fragt nur nach Administratorrechten, wenn die .NET 8 Desktop Runtime fehlt.
+2. Auf der Seite *DCS hook* jedes DCS anhaken, mit dem der Pilot fliegt (`DCS`, `DCS.openbeta`, …). Der Hook kommt jeweils nach `Scripts\Hooks`.
+3. DCS einmal neu starten, dann über das Symbol im Infobereich die Rad-Taste oder den HOTAS-Knopf anlernen.
+
+Auf dem Server muss die Chat-Brücke eingeschaltet sein — die Anfragen des Rads kommen als Chat an. Einzelheiten, Bedienung und Einstellungen: [8.8](#88-das-funkrad-für-den-pc-des-piloten).
+
 ### Den Installer selbst bauen
 
 Nur nötig, um eine neue `Setup.exe` zu erzeugen (für ein Release oder mit einem anderen Sprachmodell). In PowerShell, im Wurzelverzeichnis des Repositorys:
@@ -177,7 +190,7 @@ Nur nötig, um eine neue `Setup.exe` zu erzeugen (für ein Release oder mit eine
 .\build-installer.ps1 -Slim                                  # schlanker Installer, ohne Modell
 ```
 
-Das Skript prüft die Voraussetzungen, veröffentlicht beide Projekte **im Release-Modus**, holt die Abhängigkeits-Installer und das Modell und kompiliert alles nach `installer\output\`. Einzelheiten und alle Optionen: [building-the-installer.md](building-the-installer.md).
+Das Skript prüft die Voraussetzungen, veröffentlicht Bot, Editor und Funkrad **im Release-Modus**, holt die Abhängigkeits-Installer und das Modell und kompiliert zwei Installer nach `installer\output\`: `DARKSTAR-Setup-<Version>.exe` für den Server und `DARKSTAR-Wheel-Setup-<Version>.exe` für die Piloten (`-SkipWheel` baut nur den ersten). Einzelheiten und alle Optionen: [building-the-installer.md](building-the-installer.md).
 
 ### Aus dem Quellcode betreiben
 
@@ -1502,6 +1515,9 @@ Ein Reconnect löst **keine** Welle von Begrüßungen aus: der Bot weiß weiterh
 | **Dienst lässt sich nicht entfernen** | Etwas hält noch ein Handle darauf (services.msc, Task-Manager). Beides schließen und erneut versuchen; ein Neustart räumt es immer auf. |
 | **GUI meldet „config.json exists but has invalid JSON“** | Absicht: Der Editor weigert sich, eine kaputte Datei mit Standardwerten zu überschreiben. Syntax korrigieren (das Log nennt die Stelle) und neu laden. |
 | **Aussendung an einen entfernten SRS-Server kommt nicht an** | `DCS-SR-ExternalAudio.exe` wird derzeit ohne Serverparameter aufgerufen und sendet damit an `127.0.0.1`. Bei entferntem SRS-Server bleiben die Antworten lokal. Den richtigen Parameternamen in `--help` nachsehen und einbauen lassen. |
+| **Funkrad: eine Meldung sagt *"Picture" was not sent*** | DCS ist nicht als Client mit einem Server verbunden (Einzelspieler, oder die Mission selbst gehostet), oder dem geflogenen DCS fehlt der Hook. Das Funkrad-Setup erneut ausführen, dieses DCS anhaken, DCS neu starten. |
+| **Funkrad: die Anfrage steht in meinem Chat, aber es kommt keine Antwort** | Die Serverseite: `ChatBridgeEnabled` aus, `ChatBridgeFolder` falsch oder der Server-Hook fehlt — das Server-Log zeigt für jede angekommene Anfrage eine `[Chat]`-Zeile. Außerdem prüfen, ob `Callsign` in `wheel.json` eines der Rufzeichen des Bots ist. |
+| **Funkrad öffnet sich nicht** | Es reagiert nur, solange DCS im Vordergrund ist, und DCS muss im Fenster oder randlos laufen. Prüfen, ob das Symbol im Infobereich da ist (Autostart ist eine Wahl im Setup) und welche Taste oder welcher Knopf angelernt ist. |
 
 Kommst du nicht weiter: Die Logdatei samt den `[STT]`-Zeilen rund um den Fehler erklärt das meiste — und genau das gehört in einen Fehlerbericht (mit geschwärztem `GeminiApiKey`, `DiscordWebhookUrl` und `DcsGrpcApiKey`).
 

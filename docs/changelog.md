@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Format loosely follows 
 ## [Unreleased]
 
 ### Added
+- **The radio wheel throughout the documentation**: how it works (chapter 1), what is needed (2), a pilot's installation (3, *For the pilots: the radio wheel*), three troubleshooting rows (11), a link in the table of contents, and `wheel.json` as its own section of `configuration.md`.
 - **A setup for the radio wheel**, built by `build-installer.ps1` next to the server installer: `DARKSTAR-Wheel-Setup-<version>.exe` (`installer\Wheel.iss`). Per user without administrator rights, the .NET 8 Desktop Runtime only when missing, the DCS hook copied into every `Saved Games\DCS*` folder the pilot ticks (server folders left out), autostart via the Startup folder. Updating closes the running wheel; uninstalling removes exactly the hooks it wrote and keeps `wheel.json`. `-SkipWheel` builds the server installer alone.
 - **Backup and restore in the config editor** (CH3, now *Profiles & Backup*): the whole setup - `config.json`, `phrases.json`, `vocabulary.json` and, by choice, the profiles - as one ZIP file in `Backup\` or anywhere else, and back. `ConfigBackup` in `Darkstar.Core`.
   - A restore parses every file the way the bot reads it before writing anything, backs up the current state first as `...-before-restore.zip` (restoring that undoes it), writes `config.json` last, and leaves profiles that are not in the backup alone. The editor asks first and says what the backup holds.

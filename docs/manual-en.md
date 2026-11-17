@@ -19,7 +19,7 @@ This manual covers everything: what you need, how to install it, every setting, 
 5. [Configuration reference](#5-configuration-reference)
 6. [The configuration editor (GUI)](#6-the-configuration-editor-gui)
 7. [Using the bot on the radio](#7-using-the-bot-on-the-radio)
-8. [Live mission data via DCS-gRPC](#8-live-mission-data-via-dcs-grpc)
+8. [Live mission data via DCS-gRPC](#8-live-mission-data-via-dcs-grpc) — including the F10 menu, [requests typed into the chat](#87-requests-typed-into-the-chat) and [the radio wheel](#88-the-radio-wheel-for-the-pilots-pc)
 9. [Running as a Windows Service](#9-running-as-a-windows-service)
 10. [Files, logs and backups](#10-files-logs-and-backups)
 11. [Troubleshooting](#11-troubleshooting)
@@ -66,6 +66,8 @@ Two things are worth knowing up front:
 
 Each configured radio is fully independent: its own wake word, its own callsign, its own recording state. Two pilots can talk to two different frequencies at the same time without interfering with each other.
 
+**Not only by voice.** The same calls can also be asked through the F10 menu ([8.6](#86-the-f10-menu-for-when-the-radio-route-does-not-work)), typed into the DCS chat ([8.7](#87-requests-typed-into-the-chat)), or picked on the **radio wheel** — a small program on the pilot's PC that puts the calls on a wheel over DCS, opened with a key or a HOTAS button ([8.8](#88-the-radio-wheel-for-the-pilots-pc)). The answer comes back on the radio either way.
+
 ---
 
 ## 2. What you need
@@ -89,6 +91,7 @@ Each configured radio is fully independent: its own wake word, its own callsign,
 | **WebView2 Runtime** | Required by the GUI configuration editor (preinstalled on current Windows versions; the installer adds it if missing). |
 | **DCS-gRPC server** | Enables the tactical replies ("bogey dope", "picture", "threat check") and the mission data explorer. See [chapter 8](#8-live-mission-data-via-dcs-grpc). |
 | **A Discord webhook** | Start/stop and connection-loss notifications. |
+| **The radio wheel** *(on each pilot's PC)* | Calls picked from a wheel over DCS instead of spoken. Its own small setup, no administrator rights; needs the chat bridge on the server. See [3](#for-the-pilots-the-radio-wheel) and [8.8](#88-the-radio-wheel-for-the-pilots-pc). |
 | **Visual Studio 2022** | Only for building from source, with the workloads *.NET desktop development* and *ASP.NET and web development*. |
 
 ### Which Vosk model?
@@ -167,6 +170,16 @@ Versions come from the build: `.uild-installer.ps1 -Version 1.2` stamps `1.2` i
 
 After installing, continue with [chapter 4](#4-first-start).
 
+### For the pilots: the radio wheel
+
+Everything above happens on the server. A pilot who wants the radio wheel installs one small file on their own PC instead: **`DARKSTAR-Wheel-Setup-<version>.exe`**, which the server operator builds together with the server installer and hands out.
+
+1. Run it as a normal user — it installs into the user's own profile and asks for administrator rights only if the .NET 8 Desktop Runtime is missing.
+2. On the *DCS hook* page, tick every DCS the pilot flies with (`DCS`, `DCS.openbeta`, …). The hook goes into each one's `Scripts\Hooks`.
+3. Restart DCS once, then learn the wheel key or HOTAS button from the tray icon.
+
+On the server, the chat bridge has to be on — the wheel's requests arrive as chat. Details, the controls and the settings: [8.8](#88-the-radio-wheel-for-the-pilots-pc).
+
 ### Building the installer yourself
 
 Only needed to produce a new `Setup.exe` (for a release, or with a different speech model). In PowerShell, from the repository root:
@@ -177,7 +190,7 @@ Only needed to produce a new `Setup.exe` (for a release, or with a different spe
 .\build-installer.ps1 -Slim                                  # slim installer, no model
 ```
 
-It checks the prerequisites, publishes both projects **in Release**, fetches the dependency installers and the model, and compiles everything into `installer\output\`. Details and all options: [building-the-installer.md](building-the-installer.md).
+It checks the prerequisites, publishes the bot, the editor and the radio wheel **in Release**, fetches the dependency installers and the model, and compiles two installers into `installer\output\`: `DARKSTAR-Setup-<version>.exe` for the server and `DARKSTAR-Wheel-Setup-<version>.exe` for the pilots (`-SkipWheel` builds only the first). Details and all options: [building-the-installer.md](building-the-installer.md).
 
 ### Running from source
 
@@ -1498,6 +1511,9 @@ A reconnect does **not** produce a burst of tune-in greetings: the bot still kno
 | **Service can't be removed** | Something still holds a handle on it (services.msc, Task Manager). Close both and retry; a reboot always clears it. |
 | **GUI shows "config.json exists but has invalid JSON"** | Deliberate: the editor refuses to overwrite a broken file with defaults. Fix the syntax (the log names the position) and reload. |
 | **Transmission to a remote SRS server doesn't arrive** | `DCS-SR-ExternalAudio.exe` is currently called without a server parameter, so it transmits to `127.0.0.1`. With a remote SRS server the replies stay local. Check `--help` for the right parameter name and ask for it to be wired in. |
+| **Radio wheel: a notification says *"Picture" was not sent*** | DCS is not connected to a server as a client (single player, or hosting the mission yourself), or the hook is missing from the DCS being flown. Run the wheel setup again and tick that DCS, then restart DCS. |
+| **Radio wheel: the request shows in my chat, but no answer comes** | The server side: `ChatBridgeEnabled` off, `ChatBridgeFolder` wrong, or the server hook not in place — the server log shows a `[Chat]` line for every request it got. Also check that `Callsign` in `wheel.json` is one of the bot's callsigns. |
+| **Radio wheel does not open** | It only reacts while DCS is in front, and DCS has to run windowed or borderless. Check that the tray icon is there (autostart is a choice in the setup) and which key or button it has learnt. |
 
 Still stuck? The log file plus the `[STT]` lines around the failure usually explain it, and are what to include in a bug report (with `GeminiApiKey`, `DiscordWebhookUrl` and `DcsGrpcApiKey` redacted).
 
