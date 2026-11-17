@@ -302,6 +302,36 @@ if (-not $dotnetOk -or ($null -eq $iscc -and -not $DryRun)) {
 # 4. Clean
 # ---------------------------------------------------------------------------------------------
 
+<#
+.SYNOPSIS
+    The obj\ and bin\ folders of every project under the root - and nothing else.
+.DESCRIPTION
+    Every project in the solution, found rather than listed - a hard-coded list is what made the
+    bot's own compile exclusion go stale when Darkstar.Tests was added. Searched recursively so
+    it keeps working wherever the projects sit.
+
+    Found through the .csproj files with -Filter, never with "-Include obj, bin": Windows
+    PowerShell 5.1 ignores -Include when it is combined with -LiteralPath, so that search
+    returned EVERY folder in the tree, and the loop deleting them took src\ with it - the
+    publish then failed with "Project file does not exist". PowerShell 7 does not have the bug,
+    which is why it went unnoticed. The name check below is the second line of defence: whatever
+    the search returns, only a folder called obj or bin directly beside a .csproj is ever deleted.
+#>
+function Get-ProjectIntermediates($root) {
+    $projectDirs = Get-ChildItem -LiteralPath $root -Filter *.csproj -File -Recurse -ErrorAction SilentlyContinue |
+        ForEach-Object { $_.DirectoryName } |
+        Sort-Object -Unique
+
+    foreach ($projectDir in $projectDirs) {
+        foreach ($name in @("obj", "bin")) {
+            $dir = Join-Path $projectDir $name
+            if ((Split-Path -Leaf $dir) -in @("obj", "bin") -and (Test-Path -LiteralPath $dir -PathType Container)) {
+                $dir
+            }
+        }
+    }
+}
+
 if ($Clean) {
     Write-Step "Cleaning previous build output"
     foreach ($dir in @($publishBot, $publishGui, $outputDir)) {
@@ -315,22 +345,9 @@ if ($Clean) {
     # these can't leak into the installer - but leaving them means "-Clean" doesn't actually
     # rebuild from scratch, and a stale obj\ is exactly what hides a restore or asset problem
     # that would otherwise show up now rather than on somebody else's machine.
-    # Every project in the solution, found rather than listed - a hard-coded list is what made the
-    # bot's own compile exclusion go stale when Darkstar.Tests was added. Searched recursively so
-    # it keeps working wherever the projects sit: they used to be in the root and one level down,
-    # they are now all under src\, and the next rearrangement should not need this line edited.
-    $projectDirs = Get-ChildItem -LiteralPath $ProjectRoot -Filter *.csproj -File -Recurse |
-        ForEach-Object { $_.DirectoryName } |
-        Sort-Object -Unique
-
-    foreach ($projectDir in $projectDirs) {
-        foreach ($name in @("obj", "bin")) {
-            $dir = Join-Path $projectDir $name
-            if (Test-Path -LiteralPath $dir) {
-                if (-not $DryRun) { Remove-Item -LiteralPath $dir -Recurse -Force }
-                Write-Ok "removed $dir"
-            }
-        }
+    foreach ($dir in Get-ProjectIntermediates $ProjectRoot) {
+        if (-not $DryRun) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        Write-Ok "removed $dir"
     }
 }
 
@@ -379,8 +396,8 @@ function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
     #
     # Costs a full compile per installer build. An installer is a release artefact: it has to
     # contain the tree it was built from, and ten seconds is not a reason to gamble on that.
-    foreach ($intermediate in Get-ChildItem -LiteralPath $ProjectRoot -Directory -Recurse -Include obj, bin -ErrorAction SilentlyContinue) {
-        Remove-Item -LiteralPath $intermediate.FullName -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($intermediate in Get-ProjectIntermediates $ProjectRoot) {
+        Remove-Item -LiteralPath $intermediate -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     # Out-Host rather than letting it run bare: the output of an external command goes into the

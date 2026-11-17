@@ -1080,7 +1080,35 @@ internal static class HousekeepingTests
         Check("which is stamped into the assemblies",
             buildScript.Contains("-p:InformationalVersion=$informational", StringComparison.Ordinal));
         Check("the intermediates are deleted first, so no timestamp decides what gets compiled",
-            buildScript.Contains("-Include obj, bin", StringComparison.Ordinal));
+            buildScript.Contains("foreach ($intermediate in Get-ProjectIntermediates $ProjectRoot)", StringComparison.Ordinal));
+
+        // Windows PowerShell 5.1 ignores -Include and -Exclude next to -LiteralPath. The wipe above
+        // used "-Include obj, bin" and so got every folder in the tree: it deleted src\ before the
+        // publish, which then failed with "Project file does not exist". PowerShell 7 filters
+        // correctly, so it only showed on a machine running the script in Windows PowerShell.
+        // Comments may tell the story; code may not use the parameters at all.
+        static IEnumerable<string> CodeLines(string script)
+        {
+            var inBlock = false;
+            foreach (var raw in script.Replace("\r\n", "\n").Split('\n'))
+            {
+                var line = raw.Trim();
+                if (inBlock) { if (line.Contains("#>")) inBlock = false; continue; }
+                if (line.StartsWith("<#", StringComparison.Ordinal)) { inBlock = !line.Contains("#>"); continue; }
+                if (line.StartsWith('#')) continue;
+                yield return line;
+            }
+        }
+
+        var filtering = new List<string>();
+        foreach (var script in new[] { "build-installer.ps1", "setup-dev-environment.ps1" })
+            foreach (var line in CodeLines(System.IO.File.ReadAllText(Root + script)))
+                if (System.Text.RegularExpressions.Regex.IsMatch(line, @"-(Include|Exclude)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    filtering.Add($"{script}: {line}");
+        Check("no script filters with -Include or -Exclude, which Windows PowerShell ignores beside -LiteralPath",
+            filtering.Count == 0, string.Join("; ", filtering));
+        Check("and the wipe only ever deletes a folder called obj or bin",
+            buildScript.Contains("(Split-Path -Leaf $dir) -in @(\"obj\", \"bin\")", StringComparison.Ordinal));
 
         var verifyAt = buildScript.IndexOf("$stamped = Get-PublishedVersion $assemblyPath", StringComparison.Ordinal);
         var publishAt = buildScript.IndexOf("& dotnet publish $projectPath", StringComparison.Ordinal);
