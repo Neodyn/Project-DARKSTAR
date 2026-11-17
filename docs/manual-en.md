@@ -606,8 +606,11 @@ The channels are grouped by what you are setting up rather than by their number 
 | **CH10 Logging** | Logging switches, resolved log folder, log retention limits, and a live tail of the newest log file. |
 | **CH8 DCS-gRPC** | Three sidebar entries: **Server & test** (connection and test button), **Replies** (tactical replies including alpha check with their own test button, the friendly-positions card, the threat circle and the airfield card) and **Mission explorer**. |
 | **CH2 Service** | Install, start, stop and cleanly remove the Windows Service. |
+| **CH3 Profiles & Backup** | The config folder, named `config.json` profiles, and **Backup & Restore**: the whole setup as one ZIP file, and back again. See chapter 10. |
 
 Bottom bar: **Discard (reload from disk)** and **Save changes**. Every save makes a timestamped backup first.
+
+Top right: **☾ DARK** and **☀ LIGHT** switch the editor's colours. The choice is remembered for the next start (in `%LOCALAPPDATA%\Darkstar\editor.json`, like the config folder) and changes nothing the bot reads.
 
 Details on CH8 and CH2 are in the next two chapters; a full walkthrough is in [gui.md](gui.md).
 
@@ -1283,9 +1286,9 @@ The radio wheel is a small program on the **pilot's** PC. It shows the bot's cal
 
 **Setting it up on a pilot's PC:**
 
-1. Copy the wheel's folder onto the PC — the server operator builds it once and hands it out as a zip (see below).
-2. Copy `dcs\Scripts\Hooks\Darkstar-Wheel.lua` from that folder into `Saved Games\DCS\Scripts\Hooks\` — the Saved Games folder of the DCS the pilot flies with — and restart DCS.
-3. Start `Darkstar.Wheel.exe`. Its icon sits in the notification area; right-click it and choose *Learn the wheel key or joystick button…*, then press the key or HOTAS button you want. Without that, **Scroll Lock** opens the wheel.
+1. Run **`DARKSTAR-Wheel-Setup-<version>.exe`** — the server operator builds it together with the server installer and hands it out (see below). No administrator rights needed. On the *DCS hook* page, tick every DCS the pilot flies with; the setup lists what it finds under `Saved Games` (`DCS`, `DCS.openbeta`, …) and puts `Darkstar-Wheel.lua` into its `Scripts\Hooks`. Restart DCS once.
+2. Leave *Start the radio wheel with Windows* ticked, so the wheel is there whenever DCS is. Only a missing .NET 8 Desktop Runtime makes Windows ask for permission, to install it.
+3. Start the wheel (it starts at the end of the setup). Its icon sits in the notification area; right-click it and choose *Learn the wheel key or joystick button…*, then press the key or HOTAS button you want. Without that, **Scroll Lock** opens the wheel.
 4. If the server's bot is not called *Overlord*, right-click → *Open the settings file* and change `Callsign`.
 
 DCS has to run **windowed or borderless** (the default). An exclusive full-screen DCS covers every other window, the wheel included.
@@ -1314,7 +1317,7 @@ Seven slices, always in the same place so a thumb finds them without looking, ea
 
 The file is `%LOCALAPPDATA%\Darkstar\wheel.json` on the pilot's PC. The joystick is read through Windows' own game controller interface, which sees the first 32 buttons and the first hat of a device.
 
-**Building it for a squadron:** on the build PC, `dotnet publish src\Darkstar.Wheel -c Release -r win-x64 --self-contained true -o publish\wheel`, then zip `publish\wheel`. Self-contained, so pilots need nothing else installed; the client hook is already in it, under `dcs\Scripts\Hooks`.
+**Building it for a squadron:** `build-installer.ps1` builds `installer\output\DARKSTAR-Wheel-Setup-<version>.exe` next to the server installer — the one file to hand to the pilots. Updating is running the newer setup; it closes a running wheel first and keeps `wheel.json`. Uninstalling removes the hooks it wrote, but not `wheel.json`. Without the setup: copy the wheel's folder and `dcs\Scripts\Hooks\Darkstar-Wheel.lua` by hand. See [building the installer](building-the-installer.md#the-radio-wheels-setup).
 
 ---
 
@@ -1352,9 +1355,9 @@ Everything lives next to the bot's executable:
 | `vocabulary.json` | Transcription hints. |
 | `logs\` | Timestamped log files, one per start, named `darkstar_<date>_<time>.log`. Verbose per-packet detail only with `DebugLogging`; an error always brings the last 200 verbose lines with it. |
 | `recordings\` | Only with `SaveRecordings` on. One WAV per transmission, roughly 100 KB per second of speech. |
-| `Backup\` | Automatic timestamped copies made before any automatic change. |
+| `Backup\` | Automatic timestamped copies made before any automatic change, and the backups made on CH3 (`Darkstar-Backup-<date>_<time>.zip`). |
 | `grpc-dumps\` | JSON results saved from the mission data explorer. |
-| `Profiles\` | Saved `config.json` variants, one file per profile. Written and read by the config editor's CH3 only — the bot never looks in here. See [the editor's guide](gui.md#ch3--profiles). |
+| `Profiles\` | Saved `config.json` variants, one file per profile. Written and read by the config editor's CH3 only — the bot never looks in here. See [the editor's guide](gui.md#ch3--profiles--backup). |
 
 **Neither folder grows forever.** At start and once an hour the bot deletes its own old files: recordings after `RecordingRetentionDays` (7) or once `recordings\` passes `RecordingRetentionMaxMb` (500), logs after `LogRetentionDays` (30) or `LogRetentionMaxMb` (200). Age first, then size: what survives the age limit is trimmed oldest-first until the folder fits. The three newest log files are never deleted whatever the limits say, so a 1 MB budget set by mistake cannot delete the log being written to. Set a limit to `0` to switch it off. Every deletion is logged with its reason:
 
@@ -1363,6 +1366,10 @@ Everything lives next to the bot's executable:
 ```
 
 Nothing else is ever touched — only `*.wav` in `recordings\` and `*.log` in `logs\`. `Backup\` and `grpc-dumps\` are left alone on purpose: those exist precisely because you might need them later.
+
+**A backup of the whole setup** is made in the config editor, on **CH3 Profiles & Backup**: one ZIP file with `config.json`, `phrases.json`, `vocabulary.json` and, if switched on, the profiles — as they are on disk, so save first. It goes to `Backup\` or, with **Back up to a file…**, anywhere else, such as a USB stick. With **Leave out keys and passwords** the Gemini key, the DCS-gRPC key, the Discord webhook and the AWACS password are blanked in the copy; without it, keep the file like a password.
+
+**Restoring** checks every file in the backup the way the bot reads it before anything is changed, and backs up the current state first as `…-before-restore.zip` — restoring that one undoes it. Profiles that are not in the backup stay. A backup made without keys keeps the keys configured on the PC it is restored on. Restart the bot afterwards.
 
 The log is the first place to look when something is off. A healthy startup looks roughly like this:
 

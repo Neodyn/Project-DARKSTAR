@@ -99,6 +99,10 @@ Console.WriteLine("======== Config profiles ========");
 ConfigProfileTests.Run();
 
 Console.WriteLine();
+Console.WriteLine("======== Backup and restore ========");
+BackupTests.Run();
+
+Console.WriteLine();
 Console.WriteLine("======== What pressing Save writes ========");
 SavingTests.Run();
 

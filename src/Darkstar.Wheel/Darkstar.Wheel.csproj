@@ -8,7 +8,8 @@
 
     Windows Forms rather than WPF: one borderless, click-through, never-focused window drawn with
     GDI+, which is exactly what a layered window is and what WPF makes awkward. It is also small
-    enough to hand to a squadron as a zip.
+    enough to hand to a squadron as one small setup: installer\Wheel.iss, built by
+    build-installer.ps1 next to the server installer.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -21,8 +22,15 @@
     <AssemblyTitle>D.A.R.K.S.T.A.R. Radio Wheel</AssemblyTitle>
     <ApplicationIcon>..\Darkstar.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Like the bot and the editor: installer\Wheel.iss packs the publish folder wholesale, so the
+         XML API docs of referenced packages stay behind and only the symbols may travel along. -->
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
     <Version>0.0.0</Version>
     <InformationalVersion>0.0.0-dev</InformationalVersion>
+    <!-- The .NET 8 SDK appends the git commit ("+<sha>") to InformationalVersion in a git
+         checkout. build-installer.ps1 compares the stamp it passed with the one it finds in
+         the published file, so an appended hash failed every build made from a clone. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

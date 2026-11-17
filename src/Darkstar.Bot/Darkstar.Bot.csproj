@@ -29,6 +29,10 @@
     -->
     <Version>0.0.0</Version>
     <InformationalVersion>0.0.0-dev</InformationalVersion>
+    <!-- The .NET 8 SDK appends the git commit ("+<sha>") to InformationalVersion in a git
+         checkout. build-installer.ps1 compares the stamp it passed with the one it finds in
+         the published file, so an appended hash failed every build made from a clone. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
     <!--
       What ends up in the installer. Everything here is about NOT shipping files the bot never

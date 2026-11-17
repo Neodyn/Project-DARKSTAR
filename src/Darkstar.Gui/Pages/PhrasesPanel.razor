@@ -4,7 +4,7 @@
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <h1 style="margin:0">PHRASES</h1>
     <div class="toggle-row" style="margin-bottom:0;padding:6px 10px;gap:10px;display:flex;width:auto">
-        <span style="font-size:11px;color:#8CA0A8">Restrict to known phrases</span>
+        <span style="font-size:11px;color:var(--muted)">Restrict to known phrases</span>
         <button class="toggle @(Store.Config.RestrictToKnownPhrases ? "on" : "")" @onclick="() => Store.Config.RestrictToKnownPhrases = !Store.Config.RestrictToKnownPhrases">
             <span class="knob"></span>
         </button>
@@ -47,14 +47,14 @@
 
 <div class="card" style="margin-top:16px">
     <div class="card-head" style="margin-bottom:6px">
-        <span style="font-size:12.5px;color:#E7EDEF">Radio check</span>
+        <span style="font-size:12.5px;color:var(--text)">Radio check</span>
         <span class="spacer"></span>
         <button class="toggle @(Store.Config.RadioCheckEnabled ? "on" : "")"
                 @onclick="() => Store.Config.RadioCheckEnabled = !Store.Config.RadioCheckEnabled">
             <span class="knob"></span>
         </button>
     </div>
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         Answered on <em>every</em> radio, whatever that radio is configured for on CH4 — a tower, an AWACS
         and a tanker all answer a radio check. With DCS-gRPC on (CH8) the reply also says whether the bot
         has the caller on scope, which is the quickest way to find out that an SRS name and a DCS name do

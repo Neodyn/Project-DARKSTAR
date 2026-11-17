@@ -39,7 +39,7 @@ by the question you are answering, and they count straight up:
 
 | Group | Channels, in sidebar order |
 |---|---|
-| **SERVER** | CH1 Connection, CH2 Windows Service, CH3 Profiles |
+| **SERVER** | CH1 Connection, CH2 Windows Service, CH3 Profiles & Backup |
 | **RADIO & SPEECH** | CH4 Radios, CH5 Speech, CH6 Phrases, CH7 Vocabulary |
 | **MISSION DATA — CH8** | Server & test, Replies, Mission explorer |
 | **MONITORING** | CH9 Discord, CH10 Logging |
@@ -67,6 +67,14 @@ reordering with the expected list "fixed" to match gets through; see `EditorPane
 An entry is marked **off** when the thing it configures is switched off in the configuration. That
 means "you turned this off", never "this is unreachable right now" — a connection that cannot be
 reached is a different problem, reported on the panel itself.
+
+## Colours: dark and light
+
+**☾ DARK** and **☀ LIGHT** in the title bar switch the whole editor; the choice is remembered in
+`editor.json`. Every colour in `app.css` is a variable defined twice, once per theme, and the
+panels use only those variables — `EditorPanelTests` fails on a colour written anywhere else,
+because it would look right in one theme and wrong in the other. The light colours are not the dark
+ones inverted: amber, teal and green had to get much darker to stay readable as text on white.
 
 ## Path fields have a Browse button
 
@@ -146,10 +154,10 @@ Internally this goes through PowerShell (`Get-Service` / `New-Service` / `Start-
 than parsing `sc.exe` output, because `sc.exe` localizes its field labels — screen-scraping it
 would break on a German Windows.
 
-## CH3 — Profiles
+## CH3 — Profiles & Backup
 
-Two things live here: which folder the bot's settings are in, and several named `config.json` files
-kept side by side.
+Three things live here: which folder the bot's settings are in, several named `config.json` files
+kept side by side, and a backup of all of it.
 
 ### The config folder
 
@@ -201,9 +209,44 @@ that profile holds — *Active: Training* against *Active: Training — config.j
 since*. That comparison is made on the settings rather than on the file text, so re-indenting a
 file, or a `config.json` that predates a setting an update added, does not read as a change.
 
-The editor's own two memories — the chosen folder and the active profile — are kept in
-`%LOCALAPPDATA%\Darkstar\editor.json`, not in `config.json`. Keeping them in `config.json` would
-carry them into every profile, and activating a profile could then change where the editor looks.
+The editor's own memories — the chosen folder, the active profile and the colour theme — are
+kept in `%LOCALAPPDATA%\Darkstar\editor.json`, not in `config.json`. Keeping them in `config.json`
+would carry them into every profile, and activating a profile could then change where the editor
+looks.
+
+### Backup and restore
+
+A backup is the whole setup at one moment, in one ZIP file: `config.json`, `phrases.json`,
+`vocabulary.json` and, if **Include the profiles** is on, every profile. It is taken from the files
+**on disk**, not from the screen — a backup is something to go back to, so it has to be a state the
+bot has actually run with. Save first if the edits on screen belong in it.
+
+| Action | What it does |
+|---|---|
+| **Back up to the Backup folder** | Writes `Backup\Darkstar-Backup-<date>_<time>.zip`, next to the automatic `.bak` copies. |
+| **Back up to a file…** | The same, to a place you choose — a USB stick, another PC's share. |
+| **Leave out keys and passwords** | Blanks `GeminiApiKey`, `DcsGrpcApiKey`, `DiscordWebhookUrl` and `ExternalAwacsPassword` in the copy, for one you hand to somebody. Without it the file holds all four: keep it like a password. |
+| **restore…** / **Restore from a file…** | Reads and checks the backup, then asks: what it holds, when and by which build it was made, whether its keys are in it. Nothing changes until **Restore it**. |
+
+What a restore does, in this order:
+
+1. **Every file is parsed the way the bot reads it.** A broken `config.json`, phrases that are not
+   a list of phrases, a backup from a newer version, an entry over 5 MB: refused, with nothing
+   written. Half a restore — a `config.json` from one day beside a `phrases.json` from another —
+   would be worse than either.
+2. **The current state is backed up**, as `…-before-restore.zip` in the same list. Restoring that
+   one undoes the restore.
+3. **The files are written**, the profiles first and `config.json` last, each through a temporary
+   file and with the usual `.bak` of what it replaces. Profiles that are not in the backup stay —
+   a restore brings settings back, it does not delete work done since.
+4. **The editor reloads**, so what is on screen is what the bot will read. Unsaved edits are gone,
+   which the question before says. The bot needs a restart.
+
+A backup made without keys keeps the keys already configured: restoring a shared copy must not
+cost anybody their API key. The archive decides nothing about paths — only the three file names
+and `Profiles/<name>.json` with a name the profile rules accept are restored; anything else is
+listed as ignored and never written. An archive somebody zipped by hand, without the backup's own
+`darkstar-backup.json`, is still accepted.
 
 ## CH4 — Radios
 

@@ -33,6 +33,20 @@ public sealed class EditorSettings
     /// </summary>
     public string? ActiveProfile { get; set; }
 
+    /// <summary>
+    /// The editor's colours: <see cref="LightTheme"/> or anything else for dark. Dark is the
+    /// default because it is what the editor always looked like, and what sits well next to a
+    /// sim at night; light is for a bright room and a screenshot in a forum post.
+    /// </summary>
+    public string? Theme { get; set; }
+
+    /// <summary>The value of <see cref="Theme"/> that means light.</summary>
+    public const string LightTheme = "light";
+
+    /// <summary>Whether the light theme is chosen. Anything unexpected in the file is dark.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsLight => string.Equals(Theme, LightTheme, StringComparison.OrdinalIgnoreCase);
+
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
     /// <summary>

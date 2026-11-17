@@ -1,11 +1,98 @@
 * { box-sizing: border-box; }
 
+/* ---------------------------------------------------------------------------------------------
+   Colours. Every colour in the editor is one of these variables - here and in the panels' inline
+   styles alike - so a theme is nothing but a second set of values. Dark is :root because the error
+   bar sits outside the themed shell and should keep the colours it always had; the light set is
+   switched on by the class Main.razor puts on .shell. EditorPanelTests checks that no colour is
+   written anywhere else and that both sets name the same variables.
+   The light values are not the dark ones inverted: amber, teal and green had to get much darker to
+   stay readable as text on a light background (4.5:1 or better), and the Save button keeps a
+   bright amber fill with dark text, which works on both.
+   --------------------------------------------------------------------------------------------- */
+:root {
+    color-scheme: dark;
+    --bg: #0E1417;             /* page */
+    --bg-bar: #12191D;         /* title bar and footer */
+    --bg-input: #161F24;       /* text fields */
+    --bg-raised: #1B2429;      /* active entry, chips, buttons */
+    --bg-deep: #0A0F12;        /* log tail */
+    --line-soft: #202A2E;      /* rules inside a table */
+    --line: #2A363C;           /* borders */
+    --line-strong: #3A464C;    /* hovered border */
+    --toggle-off: #384349;     /* switch track, off */
+    --knob: #0E1417;           /* switch knob */
+    --text: #E7EDEF;           /* body text */
+    --text-hover: #C7D4D8;     /* hovered navigation */
+    --muted: #8CA0A8;          /* secondary text */
+    --faint: #5A6A70;          /* labels, hints */
+    --accent: #F2A93B;         /* amber: selection, focus, frequencies */
+    --accent-dim: #C98A24;     /* channel number of the active entry */
+    --accent-fill: #F2A93B;    /* the Save button */
+    --accent-ink: #412402;     /* text on the Save button */
+    --teal: #4FD1C5;           /* links and actions */
+    --teal-hover: #7EE4D8;     /* hovered link */
+    --ok: #5FBF7A;             /* success */
+    --ok-line: #2E4E4C;        /* success border, badges */
+    --ok-bg: #16302A;          /* success background */
+    --bad: #E2543A;            /* error, red coalition */
+    --bad-line: #6C2E2E;       /* error border */
+    --bad-bg: #2A1614;         /* error background */
+    --red-bg: #4A1B0C;         /* red coalition selected */
+    --amber: #D9A62E;          /* caution text */
+    --amber-line: #6C5A2E;     /* caution border */
+    --amber-bg: #332A12;       /* caution selected */
+    --note-bg: #241F12;        /* caution note */
+    --blue: #4FA8E0;           /* blue coalition */
+    --blue-line: #2E4E6C;      /* blue coalition border */
+    --blue-bg: #1E3A55;        /* blue coalition selected */
+}
+
+.theme-light {
+    color-scheme: light;
+    --bg: #F3F5F6;             /* page */
+    --bg-bar: #E7ECEE;         /* title bar and footer */
+    --bg-input: #FFFFFF;       /* text fields */
+    --bg-raised: #DFE6E9;      /* active entry, chips, buttons */
+    --bg-deep: #FFFFFF;        /* log tail */
+    --line-soft: #DCE3E6;      /* rules inside a table */
+    --line: #C5D0D4;           /* borders */
+    --line-strong: #A9B6BB;    /* hovered border */
+    --toggle-off: #B9C4C9;     /* switch track, off */
+    --knob: #FFFFFF;           /* switch knob */
+    --text: #172125;           /* body text */
+    --text-hover: #2C3A40;     /* hovered navigation */
+    --muted: #3B4C53;          /* secondary text */
+    --faint: #5B6D74;          /* labels, hints */
+    --accent: #9C5800;         /* amber: selection, focus, frequencies */
+    --accent-dim: #B87414;     /* channel number of the active entry */
+    --accent-fill: #E9A13A;    /* the Save button */
+    --accent-ink: #2B1700;     /* text on the Save button */
+    --teal: #097368;           /* links and actions */
+    --teal-hover: #05564E;     /* hovered link */
+    --ok: #237A3E;             /* success */
+    --ok-line: #9CCFC4;        /* success border, badges */
+    --ok-bg: #E1F2E7;          /* success background */
+    --bad: #B8321B;            /* error, red coalition */
+    --bad-line: #E2A69B;       /* error border */
+    --bad-bg: #FBE6E2;         /* error background */
+    --red-bg: #FADDD3;         /* red coalition selected */
+    --amber: #8A6400;          /* caution text */
+    --amber-line: #D9C48E;     /* caution border */
+    --amber-bg: #FBF0D6;       /* caution selected */
+    --note-bg: #FCF6E6;        /* caution note */
+    --blue: #1C66A0;           /* blue coalition */
+    --blue-line: #A7C5E0;      /* blue coalition border */
+    --blue-bg: #E0EDF8;        /* blue coalition selected */
+}
+
+
 html, body {
     margin: 0;
     padding: 0;
     height: 100%;
-    background: #0E1417;
-    color: #E7EDEF;
+    background: var(--bg);
+    color: var(--text);
     font-family: Segoe UI, sans-serif;
     font-size: 13px;
 }
@@ -14,6 +101,16 @@ html, body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+}
+
+/* Everything the editor shows, inside the element that carries the theme. */
+.shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
 }
 
 #blazor-error-ui {
@@ -25,7 +122,7 @@ html, body {
     bottom: 0;
     width: 100%;
 }
-#blazor-error-ui .reload { color: #4FD1C5; margin-left: 8px; }
+#blazor-error-ui .reload { color: var(--teal); margin-left: 8px; }
 #blazor-error-ui .dismiss { float: right; cursor: pointer; }
 
 .titlebar {
@@ -33,58 +130,58 @@ html, body {
     align-items: center;
     justify-content: space-between;
     padding: 10px 16px;
-    background: #12191D;
-    border-bottom: 1px solid #2A363C;
+    background: var(--bg-bar);
+    border-bottom: 1px solid var(--line);
     flex-shrink: 0;
 }
-.titlebar .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 1px; color: #E7EDEF; font-weight: 600; }
+.titlebar .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 1px; color: var(--text); font-weight: 600; }
 /* Which build this is. Quiet on purpose - it is reference information, not a headline -
    but always visible, because the question it answers only comes up when something is wrong. */
-.titlebar .brand .build { font-size: 10px; letter-spacing: 0.5px; color: #5A6A70; font-weight: 400; }
+.titlebar .brand .build { font-size: 10px; letter-spacing: 0.5px; color: var(--faint); font-weight: 400; }
 .titlebar .status { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: 0.5px; }
-.titlebar .status.connected { color: #5FBF7A; }
-.titlebar .status.disconnected { color: #E2543A; }
+.titlebar .status.connected { color: var(--ok); }
+.titlebar .status.disconnected { color: var(--bad); }
 .status .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; }
 
 .body-row { display: flex; flex: 1; min-height: 0; }
 
-.sidebar { width: 210px; border-right: 1px solid #2A363C; padding: 12px 0; flex-shrink: 0; overflow-y: auto; }
+.sidebar { width: 210px; border-right: 1px solid var(--line); padding: 12px 0; flex-shrink: 0; overflow-y: auto; }
 /* The vertical rhythm is set by the window's MinHeight of 600px: all four groups and eleven entries
    have to fit above the fold there, or grouping them has bought nothing. */
-.sidebar .heading { padding: 4px 16px 4px; font-size: 10px; letter-spacing: 1.5px; color: #5A6A70; margin-top: 12px; }
+.sidebar .heading { padding: 4px 16px 4px; font-size: 10px; letter-spacing: 1.5px; color: var(--faint); margin-top: 12px; }
 .sidebar .heading:first-child { margin-top: 0; }
-.navitem { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 16px; color: #8CA0A8; font-size: 12.5px; cursor: pointer; border-left: 2px solid transparent; user-select: none; }
-.navitem:hover { color: #C7D4D8; }
-.navitem.active { background: #1B2429; border-left: 2px solid #F2A93B; color: #F2A93B; font-weight: 600; }
+.navitem { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 16px; color: var(--muted); font-size: 12.5px; cursor: pointer; border-left: 2px solid transparent; user-select: none; }
+.navitem:hover { color: var(--text-hover); }
+.navitem.active { background: var(--bg-raised); border-left: 2px solid var(--accent); color: var(--accent); font-weight: 600; }
 
 /* The channel number is kept because the whole documentation uses it, but it is not what you read
    when looking for a panel - so it stays legible and gets out of the way. */
-.navitem .ch { flex-shrink: 0; min-width: 24px; font-size: 10px; letter-spacing: 0.5px; color: #5A6A70; }
-.navitem.active .ch { color: #C98A24; }
+.navitem .ch { flex-shrink: 0; min-width: 24px; font-size: 10px; letter-spacing: 0.5px; color: var(--faint); }
+.navitem.active .ch { color: var(--accent-dim); }
 .navitem .navlabel { flex: 1; }
 /* An entry of a panel that is split across several of them (CH8), indented to line up with the
    labels above rather than with their numbers. */
 .navitem.sub { padding-left: 50px; }
 /* Switched off in the configuration - not "unavailable", which belongs on the panel itself. */
-.navitem .navflag { flex-shrink: 0; font-size: 9px; letter-spacing: 1px; color: #5A6A70; border: 1px solid #2A363C; border-radius: 3px; padding: 0 4px; }
+.navitem .navflag { flex-shrink: 0; font-size: 9px; letter-spacing: 1px; color: var(--faint); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
 
 .content { flex: 1; padding: 20px 24px; overflow-y: auto; }
-.content h1 { font-size: 14px; letter-spacing: 1px; color: #E7EDEF; font-weight: 600; margin: 0 0 16px 0; }
+.content h1 { font-size: 14px; letter-spacing: 1px; color: var(--text); font-weight: 600; margin: 0 0 16px 0; }
 
 .field { margin-bottom: 12px; }
-.field label { display: block; font-size: 10px; letter-spacing: 0.5px; color: #5A6A70; margin-bottom: 5px; }
+.field label { display: block; font-size: 10px; letter-spacing: 0.5px; color: var(--faint); margin-bottom: 5px; }
 .field input[type=text], .field input[type=password], .field input[type=number], .field select, .field textarea {
     width: 100%;
-    background: #161F24;
-    border: 1px solid #2A363C;
+    background: var(--bg-input);
+    border: 1px solid var(--line);
     border-radius: 4px;
     padding: 7px 10px;
     font-size: 13px;
-    color: #E7EDEF;
+    color: var(--text);
     font-family: inherit;
 }
-.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #F2A93B; }
-.field .hint { font-size: 11px; color: #5A6A70; margin-top: 4px; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+.field .hint { font-size: 11px; color: var(--faint); margin-top: 4px; }
 
 /* A path field with a Browse button beside it. The input keeps its own styling and simply stops
    being full-width; the button matches the input's height rather than the link-actions elsewhere,
@@ -93,77 +190,105 @@ html, body {
 .path-row input[type=text] { flex: 1; min-width: 0; }
 .path-row .browse {
     flex-shrink: 0;
-    background: #1B2429;
-    border: 1px solid #2A363C;
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
     border-radius: 4px;
-    color: #8CA0A8;
+    color: var(--muted);
     font-size: 11px;
     font-family: inherit;
     padding: 0 14px;
     cursor: pointer;
     white-space: nowrap;
 }
-.path-row .browse:hover { color: #E7EDEF; border-color: #3A464C; }
+.path-row .browse:hover { color: var(--text); border-color: var(--line-strong); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
 
-.toggle-row { display: flex; align-items: center; justify-content: space-between; border: 1px solid #2A363C; border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
-.toggle { position: relative; width: 34px; height: 18px; border-radius: 9px; background: #384349; cursor: pointer; flex-shrink: 0; border: none; padding: 0; }
-.toggle.on { background: #5FBF7A; }
-.toggle .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #0E1417; transition: left 0.12s; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+.toggle { position: relative; width: 34px; height: 18px; border-radius: 9px; background: var(--toggle-off); cursor: pointer; flex-shrink: 0; border: none; padding: 0; }
+.toggle.on { background: var(--ok); }
+.toggle .knob { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--knob); transition: left 0.12s; }
 .toggle.on .knob { left: 16px; }
 
-.card { border: 1px solid #2A363C; border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+.card { border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
 .card .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.freq { font-family: Consolas, monospace; font-size: 17px; color: #F2A93B; }
-.badge { font-size: 10px; color: #4FD1C5; border: 1px solid #2E4E4C; border-radius: 3px; padding: 2px 6px; }
+.freq { font-family: Consolas, monospace; font-size: 17px; color: var(--accent); }
+.badge { font-size: 10px; color: var(--teal); border: 1px solid var(--ok-line); border-radius: 3px; padding: 2px 6px; }
 .spacer { flex: 1; }
-.icon-btn { background: none; border: none; color: #5A6A70; cursor: pointer; font-size: 14px; padding: 2px; }
-.icon-btn:hover { color: #E2543A; }
+.icon-btn { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 14px; padding: 2px; }
+.icon-btn:hover { color: var(--bad); }
 
-.link-action { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4FD1C5; cursor: pointer; background: none; border: none; padding: 0; margin-bottom: 16px; }
-.link-action:hover { color: #7EE4D8; }
+.link-action { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--teal); cursor: pointer; background: none; border: none; padding: 0; margin-bottom: 16px; }
+.link-action:hover { color: var(--teal-hover); }
 
 /* The editor had no links at all until the voice-sources block, so none were ever styled - and a
    browser default link is navy on this background, which is close to invisible. Same teal as the
    other actionable text. */
-a { color: #4FD1C5; }
-a:hover { color: #7EE4D8; }
+a { color: var(--teal); }
+a:hover { color: var(--teal-hover); }
 
 /* A detected TTS voice, as a button rather than a label: the voice field is a combo box, but
    nothing about an <input list> says so, so the voices somebody just listed are also the
    quickest way to fill the field. Clicking one writes its name into the field it belongs to. */
-.voice-chip { font-size: 11px; color: #8CA0A8; background: none; border: 1px solid #2A363C; border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: inherit; }
-.voice-chip:hover { color: #E7EDEF; border-color: #4FD1C5; }
-.voice-chip.is-current { color: #4FD1C5; border-color: #4FD1C5; }
+.voice-chip { font-size: 11px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; cursor: pointer; font-family: inherit; }
+.voice-chip:hover { color: var(--text); border-color: var(--teal); }
+.voice-chip.is-current { color: var(--teal); border-color: var(--teal); }
 .voice-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 /* The "where do I get more voices" block. Collapsed by default - it is a detour somebody takes
    once, and open by default it would push the fields off the page. */
-details.voice-sources { border: 1px solid #2A363C; border-radius: 6px; padding: 10px 14px; margin: 4px 0 12px; }
-details.voice-sources > summary { font-size: 12.5px; color: #4FD1C5; cursor: pointer; }
-details.voice-sources > summary:hover { color: #7EE4D8; }
+details.voice-sources { border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; margin: 4px 0 12px; }
+details.voice-sources > summary { font-size: 12.5px; color: var(--teal); cursor: pointer; }
+details.voice-sources > summary:hover { color: var(--teal-hover); }
 details.voice-sources[open] > summary { margin-bottom: 8px; }
-details.voice-sources .route { font-size: 11.5px; color: #8CA0A8; margin-top: 10px; }
-details.voice-sources .route strong { color: #E7EDEF; }
-details.voice-sources .route.warn strong { color: #F2A93B; }
+details.voice-sources .route { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+details.voice-sources .route strong { color: var(--text); }
+details.voice-sources .route.warn strong { color: var(--accent); }
 
-table.phrase-table { width: 100%; border: 1px solid #2A363C; border-radius: 6px; border-collapse: collapse; margin-bottom: 12px; overflow: hidden; }
-table.phrase-table td { padding: 8px 12px; border-bottom: 1px solid #202A2E; font-size: 12px; vertical-align: middle; }
+table.phrase-table { width: 100%; border: 1px solid var(--line); border-radius: 6px; border-collapse: collapse; margin-bottom: 12px; overflow: hidden; }
+table.phrase-table td { padding: 8px 12px; border-bottom: 1px solid var(--line-soft); font-size: 12px; vertical-align: middle; }
 table.phrase-table tr:last-child td { border-bottom: none; }
-table.phrase-table input { background: #161F24; border: 1px solid #2A363C; border-radius: 4px; padding: 5px 8px; font-size: 12px; color: #E7EDEF; width: 100%; }
+table.phrase-table input { background: var(--bg-input); border: 1px solid var(--line); border-radius: 4px; padding: 5px 8px; font-size: 12px; color: var(--text); width: 100%; }
 
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 14px; background: #1B2429; border: 1px solid #2A363C; font-size: 12px; color: #E7EDEF; margin: 0 8px 8px 0; }
-.chip .x { cursor: pointer; color: #5A6A70; }
-.chip .x:hover { color: #E2543A; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 14px; background: var(--bg-raised); border: 1px solid var(--line); font-size: 12px; color: var(--text); margin: 0 8px 8px 0; }
+.chip .x { cursor: pointer; color: var(--faint); }
+.chip .x:hover { color: var(--bad); }
 
-.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #12191D; border-top: 1px solid #2A363C; font-size: 11px; color: #5A6A70; flex-shrink: 0; }
+.footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--bg-bar); border-top: 1px solid var(--line); font-size: 11px; color: var(--faint); flex-shrink: 0; }
 .footer .left { display: flex; align-items: center; gap: 16px; }
-.footer .ok { color: #5FBF7A; }
-.footer .warn { color: #F2A93B; }
-.footer button { font-size: 11px; padding: 6px 12px; border-radius: 4px; border: 1px solid #2A363C; background: transparent; color: #8CA0A8; cursor: pointer; margin-left: 8px; }
-.footer button.primary { background: #F2A93B; border-color: #F2A93B; color: #412402; font-weight: 600; }
+.footer .ok { color: var(--ok); }
+.footer .warn { color: var(--accent); }
+.footer button { font-size: 11px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; margin-left: 8px; }
+.footer button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); font-weight: 600; }
 .footer button:hover { filter: brightness(1.1); }
 
-.log-tail { background: #0A0F12; border: 1px solid #202A2E; border-radius: 4px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 11px; line-height: 1.7; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
+.log-tail { background: var(--bg-deep); border: 1px solid var(--line-soft); border-radius: 4px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 11px; line-height: 1.7; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
+
+/* The dark/light switch in the title bar: two halves, the chosen one filled. */
+.titlebar-right { display: flex; align-items: center; gap: 16px; }
+.theme-switch { display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+.theme-switch button { background: transparent; border: none; color: var(--faint); font-family: inherit; font-size: 10px; letter-spacing: 1px; padding: 4px 10px; cursor: pointer; }
+.theme-switch button + button { border-left: 1px solid var(--line); }
+.theme-switch button:hover { color: var(--text); }
+.theme-switch button.active { background: var(--bg-raised); color: var(--accent); font-weight: 600; }
+
+/* A second heading on one page (CH3: profiles, then backup and restore). */
+.content h1.section-title { margin-top: 28px; }
+.card .card-title { font-size: 10px; letter-spacing: 1px; color: var(--faint); }
+
+/* Text roles, for markup that used to carry its colour inline. */
+.quiet { color: var(--faint); }
+.strong-text { color: var(--text); }
+.warn-text { color: var(--accent); }
+.bad-text { color: var(--bad); font-size: 12px; }
+code { font-family: Consolas, monospace; font-size: 0.95em; }
+
+/* The "restore this?" question: set apart from the list it sits above. */
+.confirm-box { border: 1px solid var(--amber-line); background: var(--note-bg); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+.confirm-box.bad { border-color: var(--bad-line); background: var(--bad-bg); }
+.confirm-box .hint { margin-top: 6px; }
+.link-action.danger { color: var(--bad); }
+.link-action.danger:hover { color: var(--bad); filter: brightness(1.2); }
+.icon-btn.accent { color: var(--teal); }
+.icon-btn.accent:hover { color: var(--teal-hover); }

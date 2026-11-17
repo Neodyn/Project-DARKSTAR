@@ -1072,8 +1072,17 @@ public sealed class AppConfig
         if (!File.Exists(configPath))
             return null;
 
-        return JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(configPath), JsonOptions);
+        return FromJson(File.ReadAllText(configPath));
     }
+
+    /// <summary>
+    /// Reads settings from text rather than from a file - for a config.json that is not on disk
+    /// yet, such as one inside a backup that is about to be restored. Same options as every other
+    /// read, so what passes here is what the bot will accept.
+    /// </summary>
+    /// <exception cref="JsonException">The text isn't valid JSON for a config.</exception>
+    public static AppConfig? FromJson(string json) =>
+        JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
 
     /// <summary>
     /// Checks whether configPath exists. If not: creates a default configuration there and

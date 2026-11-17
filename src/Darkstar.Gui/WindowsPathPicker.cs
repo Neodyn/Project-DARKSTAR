@@ -69,6 +69,24 @@ public sealed class WindowsPathPicker : IPathPicker
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     });
 
+    public string? PickSaveFile(string title, string? startAt, string suggestedName, string filter) => Show(() =>
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = title,
+            Filter = filter,
+            FileName = suggestedName,
+            AddExtension = true,
+            DefaultExt = Path.GetExtension(suggestedName),
+            OverwritePrompt = true,
+        };
+
+        var start = ExistingFolder(startAt);
+        if (start != null) dialog.InitialDirectory = start;
+
+        return dialog.ShowDialog() == true ? dialog.FileName : null;
+    });
+
     /// <summary>The path if it is a folder that exists, otherwise null. Never throws.</summary>
     private static string? ExistingFolder(string? path)
     {

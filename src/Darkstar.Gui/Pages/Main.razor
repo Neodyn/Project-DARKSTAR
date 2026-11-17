@@ -3,14 +3,25 @@
 @inject IPathPicker Picker
 @implements IDisposable
 
+@* The theme is a class on one element that holds everything, rather than on <html>: the editor
+   has no JavaScript interop, and a class Blazor renders is the one switch it can flip by itself.
+   Every colour is a variable in app.css that this class redefines. *@
+<div class="shell @(Store.LightTheme ? "theme-light" : "theme-dark")">
+
 <div class="titlebar">
     <div class="brand">
         D.A.R.K.S.T.A.R. // CONFIG EDITOR
         <span class="build" title="@(VersionInfo.IsRelease ? "Installed build" : "Built from source, not by the installer script")">@VersionInfo.Display</span>
     </div>
-    <div class="status @(Store.IsLoaded ? "connected" : "disconnected")">
-        <span class="dot"></span>
-        @(Store.IsLoaded ? $"Loaded from {Store.ConfigFolder}" : "Not loaded")
+    <div class="titlebar-right">
+        <div class="status @(Store.IsLoaded ? "connected" : "disconnected")">
+            <span class="dot"></span>
+            @(Store.IsLoaded ? $"Loaded from {Store.ConfigFolder}" : "Not loaded")
+        </div>
+        <div class="theme-switch" role="group" aria-label="Colours">
+            <button class="@(Store.LightTheme ? "" : "active")" title="Dark colours" @onclick="() => Store.SetTheme(false)">☾ DARK</button>
+            <button class="@(Store.LightTheme ? "active" : "")" title="Light colours" @onclick="() => Store.SetTheme(true)">☀ LIGHT</button>
+        </div>
     </div>
 </div>
 
@@ -42,7 +53,7 @@
         @if (!Store.IsLoaded)
         {
             <h1>NOT LOADED</h1>
-            <p style="color:#8CA0A8">@Store.StatusMessage</p>
+            <p style="color:var(--muted)">@Store.StatusMessage</p>
             <div class="field" style="max-width:480px">
                 <label>CONFIG FOLDER</label>
                 <div class="path-row">
@@ -100,6 +111,8 @@
         <button @onclick="Reload">Discard (reload from disk)</button>
         <button class="primary" @onclick="() => Store.SaveAll()">Save changes</button>
     </div>
+</div>
+
 </div>
 
 @code {
@@ -186,7 +199,7 @@
             {
                 new NavEntry("connection", "CH1", "CONNECTION"),
                 new NavEntry("service", "CH2", "SERVICE"),
-                new NavEntry("profiles", "CH3", "PROFILES"),
+                new NavEntry("profiles", "CH3", "PROFILES & BACKUP"),
             }),
             new NavGroup("RADIO & SPEECH", new[]
             {

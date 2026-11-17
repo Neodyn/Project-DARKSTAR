@@ -607,8 +607,11 @@ Die Kanäle sind danach gruppiert, was man gerade einrichtet, nicht nach ihrer N
 | **CH10 Logging** | Log-Schalter, ermittelter Log-Ordner, Aufräumgrenzen für Logs und eine Live-Ansicht der neuesten Logzeilen. |
 | **CH8 DCS-gRPC** | Drei Einträge in der Seitenleiste: **Server & test** (Verbindung und Testknopf), **Replies** (taktische Antworten inklusive Alpha Check mit eigenem Testknopf, die Karte für Positionen von Freunden, der Threat Circle und die Flugplatz-Karte) und **Mission explorer**. |
 | **CH2 Service** | Windows-Dienst installieren, starten, stoppen und sauber entfernen. |
+| **CH3 Profiles & Backup** | Der Konfigurationsordner, benannte `config.json`-Profile und **Backup & Restore**: das ganze Setup als eine ZIP-Datei, und wieder zurück. Siehe Kapitel 10. |
 
 Fußzeile: **Discard (reload from disk)** und **Save changes**. Vor jedem Speichern wird eine Sicherungskopie mit Zeitstempel angelegt.
+
+Oben rechts: **☾ DARK** und **☀ LIGHT** schalten die Farben des Editors um. Die Wahl wird für den nächsten Start gemerkt (in `%LOCALAPPDATA%\Darkstar\editor.json`, wie der Konfigurationsordner) und ändert nichts, was der Bot liest.
 
 Einzelheiten zu CH8 und CH2 stehen in den nächsten beiden Kapiteln, eine vollständige Beschreibung in [gui.md](gui.md).
 
@@ -1286,9 +1289,9 @@ Das Funkrad ist ein kleines Programm auf dem PC des **Piloten**. Es zeigt die Ca
 
 **Einrichten auf dem PC eines Piloten:**
 
-1. Den Ordner des Funkrads auf den PC kopieren — der Serverbetreiber baut ihn einmal und gibt ihn als Zip weiter (siehe unten).
-2. `dcs\Scripts\Hooks\Darkstar-Wheel.lua` aus diesem Ordner nach `Saved Games\DCS\Scripts\Hooks\` kopieren — der Saved-Games-Ordner des DCS, mit dem der Pilot fliegt — und DCS neu starten.
-3. `Darkstar.Wheel.exe` starten. Das Symbol sitzt im Infobereich; Rechtsklick, *Learn the wheel key or joystick button…* wählen und die gewünschte Taste oder HOTAS-Taste drücken. Ohne das öffnet **Rollen** (Scroll Lock) das Rad.
+1. **`DARKSTAR-Wheel-Setup-<Version>.exe`** ausführen — der Serverbetreiber baut es zusammen mit dem Server-Installer und gibt es weiter (siehe unten). Keine Administratorrechte nötig. Auf der Seite *DCS hook* jedes DCS anhaken, mit dem der Pilot fliegt; das Setup listet, was es unter `Saved Games` findet (`DCS`, `DCS.openbeta`, …), und legt `Darkstar-Wheel.lua` in dessen `Scripts\Hooks`. DCS einmal neu starten.
+2. *Start the radio wheel with Windows* angehakt lassen, damit das Rad da ist, wann immer DCS läuft. Nur eine fehlende .NET 8 Desktop Runtime lässt Windows um Erlaubnis fragen, um sie zu installieren.
+3. Das Rad starten (das Setup startet es am Ende). Das Symbol sitzt im Infobereich; Rechtsklick, *Learn the wheel key or joystick button…* wählen und die gewünschte Taste oder HOTAS-Taste drücken. Ohne das öffnet **Rollen** (Scroll Lock) das Rad.
 4. Heißt der Bot auf dem Server nicht *Overlord*: Rechtsklick → *Open the settings file* und `Callsign` ändern.
 
 DCS muss **im Fenster oder randlos** laufen (Standard). Ein exklusives Vollbild-DCS verdeckt jedes andere Fenster, das Rad eingeschlossen.
@@ -1317,7 +1320,7 @@ Sieben Segmente, immer an derselben Stelle, damit der Daumen sie ohne Hinsehen f
 
 Die Datei liegt auf dem PC des Piloten unter `%LOCALAPPDATA%\Darkstar\wheel.json`. Der Joystick wird über die Gamecontroller-Schnittstelle von Windows gelesen; sie sieht die ersten 32 Knöpfe und den ersten Hat eines Geräts.
 
-**Für die Staffel bauen:** auf dem Build-PC `dotnet publish src\Darkstar.Wheel -c Release -r win-x64 --self-contained true -o publish\wheel`, dann `publish\wheel` zippen. Eigenständig, die Piloten müssen also nichts weiter installieren; der Client-Hook ist schon drin, unter `dcs\Scripts\Hooks`.
+**Für die Staffel bauen:** `build-installer.ps1` baut `installer\output\DARKSTAR-Wheel-Setup-<Version>.exe` neben dem Server-Installer — die eine Datei für die Piloten. Aktualisieren heißt, das neuere Setup ausführen; es beendet ein laufendes Rad vorher und behält `wheel.json`. Die Deinstallation entfernt die Hooks, die es geschrieben hat, aber nicht `wheel.json`. Ohne Setup: den Ordner des Rads und `dcs\Scripts\Hooks\Darkstar-Wheel.lua` von Hand kopieren. Siehe [Installer bauen](building-the-installer.md#the-radio-wheels-setup).
 
 ---
 
@@ -1355,9 +1358,9 @@ Alles liegt neben der EXE des Bots:
 | `vocabulary.json` | Erkennungshinweise. |
 | `logs\` | Logdateien mit Zeitstempel, eine pro Start, benannt `darkstar_<Datum>_<Zeit>.log`. Ausführliche Paketdetails nur mit `DebugLogging`; bei einem Fehler kommen die letzten 200 ausführlichen Zeilen automatisch mit. |
 | `recordings\` | Nur mit aktivem `SaveRecordings`. Eine WAV pro Aussendung, etwa 100 KB pro Sekunde Sprache. |
-| `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung. |
+| `Backup\` | Automatische Sicherungskopien vor jeder automatischen Änderung, und die Backups von CH3 (`Darkstar-Backup-<Datum>_<Uhrzeit>.zip`). |
 | `grpc-dumps\` | Gespeicherte JSON-Ergebnisse aus dem Missionsdaten-Explorer. |
-| `Profiles\` | Gespeicherte `config.json`-Varianten, eine Datei je Profil. Wird nur von CH3 des Konfigurationseditors geschrieben und gelesen — der Bot sieht hier nie hinein. Siehe [die Anleitung zum Editor](gui.md#ch3--profiles). |
+| `Profiles\` | Gespeicherte `config.json`-Varianten, eine Datei je Profil. Wird nur von CH3 des Konfigurationseditors geschrieben und gelesen — der Bot sieht hier nie hinein. Siehe [die Anleitung zum Editor](gui.md#ch3--profiles--backup). |
 
 **Keiner der beiden Ordner wächst unbegrenzt.** Beim Start und einmal pro Stunde löscht der Bot seine eigenen alten Dateien: Aufnahmen nach `RecordingRetentionDays` (7) oder sobald `recordings\` über `RecordingRetentionMaxMb` (500) liegt, Logs nach `LogRetentionDays` (30) bzw. `LogRetentionMaxMb` (200). Erst das Alter, dann die Größe: Was das Alterslimit überlebt, wird von den ältesten Dateien her gekürzt, bis der Ordner passt. Die drei neuesten Logdateien werden nie gelöscht, egal was die Limits sagen — ein versehentlich gesetztes 1-MB-Budget kann also nicht das Log löschen, in das gerade geschrieben wird. Ein Limit auf `0` schaltet es ab. Jede Löschung steht mit Begründung im Log:
 
@@ -1366,6 +1369,10 @@ Alles liegt neben der EXE des Bots:
 ```
 
 Angetastet wird sonst nichts — nur `*.wav` in `recordings\` und `*.log` in `logs\`. `Backup\` und `grpc-dumps\` bleiben absichtlich unberührt: Die gibt es ja gerade für den Fall, dass man sie später noch braucht.
+
+**Ein Backup des ganzen Setups** entsteht im Konfigurationseditor auf **CH3 Profiles & Backup**: eine ZIP-Datei mit `config.json`, `phrases.json`, `vocabulary.json` und, wenn eingeschaltet, den Profilen — so, wie sie auf der Platte stehen, also vorher speichern. Sie landet in `Backup\` oder mit **Back up to a file…** woanders, etwa auf einem USB-Stick. Mit **Leave out keys and passwords** werden Gemini-Schlüssel, DCS-gRPC-Schlüssel, Discord-Webhook und AWACS-Passwort in der Kopie geleert; ohne diese Option die Datei wie ein Passwort behandeln.
+
+**Beim Wiederherstellen** wird jede Datei im Backup so geprüft, wie der Bot sie liest, bevor irgendetwas geändert wird, und der aktuelle Stand vorher als `…-before-restore.zip` gesichert — wer diese Datei wiederherstellt, macht den Restore rückgängig. Profile, die nicht im Backup sind, bleiben. Ein Backup ohne Schlüssel behält die Schlüssel, die auf dem Ziel-PC eingetragen sind. Danach den Bot neu starten.
 
 Das Log ist die erste Anlaufstelle, wenn etwas klemmt. Ein gesunder Start sieht ungefähr so aus:
 

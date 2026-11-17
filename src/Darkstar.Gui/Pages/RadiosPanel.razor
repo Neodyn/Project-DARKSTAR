@@ -3,12 +3,12 @@
 
 <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
     <h1 style="margin:0">RADIOS — PER-CHANNEL IDENTITY</h1>
-    <span style="font-size:11px;color:#5A6A70">@Store.Config.Radios.Count active</span>
+    <span style="font-size:11px;color:var(--faint)">@Store.Config.Radios.Count active</span>
 </div>
 
 @if (Store.Config.Radios.Count == 0)
 {
-    <p style="color:#8CA0A8;font-size:12px">
+    <p style="color:var(--muted);font-size:12px">
         No entries in "Radios" yet - the bot falls back to the legacy single-radio fields
         (@FrequencyText.ToMhz(Store.Config.FrequencyHz) MHz, @Store.Config.Modulation). Add a radio below to switch to
         the multi-radio mode.
@@ -17,7 +17,7 @@
 
 @if (_frequencyError != null)
 {
-    <div class="hint" style="color:#F2A93B;margin-bottom:10px">@_frequencyError</div>
+    <div class="hint" style="color:var(--accent);margin-bottom:10px">@_frequencyError</div>
 }
 
 @for (var i = 0; i < Store.Config.Radios.Count; i++)
@@ -28,8 +28,8 @@
             <input type="text" inputmode="decimal" class="freq" title="Frequency in MHz, e.g. 251.000"
                    value="@FrequencyText.ToMhz(radio.FrequencyHz)" @onchange="e => SetFrequency(radio, e.Value)"
                    style="background:transparent;border:none;width:90px;padding:0" />
-            <span style="font-size:11px;color:#5A6A70;margin-right:8px">MHz</span>
-            <select @bind="radio.Modulation" style="background:#161F24;border:1px solid #2A363C;border-radius:3px;color:#4FD1C5;font-size:11px;padding:3px 6px">
+            <span style="font-size:11px;color:var(--faint);margin-right:8px">MHz</span>
+            <select @bind="radio.Modulation" style="background:var(--bg-input);border:1px solid var(--line);border-radius:3px;color:var(--teal);font-size:11px;padding:3px 6px">
                 <option value="AM">AM</option>
                 <option value="FM">FM</option>
             </select>
@@ -164,7 +164,7 @@
 
 <div class="card" style="margin:4px 0 12px">
     <div class="card-head" style="margin-bottom:6px">
-        <span style="font-size:12.5px;color:#E7EDEF">Voices on this machine</span>
+        <span style="font-size:12.5px;color:var(--text)">Voices on this machine</span>
         <span class="spacer"></span>
         <button class="link-action" style="margin-bottom:0" disabled="@Store.TtsVoicesLoading"
                 @onclick="() => Store.LoadTtsVoicesAsync(force: true)">
@@ -174,7 +174,7 @@
 
     @if (Store.TtsVoiceStatus != null)
     {
-        <div style="font-size:11.5px;color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">
+        <div style="font-size:11.5px;color:@(Store.TtsVoiceStatusIsError ? "var(--accent)" : "var(--ok)")">
             @Store.TtsVoiceStatus
         </div>
     }
@@ -187,7 +187,7 @@
         <div class="voice-chips">
             @foreach (var voice in Store.TtsVoiceList)
             {
-                <span style="font-size:11px;color:#8CA0A8;border:1px solid #2A363C;border-radius:3px;padding:3px 7px">
+                <span style="font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:3px 7px">
                     @voice.Describe()
                 </span>
             }
@@ -210,7 +210,7 @@
 
 <VoiceSourcesCard />
 
-<p style="color:#8CA0A8;font-size:11.5px;margin:4px 0 12px">
+<p style="color:var(--muted);font-size:11.5px;margin:4px 0 12px">
     Splitting the roles is how you get a tower: give one frequency the airfield requests and turn
     its tactical requests off, and the other way round on the AWACS frequency. Each gets its own
     wake word and callsign above. A pilot who calls the wrong one is told where to go instead of
@@ -232,7 +232,7 @@
 
 <div class="card" style="margin-top:10px">
     <div class="card-head" style="margin-bottom:6px">
-        <span style="font-size:12.5px;color:#E7EDEF">One tower per airfield</span>
+        <span style="font-size:12.5px;color:var(--text)">One tower per airfield</span>
         <span class="spacer"></span>
         <button class="link-action" style="margin-bottom:0" disabled="@(_planning || GeneratedCount == 0)"
                 @onclick="RemoveGeneratedTowers">
@@ -244,7 +244,7 @@
         </button>
     </div>
 
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         Reads the airfields from the mission that is loaded right now and adds one radio per airfield —
         callsign <code>&lt;airfield&gt; @Store.Config.TowerPlanCallsignSuffix</code>, airfield requests on,
         tactical off. Existing radios are kept and their frequencies skipped, so generating is
@@ -269,15 +269,15 @@
         </div>
         <div class="field" style="margin-bottom:0">
             <label>MODULATION</label>
-            <select @bind="Store.Config.TowerPlanModulation" style="background:#161F24;border:1px solid #2A363C;border-radius:4px;color:#E7EDEF;padding:7px 10px;width:100%">
+            <select @bind="Store.Config.TowerPlanModulation" style="background:var(--bg-input);border:1px solid var(--line);border-radius:4px;color:var(--text);padding:7px 10px;width:100%">
                 <option value="AM">AM</option>
                 <option value="FM">FM</option>
             </select>
         </div>
     </div>
 
-    <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:10px 0 0">
-        <div style="font-size:11.5px;color:#F2A93B">
+    <div class="card" style="border-color:var(--amber-line);background:var(--note-bg);margin:10px 0 0">
+        <div style="font-size:11.5px;color:var(--accent)">
             <strong>These frequencies are invented.</strong> DCS-gRPC does not report an airfield's real
             radio frequency — the <code>Airbase</code> data carries a name, a coalition and a position and
             nothing else. So pick a range your mission doesn't use for something else, and leave the
@@ -298,7 +298,7 @@
         <div style="margin-top:10px">
             @foreach (var note in _planNotes)
             {
-                <div style="font-size:11.5px;color:@(_planFailed ? "#F2A93B" : "#5FBF7A")">@note</div>
+                <div style="font-size:11.5px;color:@(_planFailed ? "var(--accent)" : "var(--ok)")">@note</div>
             }
         </div>
     }
@@ -306,7 +306,7 @@
 
 <div class="card" style="margin-top:10px">
     <div class="card-head" style="margin-bottom:6px">
-        <span style="font-size:12.5px;color:#E7EDEF">Announce the frequencies in game</span>
+        <span style="font-size:12.5px;color:var(--text)">Announce the frequencies in game</span>
         <span class="spacer"></span>
         <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
             <button class="toggle @(Store.Config.AnnounceFrequenciesEnabled ? "on" : "")"
@@ -316,7 +316,7 @@
         </div>
     </div>
 
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         The counterpart to the generated towers: at startup the bot writes its frequencies into the
         running mission, because invented frequencies appear in no briefing and on no kneeboard.
         On by default — this is the only place your pilots can learn them.
@@ -324,7 +324,7 @@
 
     @if (!Store.Config.DcsGrpcEnabled)
     {
-        <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B;margin:0 0 10px">
+        <div class="card" style="border-color:var(--bad-line);font-size:12px;color:var(--accent);margin:0 0 10px">
             DCS-gRPC is switched off (CH8 → Server &amp; test). Writing into a mission needs it, so
             nothing will be announced — the frequencies then have to reach your pilots some other way.
         </div>
@@ -334,7 +334,7 @@
         <div class="toggle-row" style="margin:0 0 4px 0">
             <div>
                 <div>One F10 map marker per airfield</div>
-                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                <div style="font-size:11px;color:var(--faint);margin-top:3px">
                     The durable half: stays for the whole mission, names the tower that serves that field
                     plus the radios that are not tied to one, and can be read whenever somebody needs it.
                     Read-only, own coalition only, and a fixed id range — a restarted bot replaces its
@@ -351,7 +351,7 @@
         <div class="toggle-row" style="margin:0 0 4px 0">
             <div>
                 <div>One on-screen message at startup</div>
-                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                <div style="font-size:11px;color:var(--faint);margin-top:3px">
                     The transient half, for whoever is already flying when the bot comes up. Lists the
                     radios that are not tied to an airfield in full and summarises the towers, because a
                     dozen of them would scroll off the screen.
@@ -381,7 +381,7 @@
 
 <div class="card" style="margin-top:10px">
     <div class="card-head" style="margin-bottom:6px">
-        <span style="font-size:12.5px;color:#E7EDEF">Greet a pilot who tunes in</span>
+        <span style="font-size:12.5px;color:var(--text)">Greet a pilot who tunes in</span>
         <span class="spacer"></span>
         <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
             <button class="toggle @(Store.Config.TuneInGreetingEnabled ? "on" : "")"
@@ -391,7 +391,7 @@
         </div>
     </div>
 
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         SRS reports which frequencies every client has tuned. When somebody dials one of these radios in,
         the bot says which channel they reached and where the tactical radio is — the one thing an F10
         marker at their departure field cannot tell them once they are airborne.
@@ -413,8 +413,8 @@
         <input type="number" min="5" step="5" @bind="Store.Config.TuneInGreetingGapSeconds" />
     </div>
 
-    <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:10px 0 0">
-        <div style="font-size:11.5px;color:#F2A93B">
+    <div class="card" style="border-color:var(--amber-line);background:var(--note-bg);margin:10px 0 0">
+        <div style="font-size:11.5px;color:var(--accent)">
             <strong>SRS has no unicast.</strong> This greeting goes to <em>everybody</em> on the frequency,
             not just to the pilot who tuned in — which is why it is off by default. Each client is greeted
             once per frequency for the whole session and never again, and the gap above means a flight of
@@ -425,7 +425,7 @@
 </div>
 
 <div class="card" style="margin-top:10px">
-    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:10px">Legacy single-radio fields</div>
+    <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:10px">Legacy single-radio fields</div>
     <div class="hint" style="margin-bottom:10px">Only used when the list above is empty.</div>
     <div class="row2">
         <div class="field" style="margin-bottom:0">
@@ -434,7 +434,7 @@
         </div>
         <div class="field" style="margin-bottom:0">
             <label>MODULATION</label>
-            <select @bind="Store.Config.Modulation" style="background:#161F24;border:1px solid #2A363C;border-radius:4px;color:#E7EDEF;padding:7px 10px;width:100%">
+            <select @bind="Store.Config.Modulation" style="background:var(--bg-input);border:1px solid var(--line);border-radius:4px;color:var(--text);padding:7px 10px;width:100%">
                 <option value="AM">AM</option>
                 <option value="FM">FM</option>
             </select>
@@ -531,15 +531,15 @@
             var selected = value == optionValue;
             var colour = optionValue switch
             {
-                true => selected ? "#5FBF7A" : "#5A6A70",
-                false => selected ? "#E2543A" : "#5A6A70",
-                _ => selected ? "#E7EDEF" : "#5A6A70"
+                true => selected ? "var(--ok)" : "var(--faint)",
+                false => selected ? "var(--bad)" : "var(--faint)",
+                _ => selected ? "var(--text)" : "var(--faint)"
             };
             var border = selected
-                ? optionValue switch { true => "#2E4E4C", false => "#6C2E2E", _ => "#3A474D" }
-                : "#2A363C";
+                ? optionValue switch { true => "var(--ok-line)", false => "var(--bad-line)", _ => "var(--line-strong)" }
+                : "var(--line)";
             var background = selected
-                ? optionValue switch { true => "#16302A", false => "#2A1614", _ => "#1B2429" }
+                ? optionValue switch { true => "var(--ok-bg)", false => "var(--bad-bg)", _ => "var(--bg-raised)" }
                 : "transparent";
 
             builder.OpenElement(sequence++, "button");

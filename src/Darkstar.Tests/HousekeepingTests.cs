@@ -1002,7 +1002,8 @@ internal static class HousekeepingTests
         // Setup.iss packs the publish folders wholesale, so these two properties are the only thing
         // standing between a NuGet package's extras and somebody's disk. They are easy to lose in a
         // merge and nothing else would notice.
-        foreach (var project in new[] { "src/Darkstar.Bot/Darkstar.Bot.csproj", "src/Darkstar.Gui/Darkstar.Gui.csproj" })
+        foreach (var project in new[] { "src/Darkstar.Bot/Darkstar.Bot.csproj", "src/Darkstar.Gui/Darkstar.Gui.csproj",
+                                        "src/Darkstar.Wheel/Darkstar.Wheel.csproj" })
         {
             var text = System.IO.File.ReadAllText(Root + project);
             Check($"{project} ships one language only",
@@ -1044,6 +1045,9 @@ internal static class HousekeepingTests
         Eq("somebody else's metadata still yields the version",
             VersionInfo.Parse("1.2+a1b2c3d").Version, "1.2");
         Check("but not a build time", VersionInfo.Parse("1.2+a1b2c3d").BuiltUtc == null);
+        Eq("a commit the SDK appended does not hide the build time",
+            VersionInfo.Parse("1.0+build.20261117175202.66bcd97cf995bdf9c952949b84a55afaf3f70be8").BuiltUtc?.ToString("yyyy-MM-dd HH:mm") ?? "-",
+            "2026-11-17 17:52");
         Check("an unparseable stamp is dropped, not guessed at",
             VersionInfo.Parse("1.2+build.not-a-date").BuiltUtc == null);
         Eq("and whitespace around it is not part of the version",
@@ -1063,9 +1067,20 @@ internal static class HousekeepingTests
             ReadSource("src/Darkstar.Gui/Pages/Main.razor").Contains("@VersionInfo.Display", StringComparison.Ordinal));
 
         foreach (var project in new[] { "src/Darkstar.Bot/Darkstar.Bot.csproj", "src/Darkstar.Gui/Darkstar.Gui.csproj",
-                                        "src/Darkstar.Core/Darkstar.Core.csproj" })
+                                        "src/Darkstar.Core/Darkstar.Core.csproj", "src/Darkstar.Wheel/Darkstar.Wheel.csproj" })
+        {
             Check($"{System.IO.Path.GetFileName(project)} defaults to a version that is visibly not a release",
                 ReadSource(project).Contains("<InformationalVersion>0.0.0-dev</InformationalVersion>", StringComparison.Ordinal));
+
+            // In a git checkout the SDK appends the commit to the stamp, and build-installer.ps1
+            // then finds "1.0+build.<time>.<sha>" where it passed "1.0+build.<time>" - every
+            // publish from a clone was reported as stale and no installer was built.
+            Check($"{System.IO.Path.GetFileName(project)} keeps the stamp exactly as passed",
+                ReadSource(project).Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", StringComparison.Ordinal));
+        }
+
+        Check("and the build script says so too, for a project that forgets",
+            buildScript.Contains("-p:IncludeSourceRevisionInInformationalVersion=false", StringComparison.Ordinal));
 
         Console.WriteLine();
         Console.WriteLine("The installer cannot pack a build other than the one just made");
@@ -1123,7 +1138,7 @@ internal static class HousekeepingTests
         // return value, so $botOk was an array of dotnet's console lines and "-not $botOk" could
         // never be true. Every failure guard below that line was dead.
         Check("dotnet's output does not become the function's return value",
-            buildScript.Contains("-p:InformationalVersion=$informational | Out-Host", StringComparison.Ordinal));
+            buildScript.Contains("-p:IncludeSourceRevisionInInformationalVersion=false | Out-Host", StringComparison.Ordinal));
 
         Console.WriteLine();
         Console.WriteLine("A missing payload cannot end the build in the compiler");
@@ -1173,6 +1188,54 @@ internal static class HousekeepingTests
 
         Check("every packed file either always exists, can be left out, or may be missing",
             unguarded.Count == 0, string.Join(" | ", unguarded));
+
+        Console.WriteLine();
+        Console.WriteLine("The radio wheel has a setup of its own, for the pilots");
+
+        // The server installer and the wheel's are for different machines and different people:
+        // the bot runs on a server somebody administers, the wheel on every pilot's gaming PC.
+        var wheelIss = System.IO.File.ReadAllText(Root + "installer/Wheel.iss");
+
+        static string? AppIdOf(string script) =>
+            System.Text.RegularExpressions.Regex.Match(script, @"^AppId=(.+)$", System.Text.RegularExpressions.RegexOptions.Multiline)
+                is { Success: true } m ? m.Groups[1].Value.Trim() : null;
+
+        Check("it is a separate product, never taken for an upgrade of the server installation",
+            AppIdOf(wheelIss) != null && AppIdOf(wheelIss) != AppIdOf(iss), $"{AppIdOf(wheelIss)} / {AppIdOf(iss)}");
+        Check("it installs per user, without administrator rights",
+            wheelIss.Contains("PrivilegesRequired=lowest", StringComparison.Ordinal) &&
+            wheelIss.Contains("DefaultDirName={autopf}\\Darkstar Wheel", StringComparison.Ordinal));
+        Check("the runtime installer is started so that Windows can ask for those rights when it is needed",
+            wheelIss.Contains("Check: RuntimeToInstall; Flags: shellexec waituntilterminated", StringComparison.Ordinal));
+        Check("it packs the wheel's publish output, without symbols by default",
+            wheelIss.Contains("Source: \"publish\\wheel\\*\"; DestDir: \"{app}\"; Excludes: \"{#PayloadExcludes}\"", StringComparison.Ordinal) &&
+            wheelIss.Contains("#define PayloadExcludes \"*.pdb,*.xml\"", StringComparison.Ordinal));
+
+        var wheelUnguarded = wheelIss.Split('\n').Select(l => l.TrimEnd('\r'))
+            .Where(l => l.StartsWith("Source:", StringComparison.Ordinal) &&
+                        !l.Contains("skipifsourcedoesntexist", StringComparison.Ordinal) &&
+                        !l.Contains("publish\\", StringComparison.Ordinal))
+            .ToList();
+        Check("and nothing that could stop the compiler", wheelUnguarded.Count == 0, string.Join(" | ", wheelUnguarded));
+
+        Check("it copies the client hook the repository ships",
+            wheelIss.Contains("#define MyHookFile \"Darkstar-Wheel.lua\"", StringComparison.Ordinal) &&
+            System.IO.File.Exists(Root + "dcs/Scripts/Hooks/Darkstar-Wheel.lua"));
+        Check("into the DCS a pilot flies with, not into a dedicated server's folder",
+            wheelIss.Contains("(Pos('server', Lowercase(Name)) = 0)", StringComparison.Ordinal));
+        Check("and removes only files with exactly that name, whatever its list of hooks says",
+            wheelIss.Contains("if CompareText(ExtractFileName(Path), '{#MyHookFile}') = 0 then", StringComparison.Ordinal));
+
+        var wheelPublishAt = buildScript.IndexOf("Invoke-Publish $wheelProject $publishWheel \"Wheel\" \"Darkstar.Wheel.exe\"", StringComparison.Ordinal);
+        var hookCheckAt = buildScript.IndexOf("$wheelHook = Join-Path $publishWheel", StringComparison.Ordinal);
+        var wheelCompileAt = buildScript.IndexOf("& $iscc @wheelIsccArgs $wheelIssFile", StringComparison.Ordinal);
+        Check("the build publishes the wheel like the bot, stamp check included", wheelPublishAt > 0);
+        Check("checks that the hook made it into the publish output before compiling",
+            hookCheckAt > 0 && compileAt > hookCheckAt, $"hook check at {hookCheckAt}, compile at {compileAt}");
+        Check("and compiles the wheel's setup after the server's, so a failure there leaves the server's intact",
+            wheelCompileAt > compileAt, $"server at {compileAt}, wheel at {wheelCompileAt}");
+        Check("a failed wheel setup still fails the build", buildScript.Contains("if ($wheelFailed) { exit 1 }", StringComparison.Ordinal));
+        Check("and the wheel can be left out when it has not changed", buildScript.Contains("[switch]$SkipWheel", StringComparison.Ordinal));
 
         Console.WriteLine();
         Console.WriteLine("Only what is needed to run is installed");

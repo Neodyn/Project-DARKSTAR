@@ -41,7 +41,7 @@ internal static class EditorPanelTests
         "SERVER",
         "CH1 CONNECTION",
         "CH2 SERVICE",
-        "CH3 PROFILES",
+        "CH3 PROFILES & BACKUP",
 
         "RADIO & SPEECH",
         "CH4 RADIOS",
@@ -294,5 +294,94 @@ internal static class EditorPanelTests
 
         Check("the button is styled", System.Text.RegularExpressions.Regex.IsMatch(css,
             @"\.path-row \.browse\s*\{"));
+
+        CheckThemes(css);
+    }
+
+    /// <summary>
+    /// Dark and light. A theme is a second set of values for the same variables, so it is complete
+    /// exactly when every colour on screen goes through a variable and both sets name all of them.
+    /// A colour written straight into a panel looks right in the theme it was written in and wrong
+    /// in the other one, and only somebody switching themes on that very panel would ever see it.
+    /// </summary>
+    private static void CheckThemes(string css)
+    {
+        Section("Both colour themes cover every colour");
+
+        static HashSet<string> Variables(string body) =>
+            Regex.Matches(body, @"--(?<name>[a-z0-9-]+)\s*:").Select(m => m.Groups["name"].Value).ToHashSet();
+
+        var dark = Regex.Match(css, @":root\s*\{(?<body>[^}]*)\}");
+        var light = Regex.Match(css, @"\.theme-light\s*\{(?<body>[^}]*)\}");
+        Check("the dark colours are defined on :root", dark.Success);
+        Check("the light ones on .theme-light", light.Success);
+        if (!dark.Success || !light.Success) return;
+
+        var darkNames = Variables(dark.Groups["body"].Value);
+        var lightNames = Variables(light.Groups["body"].Value);
+        Check($"both define the same {darkNames.Count} colours",
+            darkNames.Count > 10 && darkNames.SetEquals(lightNames),
+            string.Join(", ", darkNames.Except(lightNames).Concat(lightNames.Except(darkNames))));
+
+        // Everything that uses a variable has to find it - a typo in a panel falls back to the
+        // browser default, which is black text on a dark page.
+        var pages = Directory.GetFiles(PagesFolder, "*.razor").ToDictionary(f => Path.GetFileName(f), f => File.ReadAllText(f));
+        var used = Regex.Matches(css + string.Join("\n", pages.Values), @"var\(--(?<name>[a-z0-9-]+)\)")
+            .Select(m => m.Groups["name"].Value)
+            .ToHashSet();
+        var undefined = used.Except(darkNames).ToList();
+        Check($"every colour used ({used.Count}) is defined", undefined.Count == 0, string.Join(", ", undefined));
+
+        var hex = new Regex(@"#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b");
+        var hardCoded = pages
+            .SelectMany(p => p.Value.Split('\n').Select((line, i) => (p.Key, Line: i + 1, Text: line)))
+            .Where(l => hex.IsMatch(l.Text))
+            .Select(l => $"{l.Key}:{l.Line}")
+            .ToList();
+        Check("no panel writes a colour of its own", hardCoded.Count == 0, string.Join(", ", hardCoded.Take(5)));
+
+        // In the stylesheet only the two sets may hold a colour - and the error bar, which sits
+        // outside the themed shell and keeps its colours on purpose.
+        var rest = css.Replace(dark.Value, "").Replace(light.Value, "");
+        rest = Regex.Replace(rest, @"#blazor-error-ui\s*\{[^}]*\}", "");
+        var strays = hex.Matches(rest).Select(m => m.Value).Distinct().ToList();
+        Check("and no rule in app.css does either", strays.Count == 0, string.Join(", ", strays));
+
+        var main = ReadSource("src/Darkstar.Gui/Pages/Main.razor");
+        Check("the shell carries the theme class",
+            main.Contains("<div class=\"shell @(Store.LightTheme ? \"theme-light\" : \"theme-dark\")\">", StringComparison.Ordinal));
+        Check("and the title bar switches it, both ways",
+            main.Contains("Store.SetTheme(false)", StringComparison.Ordinal) && main.Contains("Store.SetTheme(true)", StringComparison.Ordinal));
+
+        // The window paints its own background before the page is up. It has to be the light
+        // page colour, or every start in the light theme flashes something else first.
+        var lightBg = Regex.Match(light.Groups["body"].Value, @"--bg:\s*#(?<r>[0-9A-F]{2})(?<g>[0-9A-F]{2})(?<b>[0-9A-F]{2})", RegexOptions.IgnoreCase);
+        var window = ReadSource("src/Darkstar.Gui/MainWindow.xaml.cs");
+        Check("the window starts in the light page colour",
+            lightBg.Success && window.Contains(
+                $"Color.FromRgb(0x{lightBg.Groups["r"].Value}, 0x{lightBg.Groups["g"].Value}, 0x{lightBg.Groups["b"].Value})",
+                StringComparison.OrdinalIgnoreCase),
+            lightBg.Success ? lightBg.Value : "no --bg in the light set");
+
+        Section("The choice of theme is remembered");
+
+        var folder = Path.Combine(Path.GetTempPath(), "darkstar-theme-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = Path.Combine(folder, "editor.json");
+            Check("nothing chosen is dark", !EditorSettings.Load(file).IsLight);
+
+            new EditorSettings { Theme = EditorSettings.LightTheme }.Save(file);
+            Check("light comes back as light", EditorSettings.Load(file).IsLight);
+            Check("and only the choice is written, not what follows from it",
+                !File.ReadAllText(file).Contains("IsLight", StringComparison.Ordinal), File.ReadAllText(file).Trim());
+
+            File.WriteAllText(file, "{ \"Theme\": \"purple\" }");
+            Check("anything unexpected is dark", !EditorSettings.Load(file).IsLight);
+        }
+        finally
+        {
+            try { Directory.Delete(folder, recursive: true); } catch { /* best effort */ }
+        }
     }
 }

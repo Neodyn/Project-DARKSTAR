@@ -355,6 +355,115 @@ public sealed class ConfigStore
     }
 
     // ---------------------------------------------------------------------------------------
+    // Backup and restore (CH3)
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Where the backups of the current config folder go.</summary>
+    public string BackupFolder => ConfigBackup.FolderFor(ConfigFolder);
+
+    /// <summary>The backups in the Backup folder, newest first. Empty on any problem.</summary>
+    public List<BackupFile> Backups()
+    {
+        try
+        {
+            return ConfigBackup.List(ConfigFolder);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not read the Backup folder: {ex.Message}", isError: true);
+            return new List<BackupFile>();
+        }
+    }
+
+    /// <summary>
+    /// Backs up what is on disk - not what is on screen. A backup is something to go back to, so
+    /// it has to be a state the bot has actually run with; the panel says to save first.
+    /// Returns the file written, or null when it failed (the footer says why).
+    /// </summary>
+    public string? CreateBackup(bool includeProfiles, bool removeSecrets, string? target = null)
+    {
+        string? written = null;
+        try
+        {
+            written = ConfigBackup.Create(ConfigFolder, includeProfiles, removeSecrets, target);
+            SetStatus($"Backup written: {written}" + (removeSecrets ? " (keys left out)." : "."), isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Could not write the backup: {ex.Message}", isError: true);
+        }
+
+        NotifyStateChanged();
+        return written;
+    }
+
+    /// <summary>
+    /// Reads and checks a backup without restoring it, for the "restore this?" question.
+    /// Null with <paramref name="problem"/> set when it cannot be restored.
+    /// </summary>
+    public BackupContents? InspectBackup(string path, out string? problem)
+    {
+        problem = null;
+        try
+        {
+            return ConfigBackup.Inspect(path);
+        }
+        catch (Exception ex)
+        {
+            problem = ex.Message;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Restores a backup and reloads the editor from it, so what is on screen is what the bot
+    /// will read. Anything unsaved in the editor is gone afterwards - the panel asks first.
+    /// </summary>
+    public void RestoreBackup(string path)
+    {
+        try
+        {
+            var result = ConfigBackup.Restore(ConfigFolder, path);
+
+            Load();
+
+            if (IsLoaded)
+            {
+                var undo = result.SafetyBackup.Length > 0
+                    ? $" The state before is in {Path.GetFileName(result.SafetyBackup)}."
+                    : "";
+                var kept = result.SecretsKept > 0
+                    ? $" {result.SecretsKept} key(s) the backup did not hold were kept from the current settings."
+                    : "";
+                SetStatus($"Restored {result.Restored.Count} file(s) from {Path.GetFileName(path)}.{kept}{undo} " +
+                          "Restart the bot for it to take effect.", isError: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"Nothing was restored: {ex.Message}", isError: true);
+        }
+
+        NotifyStateChanged();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Theme
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Whether the editor is in its light colours.</summary>
+    public bool LightTheme => _settings.IsLight;
+
+    /// <summary>Switches the colours and remembers the choice for the next start.</summary>
+    public void SetTheme(bool light)
+    {
+        if (light == LightTheme) return;
+
+        Remember(s => s.Theme = light ? EditorSettings.LightTheme : "dark");
+        NotifyStateChanged();
+    }
+
+    // ---------------------------------------------------------------------------------------
     // TTS voices
     // ---------------------------------------------------------------------------------------
 

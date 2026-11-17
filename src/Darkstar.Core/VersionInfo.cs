@@ -98,6 +98,11 @@ public static class VersionInfo
 
         var stamp = metadata[marker.Length..];
 
+        // A git checkout built without IncludeSourceRevisionInInformationalVersion=false gets the
+        // commit appended: "build.20261117175202.66bcd97...". The time is still the first part.
+        var dot = stamp.IndexOf('.');
+        if (dot >= 0) stamp = stamp[..dot];
+
         return DateTime.TryParseExact(stamp, "yyyyMMddHHmmss",
                    System.Globalization.CultureInfo.InvariantCulture,
                    System.Globalization.DateTimeStyles.AssumeUniversal |

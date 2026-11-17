@@ -49,10 +49,10 @@
 </div>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
-    <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">RECENT ACTIVITY</span>
+    <span style="font-size:10px;letter-spacing:1px;color:var(--faint)">RECENT ACTIVITY</span>
     <div style="display:flex;align-items:center;gap:12px">
         <div class="toggle-row" style="margin:0;padding:0;border:0;background:none;gap:8px">
-            <span style="font-size:11px;color:#8CA0A8">Live</span>
+            <span style="font-size:11px;color:var(--muted)">Live</span>
             <button class="toggle @(_live ? "on" : "")" @onclick="ToggleLive"><span class="knob"></span></button>
         </div>
         <button class="link-action" style="margin-bottom:0" @onclick="Refresh"><span>Refresh</span></button>
@@ -61,7 +61,7 @@
 <div class="log-tail">
     @if (_lines.Count == 0)
     {
-        <span style="color:#5A6A70">No log file found yet in @System.IO.Path.Combine(Store.ConfigFolder, "logs").</span>
+        <span style="color:var(--faint)">No log file found yet in @System.IO.Path.Combine(Store.ConfigFolder, "logs").</span>
     }
     else
     {

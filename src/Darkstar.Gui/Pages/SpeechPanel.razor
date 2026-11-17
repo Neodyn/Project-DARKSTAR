@@ -6,7 +6,7 @@
 
 <div class="card">
     <div class="card-head">
-        <span style="font-size:12.5px;color:#E7EDEF">Which engine turns a transmission into text</span>
+        <span style="font-size:12.5px;color:var(--text)">Which engine turns a transmission into text</span>
     </div>
 
     <div class="row2">
@@ -54,7 +54,7 @@
 
         @if (_whisperResult != null)
         {
-            <div style="font-size:11.5px;color:@(_whisperResult.IsUsable ? "#5FBF7A" : "#F2A93B");margin-top:6px">
+            <div style="font-size:11.5px;color:@(_whisperResult.IsUsable ? "var(--ok)" : "var(--accent)");margin-top:6px">
                 @(_whisperResult.IsUsable ? WhisperModelCheck.Describe(_whisperResult) : _whisperResult.Message)
             </div>
 
@@ -135,8 +135,8 @@
 </div>
 
 <div class="card" style="margin-bottom:8px">
-    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Rate limit per pilot</div>
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px">Rate limit per pilot</div>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         Every transmission costs a Gemini call and occupies the frequency while the reply is spoken. One
         pilot repeating the wake word — bored, annoyed at being misheard, or with a stuck transmit key
         feeding cockpit noise — can use up the quota for everybody and block the channel at the same time.
@@ -192,7 +192,7 @@
             </button>
             @if (Store.TtsVoiceStatus != null)
             {
-                <span style="color:@(Store.TtsVoiceStatusIsError ? "#F2A93B" : "#5FBF7A")">@Store.TtsVoiceStatus</span>
+                <span style="color:@(Store.TtsVoiceStatusIsError ? "var(--accent)" : "var(--ok)")">@Store.TtsVoiceStatus</span>
             }
         </div>
         @* Unambiguous here, unlike on CH4: there is exactly one field on this panel, so a chip can
@@ -293,7 +293,7 @@
 <div class="toggle-row" style="margin-top:8px">
     <div>
         <div>"Message received, standby" while the reply is being worked on</div>
-        <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+        <div style="font-size:11px;color:var(--faint);margin-top:3px">
             Sent only if the reply isn't ready in time - and never while the pilot is still transmitting.
         </div>
     </div>
@@ -319,8 +319,8 @@
 </div>
 
 <div class="card" style="margin-top:8px">
-    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Wake word accuracy</div>
-    <div style="font-size:11px;color:#5A6A70;margin-bottom:10px">
+    <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px">Wake word accuracy</div>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px">
         How the 48 kHz radio audio is prepared before Vosk sees it. If wake words are missed or fire
         on their own, this is the first place to look — after the model size.
     </div>
@@ -329,10 +329,10 @@
         <label>AUDIO PREPARATION</label>
         <div class="row2">
             <button class="link-action"
-                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#2E4E4C" : "#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#5FBF7A" : "#5A6A70");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "#16302A" : "transparent")"
+                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok-line)" : "var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok)" : "var(--faint)");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok-bg)" : "transparent")"
                     @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.LowPass">Low-pass (recommended)</button>
             <button class="link-action"
-                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#6C5A2E" : "#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#D9A62E" : "#5A6A70");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "#332A12" : "transparent")"
+                    style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber-line)" : "var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber)" : "var(--faint)");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber-bg)" : "transparent")"
                     @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.Average">Average (old)</button>
         </div>
         <div class="hint">
@@ -345,7 +345,7 @@
     <div class="toggle-row">
         <div>
             <div>Even out quiet pilots (automatic gain)</div>
-            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+            <div style="font-size:11px;color:var(--faint);margin-top:3px">
                 Helps transmissions that arrive too quiet — but any automatic gain also lifts background
                 noise, which can produce wake words nobody said. Turn on only if quiet pilots are a real
                 problem, then check for false triggers.
@@ -359,7 +359,7 @@
     <div class="toggle-row">
         <div>
             <div>Save every transmission to <code>recordings\</code></div>
-            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+            <div style="font-size:11px;color:var(--faint);margin-top:3px">
                 Builds a set of real recordings to measure against, including the ones where the wake word
                 did <em>not</em> fire. Then run
                 <code>Darkstar.exe --test-hotword recordings --compare</code>.
@@ -381,14 +381,14 @@
             <input type="number" min="0" step="10" @bind="Store.Config.RecordingRetentionMaxMb" />
         </div>
     </div>
-    <div style="font-size:11px;color:#5A6A70;margin-top:6px">
+    <div style="font-size:11px;color:var(--faint);margin-top:6px">
         Checked at start and once an hour. Age first, then size: what survives the age limit is trimmed
         oldest-first until the folder fits. Set both to 0 to keep everything.
     </div>
 </div>
 
 <div class="card" style="margin-top:8px">
-    <div style="font-size:12.5px;color:#E7EDEF;font-weight:600;margin-bottom:4px">Fallback hotword (used only if no Vosk model is set)</div>
+    <div style="font-size:12.5px;color:var(--text);font-weight:600;margin-bottom:4px">Fallback hotword (used only if no Vosk model is set)</div>
     <div class="row2" style="margin-top:10px">
         <div class="field" style="margin-bottom:0">
             <label>ENERGY THRESHOLD (0-32767)</label>

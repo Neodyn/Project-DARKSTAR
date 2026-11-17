@@ -29,7 +29,7 @@
     }
     else
     {
-        <span style="font-size:11px;color:#5A6A70">Found automatically — using it once remembers it for the next start.</span>
+        <span style="font-size:11px;color:var(--faint)">Found automatically — using it once remembers it for the next start.</span>
     }
 </div>
 
@@ -47,10 +47,10 @@
 </div>
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px">
-    <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">SAVED PROFILES</span>
+    <span style="font-size:10px;letter-spacing:1px;color:var(--faint)">SAVED PROFILES</span>
     @if (Store.ActiveProfile != null)
     {
-        <span style="font-size:11px;color:@(Store.ActiveProfileStillMatches ? "#5FBF7A" : "#F2A93B")">
+        <span style="font-size:11px;color:@(Store.ActiveProfileStillMatches ? "var(--ok)" : "var(--accent)")">
             @(Store.ActiveProfileStillMatches
                 ? $"Active: {Store.ActiveProfile}"
                 : $"Active: {Store.ActiveProfile} — config.json has been edited since")
@@ -64,7 +64,7 @@
 
 @if (profiles.Count == 0)
 {
-    <div class="card" style="color:#5A6A70;font-size:12px">
+    <div class="card" style="color:var(--faint);font-size:12px">
         No profiles yet. Set the bot up the way you want it, then save it below under a name.
     </div>
 }
@@ -75,25 +75,25 @@ else
         {
             <tr>
                 <td style="width:40%">
-                    <span style="color:#E7EDEF">@profile.Name</span>
+                    <span style="color:var(--text)">@profile.Name</span>
                     @if (string.Equals(profile.Name, Store.ActiveProfile, StringComparison.OrdinalIgnoreCase))
                     {
                         <span class="badge" style="margin-left:8px">active</span>
                     }
                 </td>
-                <td style="color:#5A6A70">
+                <td style="color:var(--faint)">
                     @StartupPaths.Size(profile.Bytes), @StartupPaths.When(profile.LastWriteLocal)
                 </td>
                 <td style="width:190px;text-align:right">
                     @if (_confirmDelete == profile.Name)
                     {
-                        <span style="color:#F2A93B;font-size:11px">Delete it?</span>
-                        <button class="icon-btn" style="color:#E2543A" @onclick="() => Delete(profile.Name)">yes</button>
+                        <span style="color:var(--accent);font-size:11px">Delete it?</span>
+                        <button class="icon-btn" style="color:var(--bad)" @onclick="() => Delete(profile.Name)">yes</button>
                         <button class="icon-btn" @onclick="() => _confirmDelete = null">no</button>
                     }
                     else
                     {
-                        <button class="icon-btn" style="color:#4FD1C5" @onclick="() => Activate(profile.Name)">activate</button>
+                        <button class="icon-btn" style="color:var(--teal)" @onclick="() => Activate(profile.Name)">activate</button>
                         <button class="icon-btn" @onclick="() => _confirmDelete = profile.Name">delete</button>
                     }
                 </td>
@@ -104,7 +104,7 @@ else
 
 <div class="card">
     <div class="card-head">
-        <span style="font-size:10px;letter-spacing:1px;color:#5A6A70">SAVE THE SETTINGS ON SCREEN AS A PROFILE</span>
+        <span style="font-size:10px;letter-spacing:1px;color:var(--faint)">SAVE THE SETTINGS ON SCREEN AS A PROFILE</span>
     </div>
 
     <div class="row2">
@@ -115,10 +115,10 @@ else
         <div style="display:flex;align-items:flex-end">
             @if (_confirmOverwrite)
             {
-                <span style="font-size:11px;color:#F2A93B;margin-right:12px">
+                <span style="font-size:11px;color:var(--accent);margin-right:12px">
                     "@ConfigProfiles.Normalize(_newName)" exists. Replace it?
                 </span>
-                <button class="link-action" style="margin:0;color:#E2543A" @onclick="() => Save(force: true)"><span>Replace</span></button>
+                <button class="link-action" style="margin:0;color:var(--bad)" @onclick="() => Save(force: true)"><span>Replace</span></button>
                 <button class="link-action" style="margin:0 0 0 12px" @onclick="() => _confirmOverwrite = false"><span>Cancel</span></button>
             }
             else
@@ -134,8 +134,146 @@ else
         touching the live settings is the usual reason to be here.
         @if (ConfigProfiles.NameProblem(_newName) is { } problem && _newName.Length > 0)
         {
-            <div style="color:#F2A93B;margin-top:6px">@problem</div>
+            <div style="color:var(--accent);margin-top:6px">@problem</div>
         }
+    </div>
+</div>
+
+<h1 class="section-title">BACKUP &amp; RESTORE</h1>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">MAKE A BACKUP</span>
+    </div>
+
+    <div class="toggle-row">
+        <span>Include the profiles <span class="quiet">(@profiles.Count in @ConfigProfiles.FolderName\)</span></span>
+        <button class="toggle @(_withProfiles ? "on" : "")" @onclick="() => _withProfiles = !_withProfiles">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <div class="toggle-row">
+        <span>Leave out keys and passwords <span class="quiet">— for a copy you give to somebody else</span></span>
+        <button class="toggle @(_withoutKeys ? "on" : "")" @onclick="() => _withoutKeys = !_withoutKeys">
+            <span class="knob"></span>
+        </button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:20px">
+        <button class="link-action" style="margin:0" @onclick="BackUpHere"><span>Back up to the Backup folder</span></button>
+        <button class="link-action" style="margin:0" @onclick="BackUpTo"><span>Back up to a file...</span></button>
+    </div>
+
+    <div class="hint" style="margin-top:10px">
+        One ZIP file with <code>config.json</code>, <code>phrases.json</code>, <code>vocabulary.json</code>
+        and, if switched on, the profiles — <strong>as they are on disk</strong>: changes in this
+        editor that are not saved yet are not in it. The Backup folder is
+        <code>@Store.BackupFolder</code>.
+        @if (!_withoutKeys)
+        {
+            <span class="warn-text">
+                With the keys in, the file holds the Gemini API key, the DCS-gRPC key, the Discord
+                webhook and the AWACS password — keep it like a password.
+            </span>
+        }
+        else
+        {
+            <span>
+                Those four are blanked in the copy. Restoring it keeps the ones configured on the PC it
+                is restored on.
+            </span>
+        }
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">RESTORE</span>
+        <span class="spacer"></span>
+        <button class="link-action" style="margin:0" @onclick="RestoreFromFile"><span>Restore from a file...</span></button>
+    </div>
+
+    @if (_candidate != null)
+    {
+        <div class="confirm-box @(_candidateProblem != null ? "bad" : "")">
+            @if (_candidateProblem != null)
+            {
+                <div class="bad-text">@(System.IO.Path.GetFileName(_candidate)) cannot be restored: @_candidateProblem</div>
+                <button class="link-action" style="margin:8px 0 0" @onclick="CancelRestore"><span>Close</span></button>
+            }
+            else if (_candidateContents != null)
+            {
+                var manifest = _candidateContents.Manifest;
+                <div style="font-size:12.5px">Restore <strong>@(System.IO.Path.GetFileName(_candidate))</strong>?</div>
+                <div class="hint">
+                    @if (manifest.Format > 0)
+                    {
+                        <span>Made @(manifest.CreatedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) with build @(manifest.Build). </span>
+                    }
+                    else
+                    {
+                        <span>No backup note inside — a hand-made archive, so when it was made is unknown. </span>
+                    }
+                    Holds @(string.Join(", ", _candidateContents.Files))@(_candidateContents.Profiles.Count > 0
+                        ? $" and {_candidateContents.Profiles.Count} profile(s): {string.Join(", ", _candidateContents.Profiles)}"
+                        : ", no profiles").
+                    @(manifest.SecretsRemoved
+                        ? "Its keys were left out, so the keys configured now are kept."
+                        : "Its keys replace the ones configured now.")
+                    @if (_candidateContents.Ignored.Count > 0)
+                    {
+                        <span> Not restored, because they are not part of a backup: @(string.Join(", ", _candidateContents.Ignored.Take(5)))@(_candidateContents.Ignored.Count > 5 ? ", ..." : "").</span>
+                    }
+                </div>
+                <div class="hint warn-text">
+                    Replaces the files above; profiles not in the backup stay. Unsaved changes in this
+                    editor are lost. What is there now is backed up first, as a <em>before restore</em> file.
+                </div>
+                <div style="display:flex;gap:16px;margin-top:10px">
+                    <button class="link-action danger" style="margin:0" @onclick="ConfirmRestore"><span>Restore it</span></button>
+                    <button class="link-action" style="margin:0" @onclick="CancelRestore"><span>Cancel</span></button>
+                </div>
+            }
+        </div>
+    }
+
+    @{
+        var backups = Store.Backups();
+    }
+
+    @if (backups.Count == 0)
+    {
+        <div class="hint">No backups in the Backup folder yet.</div>
+    }
+    else
+    {
+        <table class="phrase-table" style="margin:0">
+            @foreach (var backup in backups)
+            {
+                <tr>
+                    <td>
+                        <span class="strong-text">@backup.Name</span>
+                        @if (backup.BeforeRestore)
+                        {
+                            <span class="badge" style="margin-left:8px" title="Made automatically just before a restore - restoring it undoes that restore">before restore</span>
+                        }
+                    </td>
+                    <td class="quiet" style="width:170px">
+                        @StartupPaths.Size(backup.Bytes), @StartupPaths.When(backup.LastWriteLocal)
+                    </td>
+                    <td style="width:90px;text-align:right">
+                        <button class="icon-btn accent" @onclick="() => Consider(backup.FullPath)">restore...</button>
+                    </td>
+                </tr>
+            }
+        </table>
+    }
+
+    <div class="hint" style="margin-top:10px">
+        A restore checks every file in the backup the way the bot reads it before it changes anything,
+        and backs up the current state first — restoring that <em>before restore</em> file undoes it.
+        Restart the bot afterwards for the restored settings to take effect.
     </div>
 </div>
 
@@ -212,6 +350,73 @@ else
     {
         _confirmDelete = null;
         Store.DeleteProfile(name);
+    }
+
+    // --- backup and restore ------------------------------------------------------------------
+
+    private bool _withProfiles = true;
+    private bool _withoutKeys;
+
+    /// <summary>
+    /// The backup the "restore it?" box is asking about, what it holds, and why it cannot be
+    /// restored when it cannot. Two-step for the same reason as deleting a profile: a restore
+    /// replaces the live settings, and this editor has no dialogs of its own.
+    /// </summary>
+    private string? _candidate;
+    private BackupContents? _candidateContents;
+    private string? _candidateProblem;
+
+    private void BackUpHere()
+    {
+        CancelRestore();
+        Store.CreateBackup(_withProfiles, _withoutKeys);
+    }
+
+    private void BackUpTo()
+    {
+        CancelRestore();
+
+        var picked = Picker.PickSaveFile("Where should the backup go?", Store.BackupFolder,
+            ConfigBackup.FileNameFor(DateTime.Now), IPathPicker.Filters.Backups);
+
+        if (picked != null) Store.CreateBackup(_withProfiles, _withoutKeys, picked);
+    }
+
+    private void RestoreFromFile()
+    {
+        var picked = Picker.PickFile("Pick a Darkstar backup to restore", Store.BackupFolder,
+            IPathPicker.Filters.Backups);
+
+        if (picked != null) Consider(picked);
+    }
+
+    /// <summary>Reads and checks a backup and asks about it - nothing is restored yet.</summary>
+    private void Consider(string path)
+    {
+        _candidate = path;
+        _candidateContents = Store.InspectBackup(path, out _candidateProblem);
+    }
+
+    private void CancelRestore()
+    {
+        _candidate = null;
+        _candidateContents = null;
+        _candidateProblem = null;
+    }
+
+    private void ConfirmRestore()
+    {
+        if (_candidate == null || _candidateContents == null) return;
+
+        var path = _candidate;
+        CancelRestore();
+        _confirmDelete = null;
+        _confirmOverwrite = false;
+
+        Store.RestoreBackup(path);
+
+        // The restore reloads everything; the folder field shows whatever the store settled on.
+        _folder = Store.ConfigFolder;
     }
 
     public void Dispose() => Store.OnChange -= StateHasChanged;

@@ -19,10 +19,11 @@ From the repository root, in PowerShell:
 .\build-installer.ps1
 ```
 
-That script does everything below for you: it checks the prerequisites, publishes the bot and the
-GUI **in Release** (never Debug), downloads the three dependency installers and a Vosk model, and
-compiles the `.iss` file in `installer\`.
-The result is `installer\output\DARKSTAR-Setup-<version>.exe`.
+That script does everything below for you: it checks the prerequisites, publishes the bot, the
+GUI and the radio wheel **in Release** (never Debug), downloads the three dependency installers and
+a Vosk model, and compiles the two `.iss` files in `installer\`.
+The result is two files in `installer\output\`: `DARKSTAR-Setup-<version>.exe` for the server, and
+`DARKSTAR-Wheel-Setup-<version>.exe` for the pilots (see [the radio wheel's setup](#the-radio-wheels-setup)).
 
 | Parameter | Default | Purpose |
 |---|---|---|
@@ -31,8 +32,9 @@ The result is `installer\output\DARKSTAR-Setup-<version>.exe`.
 | `-Version` | `1.0` | Stamped into the installer and its file name. |
 | `-Slim` / `-SkipVoskModel` | off | Slim installer without a bundled model: a few MB instead of up to ~2 GB. Produces `DARKSTAR-Setup-<version>-slim.exe`; `VoskModelPath` then has to be set by hand on the target machine. |
 | `-SkipDependencyDownload` | off | Don't fetch the dependency installers; anything missing simply isn't bundled. |
-| `-Clean` | off | Delete previous publish output and installers first, plus the `obj\` and `bin\` folders of all three projects — so it really is a build from scratch, not just a fresh copy of a stale one. |
+| `-Clean` | off | Delete previous publish output and installers first, plus the `obj\` and `bin\` folders of every project — so it really is a build from scratch, not just a fresh copy of a stale one. |
 | `-WithSymbols` | off | Keep the `.pdb` debug symbols and the XML documentation in the installed files. Left out by default — see below. |
+| `-SkipWheel` | off | Build only the server installer. Saves a publish and a compile when the wheel has not changed. |
 | `-DryRun` | off | Only check prerequisites and print the plan. |
 
 It is safe to re-run: every step skips itself when its result is already in place. To swap the
@@ -225,6 +227,26 @@ If the inventory ever does report `.so` or `.dylib` files, the RID has gone miss
 publish command, and the installer is about to ship them.
 
 That output is also the honest way to answer "how big is it and why": run `.\build-installer.ps1 -SkipVoskModel -SkipDependencyDownload` and read the two lines. Nothing here is estimated.
+
+## The radio wheel's setup
+
+`installer\Wheel.iss` makes `DARKSTAR-Wheel-Setup-<version>.exe`, for the **pilots'** PCs. It has
+nothing of the server in it — no bot, no editor, no service, no model — and its own AppId, so it is
+never taken for an update of the server installation.
+
+| What | How |
+|---|---|
+| Install location | Per user, `%LOCALAPPDATA%\Programs\Darkstar Wheel`. No administrator rights: a pilot's PC is a gaming PC, and a per-user install cannot touch anything outside that user's profile. |
+| .NET 8 Desktop Runtime | Bundled (the same file as the server installer) and installed only when missing. That one step needs administrator rights, so Windows asks then — and only then. |
+| DCS hook | A page lists the DCS folders under `Saved Games` (`DCS`, `DCS.openbeta`, …), all ticked; dedicated-server folders are left out. `Darkstar-Wheel.lua` is copied into each one's `Scripts\Hooks`. If none exists yet, `Saved Games\DCS` is offered, so the hook is there by the time DCS creates the folder. |
+| Autostart | A shortcut in the user's Startup folder (on by default), plus the Start menu; a desktop icon on request. |
+| Update | Run the newer setup. It closes a running wheel first, and moves the hook if the choice of DCS changed. |
+| Uninstall | Removes the program and the hooks it wrote — only files named exactly `Darkstar-Wheel.lua`, whatever its list says. `%LOCALAPPDATA%\Darkstar\wheel.json` (key, button, callsign) stays, so a reinstall picks it up. |
+
+The build checks that the hook made it into `installer\publish\wheel\dcs\Scripts\Hooks` before it
+compiles: without it the setup would install a wheel whose requests reach nobody. The wheel's
+setup is compiled after the server's, so a failure there leaves the server installer intact; the
+build still ends with an error, so nothing calling the script mistakes it for a full success.
 
 ## Internet access on the target machine
 

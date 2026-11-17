@@ -7,7 +7,7 @@ namespace Darkstar.Gui;
 /// the panels are Razor components that the offline build harness compiles against plain
 /// <c>net8.0</c> with no WPF at all. A panel that newed up an <c>OpenFolderDialog</c> could not be
 /// compile-checked there, which is most of what that harness is for. This way the panels depend on
-/// three method signatures and the WPF code sits in one file beside them
+/// a handful of method signatures and the WPF code sits in one file beside them
 /// (<c>WindowsPathPicker</c>), registered in <c>App.xaml.cs</c>.
 /// </summary>
 public interface IPathPicker
@@ -26,10 +26,18 @@ public interface IPathPicker
     /// </summary>
     string? PickFile(string title, string? startAt, string filter);
 
+    /// <summary>
+    /// Asks where to write a new file, offering <paramref name="suggestedName"/> in
+    /// <paramref name="startAt"/> (a folder). Windows asks before overwriting an existing file.
+    /// Null when cancelled.
+    /// </summary>
+    string? PickSaveFile(string title, string? startAt, string suggestedName, string filter);
+
     /// <summary>Common filters, kept here so two panels asking for the same thing agree.</summary>
     public static class Filters
     {
         public const string Executables = "Programs|*.exe|All files|*.*";
         public const string WhisperModels = "Whisper models|*.bin|All files|*.*";
+        public const string Backups = "Darkstar backups|*.zip|All files|*.*";
     }
 }

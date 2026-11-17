@@ -3,17 +3,23 @@
     Builds the complete D.A.R.K.S.T.A.R. Windows installer in one go.
 
 .DESCRIPTION
-    Takes this source tree and produces installer\output\DARKSTAR-Setup-<version>.exe, which can
-    be copied to any Windows machine and installs the bot, the config GUI, a Vosk model and every
-    runtime dependency (.NET 8 Desktop Runtime, Visual C++ Redistributable, WebView2 Runtime) -
-    each of them skipped on the target machine if it is already present.
+    Takes this source tree and produces two installers in installer\output\:
+
+      DARKSTAR-Setup-<version>.exe        for the SERVER: the bot, the config GUI, a Vosk model and
+                                          every runtime dependency (.NET 8 Desktop Runtime, Visual
+                                          C++ Redistributable, WebView2 Runtime) - each of them
+                                          skipped on the target machine if it is already present.
+      DARKSTAR-Wheel-Setup-<version>.exe  for every PILOT who wants the radio wheel: the wheel, its
+                                          DCS client hook, and the .NET 8 Desktop Runtime if
+                                          missing. Per user, no administrator rights except for
+                                          that runtime.
 
     Steps performed:
       1. Check the prerequisites on THIS machine (.NET 8 SDK, Inno Setup compiler).
-      2. Publish the bot and the GUI, framework-dependent, into installer\publish\.
+      2. Publish the bot, the GUI and the radio wheel, framework-dependent, into installer\publish\.
       3. Download the three dependency installers into installer\ (skipped if already there).
       4. Download and unpack a Vosk model into installer\vosk-model\ (skipped if already there).
-      5. Compile installer\Setup.iss with Inno Setup.
+      5. Compile installer\Setup.iss, then installer\Wheel.iss, with Inno Setup.
 
     Safe to re-run: every step skips itself when its result is already in place.
 
@@ -24,6 +30,10 @@
 .EXAMPLE
     .\build-installer.ps1 -VoskModelSize Standard -Version 1.1
     Bundles the recommended (much better, but ~1.8 GB) model and stamps the installer as 1.1.
+
+.EXAMPLE
+    .\build-installer.ps1 -SkipWheel
+    Only the server installer - quicker when the wheel has not changed.
 
 .EXAMPLE
     .\build-installer.ps1 -DryRun
@@ -65,6 +75,11 @@ param(
     # is worth more than those two things - a bug you are chasing on the target machine.
     [switch]$WithSymbols,
 
+    # Build only the server installer, not the radio wheel's. Saves a publish and a compile when
+    # the wheel has not changed; the wheel setup from the previous build stays in installer\output
+    # (unless -Clean empties that folder too).
+    [switch]$SkipWheel,
+
     # Run the checks and print the plan without publishing, downloading or compiling anything.
     [switch]$DryRun
 )
@@ -97,7 +112,7 @@ $summary = New-Object System.Collections.Generic.List[string]
 $dependencyDownloads = [ordered]@{
     "WindowsDesktopRuntime8-x64.exe"  = @{
         Url   = "https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe"
-        Needs = ".NET 8 Desktop Runtime - needed by the bot AND the GUI"
+        Needs = ".NET 8 Desktop Runtime - needed by the bot, the GUI and the radio wheel"
     }
     "VC_redist.x64.exe"               = @{
         Url   = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
@@ -124,16 +139,21 @@ $ProjectRoot   = (Resolve-Path -LiteralPath $ProjectRoot).Path
 
 $botProject    = Join-Path $ProjectRoot "src\Darkstar.Bot\Darkstar.Bot.csproj"
 $guiProject    = Join-Path $ProjectRoot "src\Darkstar.Gui\Darkstar.Gui.csproj"
+$wheelProject  = Join-Path $ProjectRoot "src\Darkstar.Wheel\Darkstar.Wheel.csproj"
 $installerDir  = Join-Path $ProjectRoot "installer"
 $issFile       = Join-Path $installerDir "Setup.iss"
 $publishBot    = Join-Path $installerDir "publish\bot"
 $publishGui    = Join-Path $installerDir "publish\gui"
+$publishWheel  = Join-Path $installerDir "publish\wheel"
+$wheelIssFile  = Join-Path $installerDir "Wheel.iss"
 $voskModelDir  = Join-Path $installerDir "vosk-model"
 $outputDir     = Join-Path $installerDir "output"
 # The .iss appends "-slim" to the file name when built without a model, so the two variants can
 # sit next to each other without overwriting one another.
 $setupSuffix   = if ($SkipVoskModel) { "-slim" } else { "" }
 $expectedSetup = Join-Path $outputDir "DARKSTAR-Setup-$Version$setupSuffix.exe"
+# The wheel's setup has no slim variant: it never carries a model.
+$expectedWheelSetup = Join-Path $outputDir "DARKSTAR-Wheel-Setup-$Version.exe"
 
 # The stamp that goes into every assembly this build produces, and that is read back out of the
 # published one afterwards. Two jobs in one string:
@@ -182,6 +202,11 @@ $requiredPaths = [ordered]@{
     "src\Darkstar.Bot\Darkstar.Bot.csproj (the bot)" = $botProject
     "src\Darkstar.Gui\Darkstar.Gui.csproj (the editor)" = $guiProject
     "installer\Setup.iss"                                  = $issFile
+}
+
+if (-not $SkipWheel) {
+    $requiredPaths["src\Darkstar.Wheel\Darkstar.Wheel.csproj (the radio wheel)"] = $wheelProject
+    $requiredPaths["installer\Wheel.iss"] = $wheelIssFile
 }
 
 $structureOk = $true
@@ -334,7 +359,7 @@ function Get-ProjectIntermediates($root) {
 
 if ($Clean) {
     Write-Step "Cleaning previous build output"
-    foreach ($dir in @($publishBot, $publishGui, $outputDir)) {
+    foreach ($dir in @($publishBot, $publishGui, $publishWheel, $outputDir)) {
         if (Test-Path -LiteralPath $dir) {
             if (-not $DryRun) { Remove-Item -LiteralPath $dir -Recurse -Force }
             Write-Ok "removed $dir"
@@ -355,7 +380,7 @@ if ($Clean) {
 # 5. Publish bot and GUI
 # ---------------------------------------------------------------------------------------------
 
-Write-Step "Publishing bot and GUI ($Configuration, framework-dependent, win-x64)"
+Write-Step "Publishing bot, GUI$(if (-not $SkipWheel) { ' and radio wheel' }) ($Configuration, framework-dependent, win-x64)"
 
 <#
 .SYNOPSIS
@@ -400,13 +425,18 @@ function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
         Remove-Item -LiteralPath $intermediate -Recurse -Force -ErrorAction SilentlyContinue
     }
 
+    # IncludeSourceRevisionInInformationalVersion=false: in a git checkout the .NET 8 SDK appends
+    # "+<commit>" to the stamp (here ".<commit>", since there is a "+" already), and the comparison
+    # below then fails a perfectly fresh build. The projects switch it off too; passing it here
+    # keeps the check working even for a project that forgets.
     # Out-Host rather than letting it run bare: the output of an external command goes into the
     # FUNCTION'S return value, so every line dotnet printed used to come back alongside the
     # $true/$false - and "if (-not $botOk)" on a non-empty array is never true. The failure
     # guards below this line could not fire at all. Out-Host writes the same text to the console
     # and keeps the return value a single boolean.
     & dotnet publish $projectPath -c $Configuration -r win-x64 --self-contained false -o $outputPath --nologo `
-        -p:Version=$versionInfo -p:FileVersion=$versionInfo -p:InformationalVersion=$informational | Out-Host
+        -p:Version=$versionInfo -p:FileVersion=$versionInfo -p:InformationalVersion=$informational `
+        -p:IncludeSourceRevisionInInformationalVersion=false | Out-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "$label failed to publish (dotnet exit code $LASTEXITCODE)."
         return $false
@@ -453,14 +483,18 @@ function Invoke-Publish($projectPath, $outputPath, $label, $expectedExe) {
 
 $botOk = Invoke-Publish $botProject $publishBot "Bot" "Darkstar.exe"
 $guiOk = Invoke-Publish $guiProject $publishGui "GUI" "Darkstar.ConfigEditor.exe"
+$wheelOk = if ($SkipWheel) { $true } else { Invoke-Publish $wheelProject $publishWheel "Wheel" "Darkstar.Wheel.exe" }
 
-if (-not $botOk -or -not $guiOk) {
+if (-not $botOk -or -not $guiOk -or -not $wheelOk) {
     Write-Host ""
     Write-Fail "Publishing failed - see the dotnet output above. No installer was built."
     exit 1
 }
 
 $summary.Add("$(if ($DryRun) { "[OK] Bot and GUI would be published ($Configuration)" } else { "[OK] Bot and GUI published ($Configuration)" })")
+if (-not $SkipWheel) {
+    $summary.Add("$(if ($DryRun) { "[OK] Radio wheel would be published ($Configuration)" } else { "[OK] Radio wheel published ($Configuration)" })")
+}
 
 # ---------------------------------------------------------------------------------------------
 # 5b. What actually goes into the installer
@@ -519,6 +553,7 @@ if (-not $DryRun) {
     Write-Step "Checking what goes into the installer"
     Show-PublishInventory $publishBot "Bot"
     Show-PublishInventory $publishGui "GUI"
+    if (-not $SkipWheel) { Show-PublishInventory $publishWheel "Wheel" }
     Write-Ok "publish folders inventoried (warnings above, if any, are advisory)"
 }
 
@@ -696,6 +731,26 @@ if (-not $DryRun) {
         }
     }
 
+    if (-not $SkipWheel) {
+        if ((Measure-PayloadFolder $publishWheel) -eq 0) {
+            Write-Host ""
+            Write-Fail "Nothing to pack for the radio wheel (installer\publish\wheel) - the publish step produced no files."
+            Write-Info "Re-run with -Clean, and check the dotnet output above for a restore or build error."
+            exit 1
+        }
+
+        # Wheel.iss copies the client hook out of the publish folder into Saved Games. It gets there
+        # through a link in Darkstar.Wheel.csproj; without it the setup would install a wheel whose
+        # requests reach nobody, and only a pilot would notice.
+        $wheelHook = Join-Path $publishWheel "dcs\Scripts\Hooks\Darkstar-Wheel.lua"
+        if (-not (Test-Path -LiteralPath $wheelHook)) {
+            Write-Host ""
+            Write-Fail "The radio wheel was published without its DCS hook ($wheelHook)."
+            Write-Info "Check the link to dcs\Scripts\Hooks\Darkstar-Wheel.lua in src\Darkstar.Wheel\Darkstar.Wheel.csproj."
+            exit 1
+        }
+    }
+
     if (-not $buildSlim -and (Measure-PayloadFolder $voskModelDir) -eq 0) {
         Write-Warn2 "installer\vosk-model holds no files, so there is no model to bundle."
         Write-Warn2 "Building the SLIM installer instead - it works, but VoskModelPath has to be set by hand"
@@ -722,6 +777,7 @@ if ($DryRun) {
     Write-Info "ISCC would compile $issFile into $expectedSetup"
     if ($buildSlim) { Write-Info "  (slim build: /DNoVoskModel - no model component in the installer)" }
     if (-not $WithSymbols) { Write-Info "  (debug symbols and XML docs are left out - pass -WithSymbols to keep them)" }
+    if (-not $SkipWheel) { Write-Info "ISCC would compile $wheelIssFile into $expectedWheelSetup" }
     Write-Host ""
     Write-Host "Dry run finished - prerequisites checked, nothing built." -ForegroundColor White
     foreach ($line in $summary) { Write-Info $line }
@@ -755,6 +811,39 @@ Write-Ok "installer built ($setupSizeMb MB)"
 $summary.Add("[OK] $expectedSetup ($setupSizeMb MB)")
 
 # ---------------------------------------------------------------------------------------------
+# 9. Compile the radio wheel's installer
+# ---------------------------------------------------------------------------------------------
+
+$wheelFailed = $false
+
+# Second, and on its own: a failure here leaves the server installer above intact and says so,
+# rather than taking it down with it.
+if (-not $SkipWheel) {
+    Write-Step "Compiling the radio wheel installer"
+
+    $wheelFailed = $true
+    $wheelIsccArgs = @("/DMyAppVersion=$Version", "/DMyVersionInfo=$versionInfo")
+    if ($WithSymbols) { $wheelIsccArgs += "/DWithSymbols" }
+
+    & $iscc @wheelIsccArgs $wheelIssFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Inno Setup failed on Wheel.iss (exit code $LASTEXITCODE) - see its output above."
+        Write-Info "The server installer was built and is fine: $expectedSetup"
+        $summary.Add("[FAIL] radio wheel installer not built")
+    }
+    elseif (-not (Test-Path -LiteralPath $expectedWheelSetup)) {
+        Write-Fail "Inno Setup reported success, but $expectedWheelSetup is not there."
+        $summary.Add("[FAIL] radio wheel installer not found after compiling")
+    }
+    else {
+        $wheelSizeMb = [math]::Round((Get-Item -LiteralPath $expectedWheelSetup).Length / 1MB, 1)
+        Write-Ok "radio wheel installer built ($wheelSizeMb MB)"
+        $wheelFailed = $false
+        $summary.Add("[OK] $expectedWheelSetup ($wheelSizeMb MB)")
+    }
+}
+
+# ---------------------------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------------------------
 
@@ -767,8 +856,12 @@ foreach ($line in $summary) {
 }
 
 Write-Host ""
-Write-Host "    Copy this file to the target machine and run it:" -ForegroundColor White
+Write-Host "    For the server - copy it there and run it:" -ForegroundColor White
 Write-Host "      $expectedSetup" -ForegroundColor Cyan
+if (-not $SkipWheel -and (Test-Path -LiteralPath $expectedWheelSetup)) {
+    Write-Host "    For every pilot who wants the radio wheel (no administrator rights needed):" -ForegroundColor White
+    Write-Host "      $expectedWheelSetup" -ForegroundColor Cyan
+}
 Write-Host ""
 Write-Info "On the target machine the installer installs whatever is missing (.NET 8 Desktop Runtime,"
 Write-Info "Visual C++ Redistributable, WebView2 Runtime), puts the bot and GUI in place, writes the"
@@ -779,3 +872,7 @@ if ($SkipVoskModel) {
     Write-Warn2 "Slim build: no speech model included. Without VoskModelPath pointing at a model on the"
     Write-Warn2 "target machine, the bot falls back to a volume-based placeholder that recognizes no words."
 }
+
+# A wheel setup that failed to build is a failed build, even with the server installer in place -
+# a script calling this one must not take the exit code for "both are there".
+if ($wheelFailed) { exit 1 }

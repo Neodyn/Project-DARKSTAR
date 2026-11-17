@@ -44,13 +44,13 @@ Reference material: [configuration fields](docs/configuration.md) · [config edi
 | ⌨️ **Requests from the chat** | `@Overlord picture` typed into the DCS chat gets the same answer as the radio call. A small server hook hides the line from everybody else — the way in for a pilot whose microphone or accent isn't working. |
 | 🎡 **Radio wheel** | A small program for the pilot's PC draws the calls as a wheel over DCS: open it with a key or a HOTAS button, pick with the hat or the number keys — threat circle radius and airfield calls in their own sub-wheel — and the request goes out through the chat. Click-through, never takes the focus. |
 | 🛡️ **Coalition aware** | Can ignore the opposing side entirely, the way a real radio net would. |
-| 🖥️ **Config editor** | Desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer and one-click Windows Service management. |
+| 🖥️ **Config editor** | Desktop GUI for every setting, with a DCS-gRPC connection test, a read-only mission data explorer, one-click Windows Service management, profiles, backup and restore of the whole setup, and a dark and a light theme. |
 | 🪶 **A handout for your pilots** | Three kneeboard pages, English and German, with every call in the words to say it, what it does and what the answer sounds like — [PNGs for `Saved Games\DCS\Kneeboard\` and a PDF to print](docs/kneeboard/README.md). |
 | 📦 **One-file installer** | A `Setup.exe` that installs every runtime dependency on a bare Windows machine. |
 
 ## Installation
 
-1. Download **`DARKSTAR-Setup-<version>.exe`** from the [Releases](../../releases) page.
+1. Download **`DARKSTAR-Setup-<version>.exe`** from the [Releases](../../releases) page. (Pilots who want the radio wheel get `DARKSTAR-Wheel-Setup-<version>.exe` instead.)
 2. Run it — it installs the bot, the config editor, a speech model and every missing runtime, and writes a `config.json` already pointing at the model and at your SRS installation.
 3. Open the config editor, fill in your SRS server, radios and Gemini API key, save, start.
 

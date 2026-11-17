@@ -45,10 +45,10 @@
 
 @if (_detectMessage != null)
 {
-    <div class="card" style="border-color:@(_detectOk ? "#2E4E4C" : "#6C2E2E");margin-top:8px">
+    <div class="card" style="border-color:@(_detectOk ? "var(--ok-line)" : "var(--bad-line)");margin-top:8px">
         <div style="display:flex;align-items:center;gap:10px">
-            <span style="color:@(_detectOk ? "#5FBF7A" : "#E2543A");font-size:14px">@(_detectOk ? "✓" : "✕")</span>
-            <span style="font-size:12.5px;color:#E7EDEF">@_detectMessage</span>
+            <span style="color:@(_detectOk ? "var(--ok)" : "var(--bad)");font-size:14px">@(_detectOk ? "✓" : "✕")</span>
+            <span style="font-size:12.5px;color:var(--text)">@_detectMessage</span>
         </div>
     </div>
 }
@@ -68,9 +68,9 @@
 <div class="field" style="max-width:420px">
     <label>OWN COALITION</label>
     <div class="row3">
-        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"#2E4E6C":"#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"#4FA8E0":"#5A6A70");background:@(Store.Config.Coalition==2?"#1E3A55":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>
-        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==1?"#6C2E2E":"#2A363C");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==1?"#E2543A":"#5A6A70");background:@(Store.Config.Coalition==1?"#4A1B0C":"transparent")" @onclick="() => Store.Config.Coalition = 1">Red</button>
-        <button class="link-action" style="justify-content:center;border:1px solid #2A363C;border-radius:4px;padding:8px;color:@(Store.Config.Coalition==0?"#E7EDEF":"#5A6A70");background:@(Store.Config.Coalition==0?"#1B2429":"transparent")" @onclick="() => Store.Config.Coalition = 0">Spectator</button>
+        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"var(--blue-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"var(--blue)":"var(--faint)");background:@(Store.Config.Coalition==2?"var(--blue-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>
+        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==1?"var(--bad-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==1?"var(--bad)":"var(--faint)");background:@(Store.Config.Coalition==1?"var(--red-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 1">Red</button>
+        <button class="link-action" style="justify-content:center;border:1px solid var(--line);border-radius:4px;padding:8px;color:@(Store.Config.Coalition==0?"var(--text)":"var(--faint)");background:@(Store.Config.Coalition==0?"var(--bg-raised)":"transparent")" @onclick="() => Store.Config.Coalition = 0">Spectator</button>
     </div>
 </div>
 

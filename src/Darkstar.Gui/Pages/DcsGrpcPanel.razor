@@ -8,7 +8,7 @@
 @if (Section == SectionServer)
 {
 <h1>DCS-gRPC — SERVER &amp; TEST</h1>
-<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+<p style="color:var(--muted);font-size:11.5px;margin-top:-8px;margin-bottom:16px">
     The connection to the running mission. Everything the bot knows about the world comes through
     here: bogey dope, picture, threat check, alpha check, friendly positions, the threat circle,
     runway in use and ATIS, the generated tower frequencies and their F10 markers. Switch it off and
@@ -39,12 +39,12 @@
 
 @if (_result != null)
 {
-    <div class="card" style="border-color:@(_result.Success ? "#2E4E4C" : "#6C2E2E");margin-top:8px">
+    <div class="card" style="border-color:@(_result.Success ? "var(--ok-line)" : "var(--bad-line)");margin-top:8px">
         <div style="display:flex;align-items:center;gap:10px">
-            <span style="color:@(_result.Success ? "#5FBF7A" : "#E2543A");font-size:14px">@(_result.Success ? "✓" : "✕")</span>
-            <span style="font-size:12.5px;color:#E7EDEF">@(_result.Success ? "Connection OK" : "Connection failed")</span>
+            <span style="color:@(_result.Success ? "var(--ok)" : "var(--bad)");font-size:14px">@(_result.Success ? "✓" : "✕")</span>
+            <span style="font-size:12.5px;color:var(--text)">@(_result.Success ? "Connection OK" : "Connection failed")</span>
         </div>
-        <div style="font-size:12px;color:#8CA0A8;margin-top:8px">@_result.Message</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">@_result.Message</div>
     </div>
 }
 }
@@ -54,7 +54,7 @@
 <!-- ================= Tactical replies (bogey dope / picture / threat) ================= -->
 
 <h1>REPLIES FROM MISSION DATA</h1>
-<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+<p style="color:var(--muted);font-size:11.5px;margin-top:-8px;margin-bottom:16px">
     Everything the bot answers from the running mission instead of from phrases.json or Gemini, in
     the order the cards appear: bogey dope, picture, threat check and alpha check, then friendly
     positions, the threat circle, a test button that shows a reply without transmitting, and the
@@ -70,7 +70,7 @@
 
 @if (Store.Config.DcsIntelEnabled && !Store.Config.DcsGrpcEnabled)
 {
-    <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
+    <div class="card" style="border-color:var(--bad-line);font-size:12px;color:var(--accent)">
         DCS-gRPC is switched off under SERVER &amp; TEST - tactical requests will keep being handled by phrases/Gemini.
     </div>
 }
@@ -117,7 +117,7 @@
 
     @if (Store.Config.DcsIntelContactSource == "AwacsOnly" && string.IsNullOrWhiteSpace(Store.Config.DcsIntelAwacsUnitName))
     {
-        <div class="card" style="border-color:#6C2E2E;font-size:12px;color:#F2A93B">
+        <div class="card" style="border-color:var(--bad-line);font-size:12px;color:var(--accent)">
             No unit named, and mission data is switched off — tactical requests will answer "no tactical data".
         </div>
     }
@@ -164,7 +164,7 @@
     <div class="toggle-row">
         <div>
             <div>Slow, clearly spoken numbers</div>
-            <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+            <div style="font-size:11px;color:var(--faint);margin-top:3px">
                 Comma between the digits of a bearing, and ranges/altitudes/counts spelled out as words -
                 so TTS doesn't rattle through them.
             </div>
@@ -331,7 +331,7 @@
 
     <div class="card">
         <div class="card-head" style="margin-bottom:6px">
-            <span style="font-size:12.5px;color:#E7EDEF">Friendly positions ("where is Springfield 2-1?")</span>
+            <span style="font-size:12.5px;color:var(--text)">Friendly positions ("where is Springfield 2-1?")</span>
             <span class="spacer"></span>
             <button class="toggle @(Store.Config.DcsIntelFriendlyPositionEnabled ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
                     @onclick="() => Store.Config.DcsIntelFriendlyPositionEnabled = !Store.Config.DcsIntelFriendlyPositionEnabled">
@@ -339,8 +339,8 @@
             </button>
         </div>
 
-        <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:8px 0">
-            <div style="font-size:11.5px;color:#F2A93B">
+        <div class="card" style="border-color:var(--amber-line);background:var(--note-bg);margin:8px 0">
+            <div style="font-size:11.5px;color:var(--accent)">
                 <strong>Off by default, and that is a decision about your server rather than a setting.</strong>
                 A bot that reads out any player's position on request changes how a PvP server plays. Only
                 <em>human players on the caller's own side</em> are ever reported, and a caller whose coalition
@@ -381,7 +381,7 @@
         <div class="toggle-row">
             <div>
                 <div>Also say the friendly's heading</div>
-                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                <div style="font-size:11px;color:var(--faint);margin-top:3px">
                     Where they are is only half of a rejoin. Aspect is deliberately never given — that
                     describes a contact closing on you, which is a question about an enemy.
                 </div>
@@ -395,14 +395,14 @@
 
     <div class="card">
         <div class="card-head" style="margin-bottom:6px">
-            <span style="font-size:12.5px;color:#E7EDEF">Threat circle (standing watch)</span>
+            <span style="font-size:12.5px;color:var(--text)">Threat circle (standing watch)</span>
             <span class="spacer"></span>
             <button class="toggle @(Store.Config.DcsIntelThreatCircleEnabled ? "on" : "")" disabled="@(!Store.Config.DcsIntelEnabled)"
                     @onclick="() => Store.Config.DcsIntelThreatCircleEnabled = !Store.Config.DcsIntelThreatCircleEnabled">
                 <span class="knob"></span>
             </button>
         </div>
-        <div style="font-size:11.5px;color:#8CA0A8;margin-bottom:12px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">
             A pilot asks for "threat circle forty miles" and the bot keeps watching a circle of that
             radius <b>around their own aircraft</b> — it moves with them — warning them on this
             frequency as soon as a hostile aircraft or helicopter enters it. Every contact is
@@ -486,7 +486,7 @@
 
     <div class="card">
         <div class="card-head" style="margin-bottom:8px">
-            <span style="font-size:12.5px;color:#E7EDEF">Try it without flying</span>
+            <span style="font-size:12.5px;color:var(--text)">Try it without flying</span>
         </div>
         <div class="row3">
             <div class="field">
@@ -524,7 +524,7 @@
         <div class="toggle-row" style="margin:0 0 4px 0">
             <div>
                 <div>Answer "runway in use" and ATIS calls</div>
-                <div style="font-size:11px;color:#5A6A70;margin-top:3px">
+                <div style="font-size:11px;color:var(--faint);margin-top:3px">
                     Live wind, temperature and pressure, plus the runway the wind actually favours.
                 </div>
             </div>
@@ -535,11 +535,11 @@
 
         @if (Store.Config.DcsAirfieldEnabled)
         {
-            <div class="card" style="border-color:#6C5A2E;background:#241F12;margin:8px 0">
-                <div style="font-size:11.5px;color:#D9A62E;font-weight:600;margin-bottom:4px">
+            <div class="card" style="border-color:var(--amber-line);background:var(--note-bg);margin:8px 0">
+                <div style="font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:4px">
                     Needs one setting on the DCS-gRPC server
                 </div>
-                <div style="font-size:11px;color:#8CA0A8">
+                <div style="font-size:11px;color:var(--muted)">
                     Runway headings come from <code>Airbase.getRunways()</code>, which DCS-gRPC only exposes
                     through its <code>Eval</code> method — and that is <strong>disabled by default</strong>.
                     Set <code>evalEnabled = true</code> in the DCS-gRPC server configuration and restart the
@@ -612,7 +612,7 @@
                             _ => "Both"
                         };
                         <button class="link-action"
-                                style="justify-content:center;border:1px solid @(selected ? "#2E4E4C" : "#2A363C");border-radius:4px;padding:8px;color:@(selected ? "#5FBF7A" : "#5A6A70");background:@(selected ? "#16302A" : "transparent")"
+                                style="justify-content:center;border:1px solid @(selected ? "var(--ok-line)" : "var(--line)");border-radius:4px;padding:8px;color:@(selected ? "var(--ok)" : "var(--faint)");background:@(selected ? "var(--ok-bg)" : "transparent")"
                                 @onclick="() => Store.Config.DcsAirfieldPressureUnit = unit">@label</button>
                     }
                 </div>
@@ -683,7 +683,7 @@
 
         <div class="card">
             <div class="card-head">
-                <span style="font-size:12.5px;color:#E7EDEF">The F10 menu — calls without being understood</span>
+                <span style="font-size:12.5px;color:var(--text)">The F10 menu — calls without being understood</span>
                 <span class="spacer"></span>
                 <label class="switch">
                     <input type="checkbox" @bind="Store.Config.F10MenuEnabled" />
@@ -700,7 +700,7 @@
 
             @if (Store.Config.F10MenuEnabled && !Store.Config.DcsGrpcEnabled)
             {
-                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                <div class="hint" style="color:var(--accent);margin-bottom:10px">
                     DCS-gRPC is switched off on the server page, so the menu cannot be built at all.
                 </div>
             }
@@ -794,7 +794,7 @@
 
         <div class="card">
             <div class="card-head">
-                <span style="font-size:12.5px;color:#E7EDEF">Requests typed into the chat — and the radio wheel</span>
+                <span style="font-size:12.5px;color:var(--text)">Requests typed into the chat — and the radio wheel</span>
                 <span class="spacer"></span>
                 <label class="switch">
                     <input type="checkbox" @bind="Store.Config.ChatBridgeEnabled" />
@@ -818,7 +818,7 @@
 
             @if (Store.Config.ChatBridgeEnabled && !Store.Config.DcsGrpcEnabled)
             {
-                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                <div class="hint" style="color:var(--accent);margin-bottom:10px">
                     DCS-gRPC is switched off on the server page, so the chat can only answer a radio check —
                     every other call needs mission data.
                 </div>
@@ -847,7 +847,7 @@
 
             @if (Store.Config.ChatBridgeEnabled && ChatBridgeFolderProblem() is { } bridgeProblem)
             {
-                <div class="hint" style="color:#F2A93B;margin-bottom:10px">
+                <div class="hint" style="color:var(--accent);margin-bottom:10px">
                     @bridgeProblem As seen from this PC, which may not be the server — the bot repeats the
                     check at startup, on the server.
                 </div>
@@ -882,26 +882,26 @@
 <!-- ================= Mission data explorer ================= -->
 
 <h1>MISSION DATA EXPLORER</h1>
-<p style="color:#8CA0A8;font-size:11.5px;margin-top:-8px;margin-bottom:16px">
+<p style="color:var(--muted);font-size:11.5px;margin-top:-8px;margin-bottom:16px">
     Read-only: only Get/Stream calls are made - nothing in the running mission is changed.
     Results are shown as the raw JSON DCS-gRPC returns (all fields, including empty/default values).
 </p>
 
 @if (!Store.Config.DcsGrpcEnabled)
 {
-    <div class="card" style="color:#8CA0A8;font-size:12px">Enable DCS-gRPC under SERVER &amp; TEST to use the explorer.</div>
+    <div class="card" style="color:var(--muted);font-size:12px">Enable DCS-gRPC under SERVER &amp; TEST to use the explorer.</div>
 }
 else
 {
     <div class="card">
         <div class="card-head">
-            <span style="font-size:12.5px;color:#E7EDEF">Mission snapshot</span>
+            <span style="font-size:12.5px;color:var(--text)">Mission snapshot</span>
             <span class="spacer"></span>
             <button class="link-action" style="margin:0" @onclick="RunSnapshot" disabled="@_running">
                 <span>@(_running && _runningSnapshot ? "Collecting..." : "Run snapshot")</span>
             </button>
         </div>
-        <div style="font-size:11.5px;color:#8CA0A8">
+        <div style="font-size:11.5px;color:var(--muted)">
             Runs every query that needs no input (mission, time, theatre, airbases, groups, player units,
             statics, players, bullseye of both sides...) in one go - the quickest overview of what's available.
         </div>
@@ -922,7 +922,7 @@ else
                 }
             </select>
             <div class="hint">
-                <span style="color:#4FD1C5;font-family:Consolas,monospace">@Selected.Rpc</span> - @Selected.Description
+                <span style="color:var(--teal);font-family:Consolas,monospace">@Selected.Rpc</span> - @Selected.Description
             </div>
         </div>
 
@@ -996,7 +996,7 @@ else
             </button>
             @if (_positionMessage != null)
             {
-                <div class="hint" style="margin-top:-10px;margin-bottom:12px;font-size:11px;color:#8CA0A8">@_positionMessage</div>
+                <div class="hint" style="margin-top:-10px;margin-bottom:12px;font-size:11px;color:var(--muted)">@_positionMessage</div>
             }
         }
 
@@ -1026,7 +1026,7 @@ else
                     </div>
                 }
             </div>
-            <div class="hint" style="margin-top:-6px;margin-bottom:12px;font-size:11px;color:#5A6A70">
+            <div class="hint" style="margin-top:-6px;margin-bottom:12px;font-size:11px;color:var(--faint)">
                 Stops after the time above or @DcsGrpcExplorer.MaxStreamMessages messages, whichever comes first.
             </div>
         }
@@ -1037,7 +1037,7 @@ else
             </button>
             @if (_running)
             {
-                <button class="link-action" style="color:#E2543A" @onclick="Cancel"><span>Cancel</span></button>
+                <button class="link-action" style="color:var(--bad)" @onclick="Cancel"><span>Cancel</span></button>
             }
         </div>
     </div>
@@ -1058,10 +1058,10 @@ else
 
     @if (_queryResult != null)
     {
-        <div class="card" style="border-color:@(_queryResult.Success ? "#2E4E4C" : "#6C2E2E")">
+        <div class="card" style="border-color:@(_queryResult.Success ? "var(--ok-line)" : "var(--bad-line)")">
             <div class="card-head" style="margin-bottom:6px">
-                <span style="color:@(_queryResult.Success ? "#5FBF7A" : "#E2543A");font-size:14px">@(_queryResult.Success ? "✓" : "✕")</span>
-                <span style="font-size:12.5px;color:#E7EDEF">@_resultTitle</span>
+                <span style="color:@(_queryResult.Success ? "var(--ok)" : "var(--bad)");font-size:14px">@(_queryResult.Success ? "✓" : "✕")</span>
+                <span style="font-size:12.5px;color:var(--text)">@_resultTitle</span>
                 <span class="spacer"></span>
                 @if (_queryResult.Success)
                 {
@@ -1069,16 +1069,16 @@ else
                     <button class="link-action" style="margin:0" @onclick="SaveJson"><span>Save to file</span></button>
                 }
             </div>
-            <div style="font-size:12px;color:#8CA0A8">@_queryResult.Message</div>
+            <div style="font-size:12px;color:var(--muted)">@_queryResult.Message</div>
             @if (_queryResult.Success && _queryResult.DiscoveredNames.Count > 0)
             {
-                <div style="font-size:11px;color:#5A6A70;margin-top:4px">
+                <div style="font-size:11px;color:var(--faint);margin-top:4px">
                     @_queryResult.DiscoveredNames.Count name(s) found - now offered as suggestions in the unit/group name fields.
                 </div>
             }
             @if (_actionMessage != null)
             {
-                <div style="font-size:11px;color:#4FD1C5;margin-top:4px;word-break:break-all">@_actionMessage</div>
+                <div style="font-size:11px;color:var(--teal);margin-top:4px;word-break:break-all">@_actionMessage</div>
             }
             @if (_queryResult.Success)
             {

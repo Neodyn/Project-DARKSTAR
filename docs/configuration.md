@@ -496,3 +496,5 @@ A plain list of terms passed to Gemini as a transcription hint alongside the aud
 ## Backups
 
 Every automatic edit to any of the three files (schema merges, GUI saves) is preceded by a timestamped backup copy written to a `Backup/` subfolder next to the file — nothing is ever overwritten without a recoverable copy.
+
+A backup of all three files together, with the profiles, is made by hand in the config editor on CH3 and lands in the same folder as `Darkstar-Backup-<date>_<time>.zip`; restoring one checks it completely before anything is written and backs up the current state first. See [gui.md](gui.md#backup-and-restore).
