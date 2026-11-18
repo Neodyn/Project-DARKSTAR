@@ -630,6 +630,8 @@ Fußzeile: **Discard (reload from disk)** und **Save changes**. Vor jedem Speich
 
 Oben rechts: **☾ DARK** und **☀ LIGHT** schalten die Farben des Editors um. Die Wahl wird für den nächsten Start gemerkt (in `%LOCALAPPDATA%\Darkstar\editor.json`, wie der Konfigurationsordner) und ändert nichts, was der Bot liest.
 
+Buttons gibt es in drei Arten: gefüllt für die Hauptaktion einer Karte, umrahmt für alles andere und unterstrichener Text für Abbrechen und Schließen. Rot heißt, dass etwas entfernt oder ersetzt wird. Graue Schildchen mit farbigem Punkt (*installed*, *in use*) sind nur Information und nicht anklickbar.
+
 Einzelheiten zu CH8 und CH2 stehen in den nächsten beiden Kapiteln, eine vollständige Beschreibung in [gui.md](gui.md).
 
 ---

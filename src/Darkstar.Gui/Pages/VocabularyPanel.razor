@@ -42,7 +42,7 @@
         <label>NEW TERM</label>
         <input type="text" @bind="_newTerm" @bind:event="oninput" @onkeydown="OnKeyDown" placeholder="e.g. Viggen" />
     </div>
-    <button class="link-action" style="margin-bottom:9px" @onclick="AddTerm"><span>Add</span></button>
+    <button class="btn" @onclick="AddTerm"><BtnIcon Name="add" /><span>Add</span></button>
 </div>
 
 @code {

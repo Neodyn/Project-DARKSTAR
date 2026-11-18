@@ -14,7 +14,8 @@
         <span style="color:@StatusColor;font-size:14px">@StatusIcon</span>
         <span style="font-size:12.5px;color:var(--text)">@StatusHeadline</span>
         <span class="spacer"></span>
-        <button class="link-action" style="margin:0" @onclick="Refresh" disabled="@_busy">
+        <button class="btn small" @onclick="Refresh" disabled="@_busy">
+            <BtnIcon Name="refresh" Busy="@_busy" />
             <span>@(_busy ? "Working..." : "Refresh")</span>
         </button>
     </div>
@@ -85,27 +86,32 @@
         </button>
     </div>
 
-    <button class="link-action" @onclick="Install" disabled="@(_busy || !System.IO.File.Exists(_exePath))">
-        <span>@(_busy ? "Working..." : "Install service")</span>
-    </button>
+    <div class="actions">
+        <button class="btn primary" @onclick="Install" disabled="@(_busy || !System.IO.File.Exists(_exePath))">
+            <BtnIcon Name="play" Busy="@_busy" />
+            <span>@(_busy ? "Working..." : "Install service")</span>
+        </button>
+    </div>
 }
 else
 {
-    <div style="display:flex;gap:18px;flex-wrap:wrap">
+    <div class="actions">
         @if (_status!.State == WindowsServiceState.Running)
         {
-            <button class="link-action" @onclick="Stop" disabled="@_busy"><span>Stop service</span></button>
+            <button class="btn" @onclick="Stop" disabled="@_busy"><BtnIcon Name="stop" /><span>Stop service</span></button>
         }
         else
         {
-            <button class="link-action" @onclick="Start" disabled="@_busy"><span>Start service</span></button>
+            <button class="btn primary" @onclick="Start" disabled="@_busy"><BtnIcon Name="play" /><span>Start service</span></button>
         }
-        <button class="link-action" style="color:var(--bad)" @onclick="Uninstall" disabled="@_busy">
+        <span class="spacer"></span>
+        <button class="btn danger" @onclick="Uninstall" disabled="@_busy">
+            <BtnIcon Name="trash" />
             <span>@(_confirmUninstall ? "Really remove? Click again" : "Stop and remove service")</span>
         </button>
         @if (_confirmUninstall)
         {
-            <button class="link-action" @onclick="() => _confirmUninstall = false"><span>Cancel</span></button>
+            <button class="btn text" @onclick="() => _confirmUninstall = false"><span>Cancel</span></button>
         }
     </div>
 }

@@ -17,7 +17,7 @@ See the [README](../README.md#project-structure) for the folder layout. The proj
 
 - **`Darkstar.Bot`** (`src/Darkstar.Bot/`, builds `Darkstar.exe`) — the bot itself: SRS connection, audio pipeline, hotword detection, Gemini calls, reply construction. Runs as a console app or Windows Service.
 - **`Darkstar.Core`** (`src/Darkstar.Core/`) — shared library, referenced by both the bot and the GUI. UI-agnostic by rule (see above).
-- **`Darkstar.Gui`** (`src/Darkstar.Gui/`) — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry.
+- **`Darkstar.Gui`** (`src/Darkstar.Gui/`) — Blazor Hybrid (WPF host + WebView2) configuration editor. One panel per channel under `Pages/`; `Pages/Main.razor` holds the sidebar as data (`NavGroup`/`NavEntry`) rather than as markup, so adding a panel means adding one entry. Buttons use the classes `btn` (framed), `btn primary` (filled, the card's main action), `btn text` (underlined) and `danger`, with an icon from `Pages/BtnIcon.razor`; a new icon is one more path in its table.
 
   Four rules the test suite enforces here:
 

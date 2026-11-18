@@ -19,13 +19,13 @@
     </div>
 </div>
 
-<div style="display:flex;align-items:center;gap:16px;margin:-4px 0 16px">
-    <button class="link-action" style="margin:0" @onclick="ApplyFolder"><span>Use this folder and load</span></button>
+<div class="actions" style="margin-top:-4px">
+    <button class="btn primary" @onclick="ApplyFolder"><BtnIcon Name="go" /><span>Use this folder and load</span></button>
 
     @if (Store.FolderWasChosen)
     {
         <span class="badge">remembered</span>
-        <button class="link-action" style="margin:0" @onclick="Store.ForgetChosenFolder"><span>Forget it</span></button>
+        <button class="btn text" @onclick="Store.ForgetChosenFolder"><span>Forget it</span></button>
     }
     else
     {
@@ -93,7 +93,7 @@ else
                     }
                     else
                     {
-                        <button class="icon-btn" style="color:var(--teal)" @onclick="() => Activate(profile.Name)">activate</button>
+                        <button class="icon-btn accent" @onclick="() => Activate(profile.Name)">activate</button>
                         <button class="icon-btn" @onclick="() => _confirmDelete = profile.Name">delete</button>
                     }
                 </td>
@@ -118,12 +118,12 @@ else
                 <span style="font-size:11px;color:var(--accent);margin-right:12px">
                     "@ConfigProfiles.Normalize(_newName)" exists. Replace it?
                 </span>
-                <button class="link-action" style="margin:0;color:var(--bad)" @onclick="() => Save(force: true)"><span>Replace</span></button>
-                <button class="link-action" style="margin:0 0 0 12px" @onclick="() => _confirmOverwrite = false"><span>Cancel</span></button>
+                <button class="btn danger" @onclick="() => Save(force: true)"><BtnIcon Name="save" /><span>Replace</span></button>
+                <button class="btn text" style="margin-left:8px" @onclick="() => _confirmOverwrite = false"><span>Cancel</span></button>
             }
             else
             {
-                <button class="link-action" style="margin:0" @onclick="() => Save(force: false)"><span>Save as profile</span></button>
+                <button class="btn primary" @onclick="() => Save(force: false)"><BtnIcon Name="save" /><span>Save as profile</span></button>
             }
         </div>
     </div>
@@ -160,9 +160,9 @@ else
         </button>
     </div>
 
-    <div style="display:flex;align-items:center;gap:20px">
-        <button class="link-action" style="margin:0" @onclick="BackUpHere"><span>Back up to the Backup folder</span></button>
-        <button class="link-action" style="margin:0" @onclick="BackUpTo"><span>Back up to a file...</span></button>
+    <div class="actions" style="margin-bottom:0">
+        <button class="btn primary" @onclick="BackUpHere"><BtnIcon Name="backup" /><span>Back up to the Backup folder</span></button>
+        <button class="btn" @onclick="BackUpTo"><BtnIcon Name="save" /><span>Back up to a file...</span></button>
     </div>
 
     <div class="hint" style="margin-top:10px">
@@ -191,7 +191,7 @@ else
     <div class="card-head">
         <span class="card-title">RESTORE</span>
         <span class="spacer"></span>
-        <button class="link-action" style="margin:0" @onclick="RestoreFromFile"><span>Restore from a file...</span></button>
+        <button class="btn small" @onclick="RestoreFromFile"><BtnIcon Name="restore" /><span>Restore from a file...</span></button>
     </div>
 
     @if (_candidate != null)
@@ -200,7 +200,7 @@ else
             @if (_candidateProblem != null)
             {
                 <div class="bad-text">@(System.IO.Path.GetFileName(_candidate)) cannot be restored: @_candidateProblem</div>
-                <button class="link-action" style="margin:8px 0 0" @onclick="CancelRestore"><span>Close</span></button>
+                <button class="btn text" style="margin-top:8px" @onclick="CancelRestore"><span>Close</span></button>
             }
             else if (_candidateContents != null)
             {
@@ -230,9 +230,9 @@ else
                     Replaces the files above; profiles not in the backup stay. Unsaved changes in this
                     editor are lost. What is there now is backed up first, as a <em>before restore</em> file.
                 </div>
-                <div style="display:flex;gap:16px;margin-top:10px">
-                    <button class="link-action danger" style="margin:0" @onclick="ConfirmRestore"><span>Restore it</span></button>
-                    <button class="link-action" style="margin:0" @onclick="CancelRestore"><span>Cancel</span></button>
+                <div class="actions" style="margin:10px 0 0">
+                    <button class="btn danger" @onclick="ConfirmRestore"><BtnIcon Name="restore" /><span>Restore it</span></button>
+                    <button class="btn text" @onclick="CancelRestore"><span>Cancel</span></button>
                 </div>
             }
         </div>

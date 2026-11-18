@@ -1,3 +1,4 @@
+@namespace Darkstar.Gui.Pages
 @inject ConfigStore Store
 @implements IDisposable
 
@@ -44,8 +45,9 @@
                 </div>
                 <div class="detail">@step.Detail</div>
             </div>
-            <button class="link-action" style="margin:0" @onclick="() => OnGo.InvokeAsync(step)">
-                <span>@EditorSearch.PageName(step.Page, step.Section) ›</span>
+            <button class="btn small" @onclick="() => OnGo.InvokeAsync(step)">
+                <span>@EditorSearch.PageName(step.Page, step.Section)</span>
+                <BtnIcon Name="go" Size="13" />
             </button>
         </li>
     }

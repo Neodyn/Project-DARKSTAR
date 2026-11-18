@@ -106,7 +106,9 @@
                 </div>
                 <div class="hint">Folder containing config.json / phrases.json / vocabulary.json. Auto-detected based on where an existing config.json was found nearby; change it if the bot lives elsewhere. A folder loaded from here is remembered for the next start, and CH3 Profiles can change it again later.</div>
             </div>
-            <button class="link-action" @onclick="() => Store.UseFolder(Store.ConfigFolder)"><span>Load</span></button>
+            <div class="actions">
+                <button class="btn primary" @onclick="() => Store.UseFolder(Store.ConfigFolder)"><BtnIcon Name="go" /><span>Load</span></button>
+            </div>
         }
         else
         {

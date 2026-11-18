@@ -46,7 +46,8 @@
         </div>
 
         <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <button class="link-action" style="margin-bottom:0" @onclick="CheckWhisperModel">
+            <button class="btn small" @onclick="CheckWhisperModel">
+                <BtnIcon Name="check" />
                 <span>Check the model</span>
             </button>
             <span>Reads the file's size and header — which is what catches a half-finished download.</span>
@@ -186,8 +187,9 @@
         <label>TTS VOICE (used by any radio that doesn't set its own)</label>
         <input type="text" @bind="Store.Config.VoiceName" list="tts-voices" placeholder="whatever ExternalAudio picks" />
         <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <button class="link-action" style="margin-bottom:0" disabled="@Store.TtsVoicesLoading"
+            <button class="btn small" disabled="@Store.TtsVoicesLoading"
                     @onclick="() => Store.LoadTtsVoicesAsync(force: true)">
+                <BtnIcon Name="refresh" Busy="@Store.TtsVoicesLoading" />
                 <span>@(Store.TtsVoicesLoading ? "Asking..." : "List available voices")</span>
             </button>
             @if (Store.TtsVoiceStatus != null)
@@ -328,10 +330,10 @@
     <div class="field" style="max-width:420px">
         <label>AUDIO PREPARATION</label>
         <div class="row2">
-            <button class="link-action"
+            <button class="choice"
                     style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok-line)" : "var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok)" : "var(--faint)");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.LowPass ? "var(--ok-bg)" : "transparent")"
                     @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.LowPass">Low-pass (recommended)</button>
-            <button class="link-action"
+            <button class="choice"
                     style="justify-content:center;border:1px solid @(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber-line)" : "var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber)" : "var(--faint)");background:@(Store.Config.HotwordAudioFilter == HotwordAudioFilter.Average ? "var(--amber-bg)" : "transparent")"
                     @onclick="() => Store.Config.HotwordAudioFilter = HotwordAudioFilter.Average">Average (old)</button>
         </div>

@@ -1,0 +1,43 @@
+@namespace Darkstar.Gui.Pages
+@* A small line icon for a button, drawn in the button's own colour (the .ico rules in app.css).
+   Busy swaps it for a spinner, so a button that is waiting says so without changing its size.
+   The shapes are plain SVG paths on a 24 x 24 grid - the editor runs offline, so no icon font. *@
+
+<svg class="ico @(Busy ? "spin" : "")" width="@Size" height="@Size" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="@(Busy ? Paths["busy"] : Paths.GetValueOrDefault(Name, Paths["go"]))" />
+</svg>
+
+@code {
+    /// <summary>Which icon: one of the keys of <see cref="Paths"/>.</summary>
+    [Parameter] public string Name { get; set; } = "go";
+
+    /// <summary>True while the button's action runs: shows a turning spinner instead.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public int Size { get; set; } = 15;
+
+    /// <summary>Every icon the editor uses. EditorPanelTests checks that every name a panel asks for is here.</summary>
+    public static readonly IReadOnlyDictionary<string, string> Paths = new Dictionary<string, string>
+    {
+        ["add"] = "M12 5v14M5 12h14",
+        ["backup"] = "M12 3v11M7.5 9.5L12 14l4.5-4.5M4 17v3h16v-3",
+        ["busy"] = "M12 3a9 9 0 1 0 9 9",
+        ["check"] = "M5 12.5l4.5 4.5L19 7",
+        ["copy"] = "M9 9h11v11H9zM15 9V4H4v11h5",
+        ["folder"] = "M3 6.5h6.5l2 2.5H21V19H3z",
+        ["generate"] = "M12 3l2 5.5L19.5 10.5 14 12.5 12 18l-2-5.5L4.5 10.5 10 8.5z",
+        ["go"] = "M5 12h14M13 6l6 6-6 6",
+        ["list"] = "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
+        ["play"] = "M7 4.5l12 7.5-12 7.5z",
+        ["position"] = "M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4M12 7.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9",
+        ["refresh"] = "M20 11.5a8 8 0 0 0-14.6-4.5M4.5 3v4.5H9M4 12.5a8 8 0 0 0 14.6 4.5M19.5 21v-4.5H15",
+        ["reply"] = "M4 5h16v11H9.5L4 20z",
+        ["restore"] = "M12 20V9M7.5 13.5L12 9l4.5 4.5M4 7V4h16v3",
+        ["save"] = "M5 3.5h11.5L20 7v13.5H5zM8.5 3.5v5h7v-5M8.5 20.5v-6h7v6",
+        ["search"] = "M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M20 20l-4.8-4.8",
+        ["stop"] = "M6.5 6.5h11v11h-11z",
+        ["test"] = "M9 3v5M15 3v5M6 8h12v3.5a6 6 0 0 1-12 0zM12 17.5V21",
+        ["trash"] = "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
+    };
+}

@@ -46,6 +46,12 @@
     --blue: #4FA8E0;           /* blue coalition */
     --blue-line: #2E4E6C;      /* blue coalition border */
     --blue-bg: #1E3A55;        /* blue coalition selected */
+    --btn-fill: #4FD1C5;       /* primary button */
+    --btn-fill-hover: #7EE4D8; /* primary button, hovered */
+    --btn-ink: #04211E;        /* text on a primary button */
+    --btn-bg: #1F2C33;         /* other buttons */
+    --btn-bg-hover: #26363E;   /* other buttons, hovered */
+    --btn-line: #3E8C85;       /* border of the other buttons */
 }
 
 .theme-light {
@@ -84,6 +90,12 @@
     --blue: #1C66A0;           /* blue coalition */
     --blue-line: #A7C5E0;      /* blue coalition border */
     --blue-bg: #E0EDF8;        /* blue coalition selected */
+    --btn-fill: #0F7F76;       /* primary button */
+    --btn-fill-hover: #0B6A62; /* primary button, hovered */
+    --btn-ink: #FFFFFF;        /* text on a primary button */
+    --btn-bg: #E6F2F1;         /* other buttons */
+    --btn-bg-hover: #D3EAE7;   /* other buttons, hovered */
+    --btn-line: #0F7F76;       /* border of the other buttons */
 }
 
 
@@ -184,23 +196,24 @@ html, body {
 .field .hint { font-size: 11px; color: var(--faint); margin-top: 4px; }
 
 /* A path field with a Browse button beside it. The input keeps its own styling and simply stops
-   being full-width; the button matches the input's height rather than the link-actions elsewhere,
+   being full-width; the button looks like every other button but takes the input's height,
    because it belongs to the field rather than to the panel. */
 .path-row { display: flex; gap: 8px; align-items: stretch; }
 .path-row input[type=text] { flex: 1; min-width: 0; }
 .path-row .browse {
     flex-shrink: 0;
-    background: var(--bg-raised);
-    border: 1px solid var(--line);
-    border-radius: 4px;
-    color: var(--muted);
-    font-size: 11px;
+    background: var(--btn-bg);
+    border: 1px solid var(--btn-line);
+    border-radius: 5px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
     font-family: inherit;
     padding: 0 14px;
     cursor: pointer;
     white-space: nowrap;
 }
-.path-row .browse:hover { color: var(--text); border-color: var(--line-strong); }
+.path-row .browse:hover { background: var(--btn-bg-hover); border-color: var(--teal); }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 .row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
@@ -214,15 +227,63 @@ html, body {
 .card { border: 1px solid var(--line); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
 .card .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
 .freq { font-family: Consolas, monospace; font-size: 17px; color: var(--accent); }
-.badge { font-size: 10px; color: var(--teal); border: 1px solid var(--ok-line); border-radius: 3px; padding: 2px 6px; }
+/* A badge says what something is; it is never clickable, so it is never teal. The dot carries the
+   colour: green for a good state, amber for a caution, none for a plain remark. */
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .badge.amber { color: var(--amber); border-color: var(--amber-line); }
-.badge.muted { color: var(--faint); border-color: var(--line); }
+.badge.amber::before { background: var(--amber); }
+.badge.muted { color: var(--faint); }
+.badge.muted::before { display: none; }
 .spacer { flex: 1; }
-.icon-btn { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 14px; padding: 2px; }
-.icon-btn:hover { color: var(--bad); }
+/* Small actions inside a list row (remove, activate, restore...). Always framed, so they read as
+   buttons; the remove kind turns red only under the mouse. */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 24px; height: 24px; background: transparent; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); cursor: pointer; font-family: inherit; font-size: 11.5px; padding: 0 7px; }
+.icon-btn:hover { color: var(--bad); border-color: var(--bad-line); }
 
-.link-action { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--teal); cursor: pointer; background: none; border: none; padding: 0; margin-bottom: 16px; }
-.link-action:hover { color: var(--teal-hover); }
+/* ---------------------------------------------------------------------------------------------
+   Buttons. Three kinds, so that what can be clicked looks clickable and the main thing to do
+   stands out:
+     .btn.primary  filled - the main action of a card, at most one per card
+     .btn          framed - every other action
+     .btn.text     underlined text - cancel, close, forget; .danger makes any of them red
+   .btn.small is the same in list rows and card heads. Several buttons sit in an .actions row;
+   .actions.foot is that row at the bottom of a card, under a rule. Teal means "can be clicked"
+   and nothing else - badges and status text use other colours.
+   --------------------------------------------------------------------------------------------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 30px; padding: 0 13px; border-radius: 5px;
+       border: 1px solid var(--btn-line); background: var(--btn-bg); color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 600;
+       cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.btn:hover:not(:disabled) { background: var(--btn-bg-hover); border-color: var(--teal); }
+.btn .ico { color: var(--teal); flex-shrink: 0; }
+.btn.primary { background: var(--btn-fill); border-color: var(--btn-fill); color: var(--btn-ink); }
+.btn.primary .ico { color: var(--btn-ink); }
+.btn.primary:hover:not(:disabled) { background: var(--btn-fill-hover); border-color: var(--btn-fill-hover); }
+.btn.danger { background: transparent; border-color: var(--bad-line); color: var(--bad); }
+.btn.danger .ico { color: var(--bad); }
+.btn.danger:hover:not(:disabled) { background: var(--bad-bg); border-color: var(--bad); }
+.btn.text { background: none; border-color: transparent; color: var(--muted); font-weight: 400; padding: 0 6px; text-decoration: underline; text-underline-offset: 3px; }
+.btn.text:hover:not(:disabled) { background: none; border-color: transparent; color: var(--text); }
+.btn.text.danger { color: var(--bad); }
+.btn.text.danger:hover:not(:disabled) { color: var(--bad); background: var(--bad-bg); }
+.btn.small { height: 26px; padding: 0 10px; font-size: 12px; gap: 6px; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; }
+.actions .spacer { flex: 1; }
+.card .actions.foot { border-top: 1px solid var(--line-soft); padding-top: 12px; margin: 12px 0 0; }
+.hint .btn { margin-right: 4px; }
+
+/* What a button does while it waits: the icon turns into a spinner. */
+@keyframes spin { to { transform: rotate(360deg); } }
+.ico.spin { animation: spin 0.9s linear infinite; }
+
+/* Keyboard focus is visible on everything that can be clicked, in the focus amber. */
+button:focus-visible, .navitem:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* An option out of two or three (coalition, pressure unit, audio filter). Each sets its own
+   frame and colour inline, by whether it is the one chosen. */
+.choice { display: flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit; font-size: 12px; cursor: pointer; background: none; border: none; padding: 0; }
+.choice:hover { filter: brightness(1.15); }
 
 /* The editor had no links at all until the voice-sources block, so none were ever styled - and a
    browser default link is navy on this background, which is close to invisible. Same teal as the
@@ -261,8 +322,8 @@ table.phrase-table input { background: var(--bg-input); border: 1px solid var(--
 .footer .left { display: flex; align-items: center; gap: 16px; }
 .footer .ok { color: var(--ok); }
 .footer .warn { color: var(--accent); }
-.footer button { font-size: 11px; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; margin-left: 8px; }
-.footer button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); font-weight: 600; }
+.footer button { height: 30px; font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 0 14px; border-radius: 5px; border: 1px solid var(--btn-line); background: var(--btn-bg); color: var(--text); cursor: pointer; margin-left: 8px; }
+.footer button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); }
 .footer button:hover { filter: brightness(1.1); }
 
 .log-tail { background: var(--bg-deep); border: 1px solid var(--line-soft); border-radius: 4px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 11px; line-height: 1.7; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
@@ -291,10 +352,8 @@ code { font-family: Consolas, monospace; font-size: 0.95em; }
 .confirm-box { border: 1px solid var(--amber-line); background: var(--note-bg); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
 .confirm-box.bad { border-color: var(--bad-line); background: var(--bad-bg); }
 .confirm-box .hint { margin-top: 6px; }
-.link-action.danger { color: var(--bad); }
-.link-action.danger:hover { color: var(--bad); filter: brightness(1.2); }
-.icon-btn.accent { color: var(--teal); }
-.icon-btn.accent:hover { color: var(--teal-hover); }
+.icon-btn.accent { color: var(--teal); border-color: var(--btn-line); }
+.icon-btn.accent:hover { color: var(--teal-hover); border-color: var(--teal); background: var(--btn-bg-hover); }
 
 /* The search box on top of the sidebar, and its results in place of the sidebar entries. */
 .search-box { padding: 0 12px 10px; }

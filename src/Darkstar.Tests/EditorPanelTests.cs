@@ -296,6 +296,63 @@ internal static class EditorPanelTests
             @"\.path-row \.browse\s*\{"));
 
         CheckThemes(css);
+        CheckButtons(css);
+    }
+
+    /// <summary>
+    /// What can be clicked has to look like it. The editor's actions used to be bare teal text -
+    /// the same teal as the badges and the status lines - so a button and a remark looked alike.
+    /// Now there are three kinds of button, teal means "clickable" and nothing else, and every
+    /// button has a visible keyboard focus.
+    /// </summary>
+    private static void CheckButtons(string css)
+    {
+        Section("Buttons look like buttons");
+
+        static string Rule(string sheet, string selector)
+        {
+            var match = Regex.Match(sheet, Regex.Escape(selector) + @"\s*\{(?<body>[^}]*)\}");
+            return match.Success ? match.Groups["body"].Value : "";
+        }
+
+        Check("a button has a frame and a fill", Rule(css, ".btn").Contains("border: 1px solid var(--btn-line)", StringComparison.Ordinal)
+                                                && Rule(css, ".btn").Contains("background: var(--btn-bg)", StringComparison.Ordinal));
+        Check("the main action is filled", Rule(css, ".btn.primary").Contains("background: var(--btn-fill)", StringComparison.Ordinal));
+        Check("a text button is still underlined, so it reads as clickable",
+            Rule(css, ".btn.text").Contains("text-decoration: underline", StringComparison.Ordinal));
+        Check("keyboard focus is visible on every button", Rule(css, "button:focus-visible, .navitem:focus-visible").Contains("outline: 2px solid", StringComparison.Ordinal));
+        Check("a badge is never teal - teal is for what can be clicked",
+            Rule(css, ".badge").Length > 0 && !Rule(css, ".badge").Contains("--teal", StringComparison.Ordinal));
+        Check("a waiting button's spinner turns", css.Contains(".ico.spin { animation: spin", StringComparison.Ordinal));
+
+        var pages = Directory.GetFiles(PagesFolder, "*.razor").ToDictionary(f => Path.GetFileName(f), File.ReadAllText);
+
+        var oldStyle = pages.Where(p => p.Value.Contains("link-action", StringComparison.Ordinal)).Select(p => p.Key).ToList();
+        Check("no panel uses the old text-only action", oldStyle.Count == 0, string.Join(", ", oldStyle));
+
+        // Every button names its kind. A bare <button> gets the browser's own grey box, which
+        // matches nothing else on the page (the footer and the theme switch style theirs themselves).
+        var known = new[] { "btn", "choice", "browse", "toggle", "icon-btn", "voice-chip", "primary" };
+        var unstyled = pages
+            .SelectMany(p => Regex.Matches(p.Value, @"<button\b(?<attrs>[^>]*)>").Select(m => (File: p.Key, Attrs: m.Groups["attrs"].Value)))
+            .Where(b => !(b.File == "Main.razor" && b.Attrs.Contains("@onclick=\"Reload\"", StringComparison.Ordinal)))
+            .Where(b => !(b.File == "Main.razor" && b.Attrs.Contains("Store.LightTheme", StringComparison.Ordinal)))
+            .Where(b => !Regex.IsMatch(b.Attrs, @"class=""[^>]*?\b(" + string.Join("|", known) + @")\b"))
+            .Select(b => $"{b.File}: <button{b.Attrs.Trim()[..Math.Min(60, b.Attrs.Trim().Length)]}")
+            .ToList();
+        Check("every button has a kind", unstyled.Count == 0, string.Join("; ", unstyled.Take(4)));
+
+        // The icons are paths in BtnIcon.razor; a name it does not know falls back to an arrow,
+        // which would look deliberate and be wrong.
+        var iconSource = pages["BtnIcon.razor"];
+        var iconNames = Regex.Matches(iconSource, @"\[""(?<name>[a-z]+)""\] = ""M").Select(m => m.Groups["name"].Value).ToHashSet();
+        var unknownIcons = pages
+            .SelectMany(p => Regex.Matches(p.Value, @"<BtnIcon Name=""(?<name>[a-z]+)""").Select(m => $"{p.Key}: {m.Groups["name"].Value}"))
+            .Where(use => !iconNames.Contains(use[(use.IndexOf(": ", StringComparison.Ordinal) + 2)..]))
+            .ToList();
+        Check($"every icon a panel asks for is drawn ({iconNames.Count} icons)", iconNames.Count >= 10 && unknownIcons.Count == 0,
+            string.Join(", ", unknownIcons));
+        Check("and the spinner is one of them", iconNames.Contains("busy"));
     }
 
     /// <summary>

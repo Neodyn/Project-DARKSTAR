@@ -39,9 +39,12 @@
     </div>
 </div>
 
-<button class="link-action" @onclick="DetectSrs" disabled="@_detecting">
-    <span>@(_detecting ? "Searching..." : "Detect SRS installation")</span>
-</button>
+<div class="actions">
+    <button class="btn primary" @onclick="DetectSrs" disabled="@_detecting">
+        <BtnIcon Name="search" Busy="@_detecting" />
+        <span>@(_detecting ? "Searching..." : "Detect SRS installation")</span>
+    </button>
+</div>
 
 @if (_detectMessage != null)
 {
@@ -68,9 +71,9 @@
 <div class="field" style="max-width:420px">
     <label>OWN COALITION</label>
     <div class="row3">
-        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"var(--blue-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"var(--blue)":"var(--faint)");background:@(Store.Config.Coalition==2?"var(--blue-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>
-        <button class="link-action" style="justify-content:center;border:1px solid @(Store.Config.Coalition==1?"var(--bad-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==1?"var(--bad)":"var(--faint)");background:@(Store.Config.Coalition==1?"var(--red-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 1">Red</button>
-        <button class="link-action" style="justify-content:center;border:1px solid var(--line);border-radius:4px;padding:8px;color:@(Store.Config.Coalition==0?"var(--text)":"var(--faint)");background:@(Store.Config.Coalition==0?"var(--bg-raised)":"transparent")" @onclick="() => Store.Config.Coalition = 0">Spectator</button>
+        <button class="choice" style="justify-content:center;border:1px solid @(Store.Config.Coalition==2?"var(--blue-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==2?"var(--blue)":"var(--faint)");background:@(Store.Config.Coalition==2?"var(--blue-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 2">Blue</button>
+        <button class="choice" style="justify-content:center;border:1px solid @(Store.Config.Coalition==1?"var(--bad-line)":"var(--line)");border-radius:4px;padding:8px;color:@(Store.Config.Coalition==1?"var(--bad)":"var(--faint)");background:@(Store.Config.Coalition==1?"var(--red-bg)":"transparent")" @onclick="() => Store.Config.Coalition = 1">Red</button>
+        <button class="choice" style="justify-content:center;border:1px solid var(--line);border-radius:4px;padding:8px;color:@(Store.Config.Coalition==0?"var(--text)":"var(--faint)");background:@(Store.Config.Coalition==0?"var(--bg-raised)":"transparent")" @onclick="() => Store.Config.Coalition = 0">Spectator</button>
     </div>
 </div>
 

@@ -629,6 +629,8 @@ Bottom bar: **Discard (reload from disk)** and **Save changes**. Every save make
 
 Top right: **☾ DARK** and **☀ LIGHT** switch the editor's colours. The choice is remembered for the next start (in `%LOCALAPPDATA%\Darkstar\editor.json`, like the config folder) and changes nothing the bot reads.
 
+Buttons come in three kinds: a filled one for the main action of a card, framed ones for everything else, and underlined text for cancel and close. Red means it removes or replaces something. Grey labels with a coloured dot (*installed*, *in use*) are only information and cannot be clicked.
+
 Details on CH8 and CH2 are in the next two chapters; a full walkthrough is in [gui.md](gui.md).
 
 ---

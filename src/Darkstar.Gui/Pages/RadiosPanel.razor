@@ -85,8 +85,9 @@
             {
                 var index = i;
                 <div class="hint" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                    <button class="link-action" style="margin-bottom:0"
+                    <button class="btn small"
                             @onclick="() => ToggleVoicePicker(index)">
+                        <BtnIcon Name="list" />
                         <span>@(_voicePickerFor == index ? "Hide voices" : "Pick a voice")</span>
                     </button>
                     <span>or click the field above.</span>
@@ -166,8 +167,9 @@
     <div class="card-head" style="margin-bottom:6px">
         <span style="font-size:12.5px;color:var(--text)">Voices on this machine</span>
         <span class="spacer"></span>
-        <button class="link-action" style="margin-bottom:0" disabled="@Store.TtsVoicesLoading"
+        <button class="btn small" disabled="@Store.TtsVoicesLoading"
                 @onclick="() => Store.LoadTtsVoicesAsync(force: true)">
+            <BtnIcon Name="refresh" Busy="@Store.TtsVoicesLoading" />
             <span>@(Store.TtsVoicesLoading ? "Asking..." : "List available voices")</span>
         </button>
     </div>
@@ -228,18 +230,21 @@
     </div>
 </div>
 
-<button class="link-action" @onclick="AddRadio"><span>+ Add radio</span></button>
+<div class="actions">
+    <button class="btn" @onclick="AddRadio"><BtnIcon Name="add" /><span>Add radio</span></button>
+</div>
 
 <div class="card" style="margin-top:10px">
     <div class="card-head" style="margin-bottom:6px">
         <span style="font-size:12.5px;color:var(--text)">One tower per airfield</span>
         <span class="spacer"></span>
-        <button class="link-action" style="margin-bottom:0" disabled="@(_planning || GeneratedCount == 0)"
+        <button class="btn small text danger" disabled="@(_planning || GeneratedCount == 0)"
                 @onclick="RemoveGeneratedTowers">
             <span>@(GeneratedCount == 0 ? "No generated towers" : $"Remove {GeneratedCount} generated tower(s)")</span>
         </button>
-        <button class="link-action" style="margin-bottom:0" disabled="@(_planning || !Store.Config.DcsGrpcEnabled)"
+        <button class="btn small primary" disabled="@(_planning || !Store.Config.DcsGrpcEnabled)"
                 @onclick="GenerateTowers">
+            <BtnIcon Name="generate" Busy="@_planning" />
             <span>@(_planning ? "Asking the mission..." : "Generate from the running mission")</span>
         </button>
     </div>
@@ -543,7 +548,7 @@
                 : "transparent";
 
             builder.OpenElement(sequence++, "button");
-            builder.AddAttribute(sequence++, "class", "link-action");
+            builder.AddAttribute(sequence++, "class", "choice");
             builder.AddAttribute(sequence++, "style",
                 $"justify-content:center;border:1px solid {border};border-radius:4px;padding:6px;" +
                 $"color:{colour};background:{background};opacity:{(enabled ? "1" : "0.45")}");

@@ -105,6 +105,23 @@ panels use only those variables — `EditorPanelTests` fails on a colour written
 because it would look right in one theme and wrong in the other. The light colours are not the dark
 ones inverted: amber, teal and green had to get much darker to stay readable as text on white.
 
+## Buttons
+
+Everything that can be clicked looks like a button, in one of three kinds:
+
+| Kind | Looks | Used for |
+|---|---|---|
+| Main action | Filled teal, white or dark text | The one thing a card is for: **Detect SRS installation**, **Test connection**, **Search this PC…**, **Back up**. At most one per card. |
+| Other actions | Framed, tinted, teal icon | Everything else: **Pick a folder**, **Show reply**, **Add radio**, **Refresh**. |
+| Text button | Underlined text | **Cancel**, **Close**, **Forget it** — in red for removing something. |
+
+Remove and restore buttons that change something for good are red. Small framed buttons in list
+rows (**activate**, **restore…**, **✕**) turn red under the mouse when they remove something.
+Several buttons sit together in a row; a button that is working shows a turning spinner instead of
+its icon. Teal means "can be clicked" and nothing else: badges such as *installed* or *in use* are
+grey with a coloured dot, and the keyboard focus is an amber ring on whatever has it.
+**Save changes** at the bottom keeps its amber, as the one button that writes the files.
+
 ## Path fields have a Browse button
 
 Every setting that holds a path has **Browse…** beside it, opening Windows' own picker:
